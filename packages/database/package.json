@@ -7,7 +7,7 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "lint": "tsc -p tsconfig.json --noEmit"
   },

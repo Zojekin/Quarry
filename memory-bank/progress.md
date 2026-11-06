@@ -41,11 +41,11 @@
   - [x] 带种子 Fisher-Yates 算法、选项打乱（identity 绑定）、分区与固定组编排打乱
   - [x] 跨午夜计时时间段自然日切分
   - [x] Vitest 单元测试覆盖率达 100%
-- [ ] **Task 0.4: `packages/database` Kysely 仓储与 SQLite 适配器**
-  - [ ] Kysely 数据库 Schema 定义与迁移脚本（启用 WAL 与外键约束）
-  - [ ] Repository 仓储接口定义 (`IFolderRepository`, `IQuestionRepository` 等)
-  - [ ] 基于 `better-sqlite3` 实现 SQLite 仓储适配器
-  - [ ] 内存 SQLite 仓储 CRUD 与事务回滚测试
+- [x] **Task 0.4: `packages/database` Kysely 仓储与 SQLite 适配器**
+  - [x] Kysely 数据库 Schema 定义与迁移脚本（启用 WAL 与外键约束）
+  - [x] Repository 仓储接口定义 (`IFolderRepository`, `IQuestionRepository` 等)
+  - [x] 基于 `better-sqlite3` 实现 SQLite 仓储适配器
+  - [x] 内存 SQLite 仓储 CRUD 与事务回滚测试
 - [ ] **Task 0.5: `packages/server` Hono 路由骨架与中间件基础**
   - [ ] Hono 实例与全局错误处理中间件
   - [ ] 依赖注入仓储实例
@@ -70,3 +70,11 @@
 - Task 0.3 complete using a red/green TDD cycle: six question scoring variants, seeded Fisher-Yates option/section/merged-section shuffling, atomic fixed groups and ordered shared material children, and timezone-aware proportional calendar duration splitting.
 - Core tests: 16 passed; V8 statements, branches, functions and lines all 100%, with enforced thresholds. Includes empty/wrong/partial answers, duplicate selections, fractional scoring, exact text sensitivity, deterministic seeds, anchored materials, multiple dates and DST short/long days.
 - Validation: `npx pnpm --filter @quarry/core test` passed; `npx pnpm build` passed for all 6 packages.
+
+
+## Database persistence milestone (2026-11-06)
+
+- Task 0.4 complete: eleven-table Kysely schema, versioned transactional migration, eight repository interfaces, better-sqlite3 adapters, factory lifecycle and transaction-bound repository execution.
+- Added foreign keys, WAL configuration, ownership/JSON/enum constraints, dual tag namespace and target validation, attempt deduplication, versioned mistake uniqueness and attachment hash deduplication.
+- `npx pnpm --filter @quarry/database test`: 11 integration tests passed. In-memory SQLite tests cover CRUD, commit/rollback, constraints, tags, paper items, learning records, mistakes and attachments. A temporary file test confirms WAL and persistence across reopen; pure memory SQLite uses its native memory journal.
+- `npx pnpm build`: all six workspace packages passed.
