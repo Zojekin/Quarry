@@ -6,7 +6,10 @@ export type SqliteBoolean = 0 | 1;
 export type TagNamespace = 'file' | 'question';
 export interface EntityTable { id: string; created_at: Generated<string> }
 export interface MutableTable extends EntityTable { updated_at: Generated<string> }
-export interface SoftDeletedTable extends MutableTable { is_deleted: Generated<SqliteBoolean> }
+export interface SoftDeletedTable extends MutableTable {
+  is_deleted: Generated<SqliteBoolean>;
+  deleted_batch_id: Generated<string | null>;
+}
 export interface FoldersTable extends SoftDeletedTable {
   parent_id: string | null;
   name: string;
@@ -42,6 +45,7 @@ export interface QuestionsTable extends SoftDeletedTable {
   version: Generated<number>;
 }
 export interface PaperItemsTable extends EntityTable {
+  historical_source_question_id: Generated<string | null>;
   paper_id: string;
   question_id: string;
   source_question_id: string | null;
@@ -59,6 +63,7 @@ export interface TagRelationsTable extends EntityTable {
   target_id: string;
 }
 export interface StudySessionsTable extends MutableTable {
+  state_json: Generated<string>;
   paper_id: string;
   mode: 'practice' | 'exam';
   status: Generated<`${SessionStatus}`>;
@@ -78,6 +83,7 @@ export interface StudyRecordsTable {
   answered_at: string;
 }
 export interface MistakeRecordsTable extends MutableTable {
+  history_json: Generated<string>;
   source_question_id: string | null;
   source_version: number | null;
   question_snapshot_json: string;

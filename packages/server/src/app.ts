@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Kysely } from 'kysely';
-import { createSqliteRepositories, withTransaction } from '@quarry/database';
-import type { ITransactionRunner, QuarryDatabase, Repositories } from '@quarry/database';
+import { createSqliteRepositories, SqliteSnapshotRepository, withTransaction } from '@quarry/database';
+import type { ISnapshotRepository, ITransactionRunner, QuarryDatabase, Repositories } from '@quarry/database';
 import { AppError, ErrorCode } from '@quarry/shared';
 import { createHealthRoutes } from './routes/health.js';
 import { createAttachmentRoutes } from './routes/attachments.js';
@@ -12,6 +12,11 @@ import { createBankRoutes } from './routes/banks.js';
 import { createQuestionRoutes } from './routes/questions.js';
 import { createTagRoutes } from './routes/tags.js';
 import { createPaperRoutes } from './routes/papers.js';
+import { createSessionRoutes } from './routes/sessions.js';
+import { createMistakeRoutes } from './routes/mistakes.js';
+import { createAnalyticsRoutes } from './routes/analytics.js';
+import { createTrashRoutes } from './routes/trash.js';
+import { createBackupImportRoutes } from './routes/backup-import.js';
 import type { IAttachmentStorage } from './services/attachment.service.js';
 
 export interface QuarryServerOptions {
@@ -20,6 +25,8 @@ export interface QuarryServerOptions {
   attachmentsDir?: string;
   attachmentStorage?: IAttachmentStorage;
   withTransaction?: ITransactionRunner['withTransaction'];
+  snapshotRepository?: ISnapshotRepository;
+  recoveryPointsDir?: string;
 }
 
 export type QuarryServerEnv = {
@@ -39,6 +46,14 @@ function localOrigin(origin: string): string | undefined {
 /** Compose an app without opening a listener or owning the supplied database. */
 export function createQuarryServer(options: QuarryServerOptions) {
   const repositories = options.repositories ?? createSqliteRepositories(options.db);
+  const snapshots = options.snapshotRepository ?? (options.repositories ? {
+    async capture(): Promise<never> {
+      throw new AppError(ErrorCode.InvalidState, 'Injected repositories require a snapshotRepository for backups');
+    },
+    async replace(): Promise<never> {
+      throw new AppError(ErrorCode.InvalidState, 'Injected repositories require a snapshotRepository for restore');
+    },
+  } : new SqliteSnapshotRepository(options.db));
   const app = new Hono<QuarryServerEnv>();
 
   app.use('*', cors({ origin: localOrigin }));
@@ -70,7 +85,12 @@ export function createQuarryServer(options: QuarryServerOptions) {
     .route('/api/banks', createBankRoutes())
     .route('/api/questions', createQuestionRoutes())
     .route('/api/tags', createTagRoutes())
-    .route('/api/papers', createPaperRoutes());
+    .route('/api/papers', createPaperRoutes())
+    .route('/api/sessions', createSessionRoutes())
+    .route('/api/mistakes', createMistakeRoutes())
+    .route('/api/analytics', createAnalyticsRoutes())
+    .route('/api/trash', createTrashRoutes())
+    .route('/api', createBackupImportRoutes(snapshots, options.recoveryPointsDir));
 }
 
 export type AppType = ReturnType<typeof createQuarryServer>;

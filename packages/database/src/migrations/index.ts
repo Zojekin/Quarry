@@ -53,6 +53,15 @@ export async function initializeDatabase(db: Kysely<QuarryDatabase>): Promise<vo
           await sql`ALTER TABLE papers ADD COLUMN composer_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(composer_json))`.execute(database);
           await sql`ALTER TABLE questions ADD COLUMN material TEXT`.execute(database);
         } },
+        '003_batch_b_study': { async up(database) {
+          await sql`ALTER TABLE paper_items ADD COLUMN historical_source_question_id TEXT`.execute(database);
+          await sql`ALTER TABLE study_sessions ADD COLUMN state_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(state_json))`.execute(database);
+          await sql`ALTER TABLE mistake_records ADD COLUMN history_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(history_json))`.execute(database);
+        } },
+        '004_batch_b_trash': { async up(database) {
+          for (const table of ['folders', 'question_banks', 'papers', 'questions'])
+            await sql.raw(`ALTER TABLE ${table} ADD COLUMN deleted_batch_id TEXT`).execute(database);
+        } },
       }; },
     },
   });

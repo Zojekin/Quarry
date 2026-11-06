@@ -1,9 +1,11 @@
 import type { Kysely } from 'kysely';
+import { randomUUID } from 'node:crypto';
+import { SqliteTrashRepository } from './trash.js';
 import type { QuarryDatabase, NewRow, Row, RowPatch } from '../schema/index.js';
 import type { IFolderRepository, IQuestionBankRepository, IPaperRepository, IQuestionRepository, ITagRepository, IStudySessionRepository, IMistakeRepository, IAttachmentRepository, Repositories } from '../repositories/index.js';
 
 export class SqliteFolderRepository implements IFolderRepository {
-  constructor(private readonly db: Kysely<QuarryDatabase>) {}
+  constructor(private readonly db: Kysely<QuarryDatabase>, private readonly deletionBatchId = randomUUID()) {}
 
   async create(input: NewRow<'folders'>): Promise<Row<'folders'>> {
     return this.db.insertInto('folders').values(input).returningAll().executeTakeFirstOrThrow();
@@ -23,13 +25,13 @@ export class SqliteFolderRepository implements IFolderRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.updateTable('folders').set({ is_deleted: 1, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
+    const result = await this.db.updateTable('folders').set({ is_deleted: 1, deleted_batch_id: this.deletionBatchId, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
     return result.numUpdatedRows > 0n;
   }
 }
 
 export class SqliteQuestionBankRepository implements IQuestionBankRepository {
-  constructor(private readonly db: Kysely<QuarryDatabase>) {}
+  constructor(private readonly db: Kysely<QuarryDatabase>, private readonly deletionBatchId = randomUUID()) {}
 
   async create(input: NewRow<'question_banks'>): Promise<Row<'question_banks'>> {
     return this.db.insertInto('question_banks').values(input).returningAll().executeTakeFirstOrThrow();
@@ -49,13 +51,13 @@ export class SqliteQuestionBankRepository implements IQuestionBankRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.updateTable('question_banks').set({ is_deleted: 1, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
+    const result = await this.db.updateTable('question_banks').set({ is_deleted: 1, deleted_batch_id: this.deletionBatchId, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
     return result.numUpdatedRows > 0n;
   }
 }
 
 export class SqlitePaperRepository implements IPaperRepository {
-  constructor(private readonly db: Kysely<QuarryDatabase>) {}
+  constructor(private readonly db: Kysely<QuarryDatabase>, private readonly deletionBatchId = randomUUID()) {}
 
   async create(input: NewRow<'papers'>): Promise<Row<'papers'>> {
     return this.db.insertInto('papers').values(input).returningAll().executeTakeFirstOrThrow();
@@ -75,7 +77,7 @@ export class SqlitePaperRepository implements IPaperRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.updateTable('papers').set({ is_deleted: 1, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
+    const result = await this.db.updateTable('papers').set({ is_deleted: 1, deleted_batch_id: this.deletionBatchId, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
     return result.numUpdatedRows > 0n;
   }
 
@@ -100,7 +102,7 @@ export class SqlitePaperRepository implements IPaperRepository {
 }
 
 export class SqliteQuestionRepository implements IQuestionRepository {
-  constructor(private readonly db: Kysely<QuarryDatabase>) {}
+  constructor(private readonly db: Kysely<QuarryDatabase>, private readonly deletionBatchId = randomUUID()) {}
 
   async create(input: NewRow<'questions'>): Promise<Row<'questions'>> {
     return this.db.insertInto('questions').values(input).returningAll().executeTakeFirstOrThrow();
@@ -120,7 +122,7 @@ export class SqliteQuestionRepository implements IQuestionRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.updateTable('questions').set({ is_deleted: 1, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
+    const result = await this.db.updateTable('questions').set({ is_deleted: 1, deleted_batch_id: this.deletionBatchId, updated_at: new Date().toISOString() }).where('id', '=', id).where('is_deleted', '=', 0).executeTakeFirst();
     return result.numUpdatedRows > 0n;
   }
 }
@@ -257,11 +259,13 @@ export class SqliteAttachmentRepository implements IAttachmentRepository {
 }
 
 export function createSqliteRepositories(db: Kysely<QuarryDatabase>): Repositories {
+  const deletionBatchId = randomUUID();
   return {
-    folders: new SqliteFolderRepository(db),
-    questionBanks: new SqliteQuestionBankRepository(db),
-    papers: new SqlitePaperRepository(db),
-    questions: new SqliteQuestionRepository(db),
+    trash: new SqliteTrashRepository(db),
+    folders: new SqliteFolderRepository(db, deletionBatchId),
+    questionBanks: new SqliteQuestionBankRepository(db, deletionBatchId),
+    papers: new SqlitePaperRepository(db, deletionBatchId),
+    questions: new SqliteQuestionRepository(db, deletionBatchId),
     tags: new SqliteTagRepository(db),
     studySessions: new SqliteStudySessionRepository(db),
     mistakes: new SqliteMistakeRepository(db),

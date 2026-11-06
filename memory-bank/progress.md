@@ -2,7 +2,7 @@
 
 > **当前版本**：v0.1.0-alpha  
 > **基准依据**：`memory-bank/design-document.md`、`memory-bank/tech-stack.md`、`memory-bank/architecture.md`、`memory-bank/implementation-plan.md`  
-> **当前状态**：Phase 0 准备就绪，基础设施与骨架搭建阶段
+> **当前状态**：Phase 1 Batch A/B 后端功能及测试、构建验证已完成
 
 ---
 
@@ -11,7 +11,7 @@
 | 阶段 (Phase) | 描述 | 状态 | 负责人 / 引擎 | 备注 |
 | :--- | :--- | :---: | :--- | :--- |
 | **Phase 0** | **工程骨架与基础基础设施** | 🟢 已完成 | Codex CLI / 主智能体调度 | Monorepo 初始化、纯函数判分与打乱、SQLite 仓储、Hono 服务骨架全部闭环 |
-| **Phase 1** | **后端核心业务 API 与数据安全** | ⚪ 未开始 | Codex CLI | 内容管理、两套标签、会话判分、错题本、备份还原 |
+| **Phase 1** | **后端核心业务 API 与数据安全** | 🟢 已完成 | Codex CLI | Batch A/B 内容管理、会话判分、错题分析、导入备份、回收站已实现 |
 | **Phase 2** | **Electron 桌面宿主与后端编排** | ⚪ 未开始 | Codex CLI | electron-vite、随机端口后端托管、生命周期 |
 | **Phase 3** | **前端框架与通用交互基础** | ⚪ 未开始 | Codex CLI | React 19 + shadcn/ui、BackendClient、Markdown/KaTeX、文件管理器布局 |
 | **Phase 4** | **内容管理与套题编排工作台** | ⚪ 未开始 | Codex CLI | 6 题型编辑、@dnd-kit 分区与固定组编排、导入严格校验 |
@@ -95,3 +95,12 @@
 - Added a backward-compatible database migration for composer JSON/material text and a repository item-update operation. Content writes use transaction-bound repositories; custom adapters inject their own transaction runner. API conventions and injection requirements are documented in `packages/server/README.md`.
 - Validation: `npx pnpm --filter @quarry/server test` passes 36 tests (24 new); `npx pnpm test` passes 95 tests across the workspace; `npx pnpm build` passes all six packages. Unchanged tasks may use Turbo cache.
 - Batch A is complete. Session/scoring APIs, mistakes/analytics, import/export, backups/restoration and recycle-bin administration remain later Phase 1 work.
+
+## Phase 1 Batch B milestone (2026-11-06)
+
+- Tasks 1.4-1.6 implemented: persisted deterministic session snapshots, practice scoring/immutable attempts, exam blank results, pause/resume duration deductions and timezone-aware midnight metrics; automatic/manual versioned mistake history, mastery transitions, filtered historical review papers and dashboard aggregation.
+- Strict Markdown/JSON/Quarry content import rejects invalid files atomically with line/path diagnostics. Export preserves questions, answers, material ancestry, paper composition/configuration and referenced ZIP attachments. Ordinary import creates new content identities.
+- Full checksum-validated ZIP backups include all database tables, trash, learning history and attachment blobs. Restore first persists a recovery archive and uses transactional row replacement plus attachment cleanup on failure. Custom persistence adapters provide their own snapshot implementation.
+- Trash lists, restores and purges content transactionally. Deletion batches prevent parent restoration from reviving earlier independent deletions. Source identities and historical snapshots survive permanent source deletion.
+- Added integration coverage for snapshots across app recreation/content edits, invalid-answer rollback, deterministic fixed/material blocks, duplicate attempts, versioned mistakes, manual idempotence, removed tags, midnight pauses, exam blanks, precise strict rejection, content roundtrips, backup restoration/partial attachment failures/checksums, subtree restoration and permanent deletion history.
+- Verification: `npx pnpm --filter @quarry/server test` passes 57 tests (21 added); `npx pnpm test` passes all 116 workspace tests; `npx pnpm build` passes all six packages. Unchanged tasks may use Turbo cache. `git diff --check` passes.

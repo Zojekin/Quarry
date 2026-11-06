@@ -72,6 +72,14 @@ describe('Quarry server', () => {
       .toEqual({ same: true, directory: 'attachments' });
   });
 
+  it('requires a matching snapshot adapter when repositories are injected', async () => {
+    const app = createQuarryServer({ db: database.db, repositories: database.repositories,
+      withTransaction: work => database.withTransaction(work) });
+    const response = await app.request('/api/backup/create', { method: 'POST' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.message).toContain('snapshotRepository');
+  });
+
   it.each(['http://localhost:5173', 'http://127.0.0.1:8080', 'http://[::1]:3000'])
     ('allows local CORS preflight for %s', async origin => {
       const response = await createQuarryServer({ db: database.db }).request('/api/health', {

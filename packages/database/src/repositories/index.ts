@@ -31,7 +31,16 @@ export interface IMistakeRepository extends IRepository<'mistake_records'> {}
 export interface IAttachmentRepository extends IRepository<'attachments'> {
   findBySha256(sha256: string): Promise<Row<'attachments'> | undefined>;
 }
+export type TrashTable = 'folders' | 'question_banks' | 'papers' | 'questions';
+export type ContentSnapshot = { [T in TrashTable]: Row<T>[] };
+/** Includes deleted content; mutations are used only inside a transaction. */
+export interface ITrashRepository {
+  snapshot(): Promise<ContentSnapshot>;
+  restore(table: TrashTable, id: string): Promise<void>;
+  purge(table: TrashTable, id: string): Promise<void>;
+}
 export interface Repositories {
+  trash: ITrashRepository;
   folders: IFolderRepository;
   questionBanks: IQuestionBankRepository;
   papers: IPaperRepository;
