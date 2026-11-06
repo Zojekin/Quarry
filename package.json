@@ -1,0 +1,21 @@
+{
+  "name": "quarry",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "turbo": "^2.7.0",
+    "vitest": "^3.2.4",
+    "@types/node": "^22.19.0"
+  }
+}
