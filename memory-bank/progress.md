@@ -10,7 +10,7 @@
 
 | 阶段 (Phase) | 描述 | 状态 | 负责人 / 引擎 | 备注 |
 | :--- | :--- | :---: | :--- | :--- |
-| **Phase 0** | **工程骨架与基础基础设施** | 🟡 进行中 | Codex CLI / 主智能体调度 | Monorepo 初始化、纯函数判分与打乱、SQLite 仓储 |
+| **Phase 0** | **工程骨架与基础基础设施** | 🟢 已完成 | Codex CLI / 主智能体调度 | Monorepo 初始化、纯函数判分与打乱、SQLite 仓储、Hono 服务骨架全部闭环 |
 | **Phase 1** | **后端核心业务 API 与数据安全** | ⚪ 未开始 | Codex CLI | 内容管理、两套标签、会话判分、错题本、备份还原 |
 | **Phase 2** | **Electron 桌面宿主与后端编排** | ⚪ 未开始 | Codex CLI | electron-vite、随机端口后端托管、生命周期 |
 | **Phase 3** | **前端框架与通用交互基础** | ⚪ 未开始 | Codex CLI | React 19 + shadcn/ui、BackendClient、Markdown/KaTeX、文件管理器布局 |
@@ -25,9 +25,10 @@
 ## 2. 详细任务分解状态 (Phase 0 细化)
 
 ### Phase 0: 工程骨架与基础基础设施建设
-- [ ] **Task 0.1: pnpm Monorepo 与构建工程初始化**
-  - [ ] 根目录 `package.json`、`pnpm-workspace.yaml`、`turbo.json` 配置
-  - [ ] 共享 TypeScript 严格配置 (`tsconfig.base.json`) 与 Vitest 配置
+- [x] **Task 0.1: pnpm Monorepo 与构建工程初始化**
+  - [x] 根目录 `package.json`、`pnpm-workspace.yaml`、`turbo.json` 配置
+  - [x] 共享 TypeScript 严格配置 (`tsconfig.base.json`) 与 Vitest 配置
+  - [x] 全部 6 个工作区包初始化与链接验证
 - [x] **Task 0.2: `packages/shared` 共享类型、DTO 与 Zod 契约**
   - [x] 6 大题型结构定义与 Zod Schema
   - [x] 文件标签 vs 题目标签枚举与类型隔离
