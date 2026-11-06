@@ -17,6 +17,7 @@
     "@quarry/database": "workspace:*",
     "@quarry/shared": "workspace:*",
     "hono": "^4.11.0",
-    "kysely": "^0.28.19"
+    "kysely": "^0.28.19",
+    "zod": "^4.6.7"
   }
 }

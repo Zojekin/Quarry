@@ -15,6 +15,7 @@ export interface IPaperRepository extends IRepository<'papers'> {
   addItem(input: NewRow<'paper_items'>): Promise<Row<'paper_items'>>;
   listItems(paperId: string): Promise<Row<'paper_items'>[]>;
   removeItem(id: string): Promise<boolean>;
+  updateItem(id: string, patch: RowPatch<'paper_items'>): Promise<Row<'paper_items'> | undefined>;
 }
 export interface IQuestionRepository extends IRepository<'questions'> {}
 export interface ITagRepository extends IRepository<'tags'> {

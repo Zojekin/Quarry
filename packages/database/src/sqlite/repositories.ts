@@ -92,6 +92,11 @@ export class SqlitePaperRepository implements IPaperRepository {
     const result = await this.db.deleteFrom('paper_items').where('id', '=', id).executeTakeFirst();
     return result.numDeletedRows > 0n;
   }
+
+  async updateItem(id: string, patch: RowPatch<'paper_items'>): Promise<Row<'paper_items'> | undefined> {
+    return this.db.updateTable('paper_items').set(patch).where('id', '=', id)
+      .returningAll().executeTakeFirst();
+  }
 }
 
 export class SqliteQuestionRepository implements IQuestionRepository {

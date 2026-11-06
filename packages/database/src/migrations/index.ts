@@ -48,7 +48,12 @@ export async function initializeDatabase(db: Kysely<QuarryDatabase>): Promise<vo
   const migrator = new Migrator({
     db,
     provider: {
-      async getMigrations() { return { '001_initial_schema': initialSchema }; },
+      async getMigrations() { return { '001_initial_schema': initialSchema,
+        '002_batch_a_content': { async up(database) {
+          await sql`ALTER TABLE papers ADD COLUMN composer_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(composer_json))`.execute(database);
+          await sql`ALTER TABLE questions ADD COLUMN material TEXT`.execute(database);
+        } },
+      }; },
     },
   });
   const result = await migrator.migrateToLatest();

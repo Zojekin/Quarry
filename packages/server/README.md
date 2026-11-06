@@ -1,0 +1,22 @@
+# Content API (Phase 1 Batch A)
+
+`createQuarryServer({ db, attachmentsDir })` returns a Hono app without starting a listener. All JSON responses use `{ success: true, data }` or the shared `AppError` envelope. Content deletion is soft deletion. A folder deletion includes its descendants, banks, papers and owned questions; learning history remains independent.
+
+Custom repository adapters supply both `repositories` and `withTransaction(work)`. The callback must receive transaction-bound repositories and roll back on rejection. Supplying custom repositories without a transaction runner permits reads, but rejects content writes rather than silently using a different adapter. An optional `attachmentStorage: IAttachmentStorage` replaces local disk storage.
+
+- `/api/folders`, `/api/banks`, `/api/questions`, `/api/papers`: GET list, POST create; `/:id`: GET, PUT partial edit, DELETE.
+- Folders: `name`, optional `parent_id` (null for root), `tag_ids`; list with `?tree=true` for nested `children`.
+- Banks: `name`, optional `folder_id`, `description`, `tag_ids`. Lists accept `folder_id`, `search`, and comma-separated `tags` (all tags must match).
+- Questions use the shared six-variant `Question` contract: `owner_type`, `owner_id`, `type`, `content`, `explanation`, `tag_ids`, and type-specific fields (`options`, `blanks`, `reference_answer`, `max_score`, `score_mode`). UUID IDs and version 1 are generated when omitted; PUT increments version and preserves ownership. Choice answers use option UUIDs and `is_correct`, never display letters. Optional `material` text and `material_parent_id` describe a same-owner material hierarchy. Lists accept `bank_id`, `paper_id`, `type`, `search`, comma-separated question `tags`.
+- `/api/tags`: GET with optional `target_type=file|question`, POST `{ name, target_type }`. POST or DELETE `/api/tags/:id/relations` accepts the shared tag relation contract: `{ tag_type, target_type, target_id, entity_type }`. File tags target `folder|question_bank|paper`; question tags target `question`. Both attachment and detachment check the stored namespace and target existence. Tag relation attachment is idempotent.
+- POST `/api/attachments` accepts multipart `file` and returns metadata plus a virtual `url`. GET `/api/attachments/:id` streams bytes with their stored MIME type. SHA-256 identity deduplicates metadata and disk content. No absolute path is returned.
+
+Papers accept `name`, `folder_id`, `description`, `tag_ids`, `full_score`, `score_mode`, `time_limit_seconds`, `follow_source` (default false), `shuffle_options`, `shuffle_sections`, `shuffle_materials`, `merged_shuffle_sections` (arrays of section UUIDs) and optional `sections`. Sections contain `{ id, title, question_type, shuffle_questions, fixed_groups, items }`. Each new item supplies exactly one of:
+
+- `{ source_question_id }`: copy a bank question into the paper, including tags/material and source identity/version.
+- `{ question }`: create an inline shared-contract question; paper ownership and a new question UUID are assigned by the service.
+- `{ question_id }`: compose an existing, uncomposed question owned by that paper.
+
+New items may supply a UUID `id`, and scoring overrides `full_score`/`score_mode`. Existing items are referenced by `{ id }` when replacing sections through PUT `/api/papers/:id`; omitted items are removed. Existing item scoring overrides may also be supplied. Fixed groups reference item UUIDs and must be ordered, contiguous, nonoverlapping and within a single type section. Material siblings stay together and retain their relative order. POST `/api/papers/:id/items` appends one item to its type section, creating a section if needed. DELETE `/api/papers/:id/items/:itemId` removes an item and repairs fixed-group metadata.
+
+GET `/api/papers/:id/follow-diff` previews per-item before/after changes to `stem`, `options`, `answers`, `analysis`, `material`, `tags` (and type), even while following is disabled. POST `/api/papers/:id/apply-follow` requires `follow_source=true` and applies the latest changes atomically. It preserves question/item identities, item order, sections/groups, paper full score and score mode, and each copied question's score and score mode. Missing source questions/banks set `source_invalid` while preserving the last snapshot. Source type changes require recomposition and reject the whole follow transaction. Unchanged reapplication does not increment snapshot versions.

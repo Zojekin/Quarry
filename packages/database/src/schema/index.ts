@@ -17,6 +17,7 @@ export interface QuestionBanksTable extends SoftDeletedTable {
   description: Generated<string>;
 }
 export interface PapersTable extends QuestionBanksTable {
+  composer_json: Generated<string>;
   full_score: Generated<number>;
   score_mode: Generated<`${ScoreMode}`>;
   time_limit_seconds: number | null;
@@ -25,6 +26,7 @@ export interface PapersTable extends QuestionBanksTable {
   follow_source: Generated<SqliteBoolean>;
 }
 export interface QuestionsTable extends SoftDeletedTable {
+  material: Generated<string | null>;
   bank_id: string | null;
   paper_id: string | null;
   type: `${QuestionType}`;

@@ -86,3 +86,12 @@
 - `/api/health` verifies the supplied database connection before returning version, timestamp and connection status. The public `AppType` preserves the route schema for typed Hono RPC clients.
 - `npx pnpm --filter @quarry/server test`: 12 integration tests passed using in-memory SQLite, including typed RPC health, database failure, application/unknown errors, not-found responses, dependency injection and CORS.
 - `npx pnpm build` and `npx pnpm test` passed across the monorepo (71 tests; unchanged tasks may use Turbo cache).
+
+## Phase 1 Batch A milestone (2026-11-06)
+
+- Tasks 1.1-1.3 implemented: attachment upload/streaming with SHA-256 deduplication and replaceable storage; folder tree CRUD/cycle protection/subtree soft deletion; bank and six-variant question CRUD with search, filters, material relationships and strict dual tag isolation.
+- Paper CRUD and composition persist sections, ordered fixed groups, merged/per-section/option/material shuffle flags and source snapshots. Inline questions and existing bank questions are supported. Material children remain together and preserve relative order. Removing items repairs fixed groups.
+- Source-follow preview includes stem/options/answers/analysis/material/tags. Enabled application preserves selection, ordering, scores and scoring rules; missing sources retain their snapshots with invalid flags. Following is off by default, and repeated unchanged application is idempotent. Type-changing source edits require recomposition before following.
+- Added a backward-compatible database migration for composer JSON/material text and a repository item-update operation. Content writes use transaction-bound repositories; custom adapters inject their own transaction runner. API conventions and injection requirements are documented in `packages/server/README.md`.
+- Validation: `npx pnpm --filter @quarry/server test` passes 36 tests (24 new); `npx pnpm test` passes 95 tests across the workspace; `npx pnpm build` passes all six packages. Unchanged tasks may use Turbo cache.
+- Batch A is complete. Session/scoring APIs, mistakes/analytics, import/export, backups/restoration and recycle-bin administration remain later Phase 1 work.
