@@ -197,3 +197,11 @@
 - A versioned Kysely migrator initializes the schema transactionally and can run again on reopen. Every SQLite connection enables foreign keys, requests WAL and sets a five-second busy timeout. Pure `:memory:` SQLite necessarily reports `memory` journal mode; file databases use WAL.
 - Composite tag foreign keys enforce stored namespace consistency. Insert/update triggers validate polymorphic target existence in the correct namespace; deletion triggers clean target relations. Question ownership is exclusive to a bank or paper. Unique session/question/attempt keys prevent duplicate completion, source/version keys distinguish mistakes, and attachment SHA-256 values are unique.
 - Validation: 11 integration tests pass, including a temporary file WAL/reopen check alongside in-memory tests; all six workspace packages build successfully.
+
+## 10. Server framework milestone (2026-11-06)
+
+- `packages/server/src/app.ts` exports `createQuarryServer({ db, repositories?, attachmentsDir? })`. It creates a standard Hono instance without starting a listener or taking ownership of database cleanup. The composition root supplies default SQLite repositories; callers can inject alternative implementations. Request context exposes repository interfaces and optional attachment configuration.
+- Health routing is isolated in `routes/health.ts`. `GET /api/health` runs a portable Kysely constant-select connection probe and returns `{ success: true, data: { status, version, timestamp, database } }`. Business routes should consume repository interfaces rather than database drivers.
+- Global Hono error handling wraps `AppError.toJSON()` in `{ success: false, error }` and preserves its HTTP status. Unknown failures return HTTP 500 with `INTERNAL_SERVER_ERROR` and a generic message; missing routes return HTTP 404 with `NOT_FOUND`. Error objects contain code, message, details and statusCode.
+- CORS accepts HTTP/HTTPS origins on localhost, 127.0.0.1 and IPv6 loopback, including variable development ports. It grants no access-control origin to other hosts or opaque origins.
+- The public index exports the app factory, options/environment types and inferred `AppType`. Chained route registration retains Hono RPC endpoint inference. Twelve in-memory SQLite integration tests cover this contract; all workspace builds and tests pass.

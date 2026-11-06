@@ -89,6 +89,9 @@ importers:
       hono:
         specifier: ^4.11.0
         version: 4.13.16
+      kysely:
+        specifier: ^0.28.19
+        version: 0.28.19
 
   packages/shared:
     dependencies:

@@ -46,10 +46,10 @@
   - [x] Repository 仓储接口定义 (`IFolderRepository`, `IQuestionRepository` 等)
   - [x] 基于 `better-sqlite3` 实现 SQLite 仓储适配器
   - [x] 内存 SQLite 仓储 CRUD 与事务回滚测试
-- [ ] **Task 0.5: `packages/server` Hono 路由骨架与中间件基础**
-  - [ ] Hono 实例与全局错误处理中间件
-  - [ ] 依赖注入仓储实例
-  - [ ] 健康检查 API 与 Hono RPC Client 连通性测试
+- [x] **Task 0.5: `packages/server` Hono 路由骨架与中间件基础**
+  - [x] Hono 实例与全局错误处理中间件
+  - [x] 依赖注入仓储实例
+  - [x] 健康检查 API 与 Hono RPC Client 连通性测试
 
 ---
 
@@ -78,3 +78,10 @@
 - Added foreign keys, WAL configuration, ownership/JSON/enum constraints, dual tag namespace and target validation, attempt deduplication, versioned mistake uniqueness and attachment hash deduplication.
 - `npx pnpm --filter @quarry/database test`: 11 integration tests passed. In-memory SQLite tests cover CRUD, commit/rollback, constraints, tags, paper items, learning records, mistakes and attachments. A temporary file test confirms WAL and persistence across reopen; pure memory SQLite uses its native memory journal.
 - `npx pnpm build`: all six workspace packages passed.
+
+## Server framework milestone (2026-11-06)
+
+- Task 0.5 complete: `createQuarryServer` composes a standard Hono app with injected repositories and optional attachment directory, local-origin CORS, global application/unknown error handling and standard 404 responses.
+- `/api/health` verifies the supplied database connection before returning version, timestamp and connection status. The public `AppType` preserves the route schema for typed Hono RPC clients.
+- `npx pnpm --filter @quarry/server test`: 12 integration tests passed using in-memory SQLite, including typed RPC health, database failure, application/unknown errors, not-found responses, dependency injection and CORS.
+- `npx pnpm build` and `npx pnpm test` passed across the monorepo (71 tests; unchanged tasks may use Turbo cache).
