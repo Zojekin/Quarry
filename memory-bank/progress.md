@@ -34,13 +34,13 @@
   - [x] 统一应用错误枚举与响应模型
   - [x] 文件、套题分区与打乱、共用材料、学习会话/作答/错题快照契约及输入 DTO
   - [x] 32 项 Vitest 测试通过；`npx pnpm --filter @quarry/shared test` 与 `build` 验证通过（2026-11-06）
-- [ ] **Task 0.3: `packages/core` 纯函数领域核心实现 (TDD)**
-  - [ ] 单选/多选/不定项判分纯函数（完全匹配、少选比例得分）
-  - [ ] 严格填空逐字符匹配纯函数（支持多空、每空多答案、全半角严格）
-  - [ ] 非严格填空与主观题未判分状态处理
-  - [ ] 带种子 Fisher-Yates 算法、选项打乱（identity 绑定）、分区与固定组编排打乱
-  - [ ] 跨午夜计时时间段自然日切分
-  - [ ] Vitest 单元测试覆盖率达 100%
+- [x] **Task 0.3: `packages/core` 纯函数领域核心实现 (TDD)**
+  - [x] 单选/多选/不定项判分纯函数（完全匹配、少选比例得分）
+  - [x] 严格填空逐字符匹配纯函数（支持多空、每空多答案、全半角严格）
+  - [x] 非严格填空与主观题未判分状态处理
+  - [x] 带种子 Fisher-Yates 算法、选项打乱（identity 绑定）、分区与固定组编排打乱
+  - [x] 跨午夜计时时间段自然日切分
+  - [x] Vitest 单元测试覆盖率达 100%
 - [ ] **Task 0.4: `packages/database` Kysely 仓储与 SQLite 适配器**
   - [ ] Kysely 数据库 Schema 定义与迁移脚本（启用 WAL 与外键约束）
   - [ ] Repository 仓储接口定义 (`IFolderRepository`, `IQuestionRepository` 等)
@@ -64,3 +64,9 @@
 
 ---
 *更新时间：2026-11-06*
+
+## Core domain milestone (2026-11-06)
+
+- Task 0.3 complete using a red/green TDD cycle: six question scoring variants, seeded Fisher-Yates option/section/merged-section shuffling, atomic fixed groups and ordered shared material children, and timezone-aware proportional calendar duration splitting.
+- Core tests: 16 passed; V8 statements, branches, functions and lines all 100%, with enforced thresholds. Includes empty/wrong/partial answers, duplicate selections, fractional scoring, exact text sensitivity, deterministic seeds, anchored materials, multiple dates and DST short/long days.
+- Validation: `npx pnpm --filter @quarry/core test` passed; `npx pnpm build` passed for all 6 packages.
