@@ -169,3 +169,12 @@
 - ?? dev ? TypeScript watch?lint ? TypeScript ??????test ?? Vitest??????????????????????????Vite/Electron ??????????????
 - desktop ???????????? shared????? server ??? web ????????????SQLite ????? esbuild ??????? pnpm `onlyBuiltDependencies` ?????
 - ?????????????????????????? better-sqlite3 ?????
+
+## 7. Shared contracts implementation (2026-11-06)
+
+- `packages/shared/src` now exposes enums, strict Zod schemas, inferred entity types, input DTOs and serializable application errors through its public index. It depends only on Zod and has no platform or persistence dependencies.
+- Wire fields use snake_case. Questions require explicit bank/paper ownership and a positive version; six question variants discriminate on `type`. Choice answers bind UUID option identities. Strict blank answers are preserved verbatim. Manual questions have reference answers and exclude grading fields.
+- Shared material is a separate ordered group of validated child questions, without introducing a seventh question type. Papers embed question snapshots, source identity/version, sections, fixed groups and shuffle settings; source following defaults to false and exists only at paper level.
+- Tag relations require matching `tag_type` and `target_type` namespaces plus the corresponding concrete `entity_type`. The repository must verify the referenced stored tag namespace and target existence; schemas cannot resolve external UUID references. File tags accept only folders, banks and papers; question tags accept only questions.
+- Study contracts retain paper/question snapshots, persisted order, answers, attempt indexes, timing, nullable grading and mistake source/version history. Schemas validate local references and permutations; transactional persistence, global reference integrity and state transitions remain responsibilities of later service/repository implementations.
+- Verification: shared Vitest suite (32 tests) and TypeScript build pass.

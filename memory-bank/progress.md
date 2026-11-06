@@ -28,10 +28,12 @@
 - [ ] **Task 0.1: pnpm Monorepo 与构建工程初始化**
   - [ ] 根目录 `package.json`、`pnpm-workspace.yaml`、`turbo.json` 配置
   - [ ] 共享 TypeScript 严格配置 (`tsconfig.base.json`) 与 Vitest 配置
-- [ ] **Task 0.2: `packages/shared` 共享类型、DTO 与 Zod 契约**
-  - [ ] 6 大题型结构定义与 Zod Schema
-  - [ ] 文件标签 vs 题目标签枚举与类型隔离
-  - [ ] 统一应用错误枚举与响应模型
+- [x] **Task 0.2: `packages/shared` 共享类型、DTO 与 Zod 契约**
+  - [x] 6 大题型结构定义与 Zod Schema
+  - [x] 文件标签 vs 题目标签枚举与类型隔离
+  - [x] 统一应用错误枚举与响应模型
+  - [x] 文件、套题分区与打乱、共用材料、学习会话/作答/错题快照契约及输入 DTO
+  - [x] 32 项 Vitest 测试通过；`npx pnpm --filter @quarry/shared test` 与 `build` 验证通过（2026-11-06）
 - [ ] **Task 0.3: `packages/core` 纯函数领域核心实现 (TDD)**
   - [ ] 单选/多选/不定项判分纯函数（完全匹配、少选比例得分）
   - [ ] 严格填空逐字符匹配纯函数（支持多空、每空多答案、全半角严格）
