@@ -1,5 +1,15 @@
 # 题匣 (Quarry) 研发进度与里程碑看板 (Progress Tracking)
 
+### Phase 3 正式 React 19 前端（2026-11-10）
+
+- `apps/web` 从占位包转为可构建的 React 19 + Vite 应用，提供独立工作区标签、首页、资料库/题库/套题管理、六题型编辑、编排与来源差异、练习/考试、结果、错题复习组卷、学习记录、设置与回收站。统一 BackendClient 接入实际 Hono HTTP 接口，不使用原型模拟仓储。
+- 视觉原语由已验证预览迁移，纸白 #F9F9F7、松绿 #386450、待判分选色 #EDE5D0；沿用五档字号与四档字重、280/72px 侧栏、45/55 练习卡及 1000px 以下堆叠。生产资源包含透明 logo、衬线字体及许可证；Markdown/KaTeX 分块加载，产品资料与版本构建期注入。
+- 草稿有序保存，查看答案提交锁定，重做追加尝试；未确认重做草稿保留于 sessionStorage。暂停移除题目并显示全屏遮罩，退出发送尽力而为的 keepalive 暂停。考试按会话固定时限倒计时并自动交卷；丢失提交响应时读取已保存结果恢复。
+- 补齐两处必要后端对接：切换题型清除旧变体字段；会话响应增加固定的套题名/时限及暂停时间，不增加数据库迁移。标签选色串行写入，反馈只对应最后保存值；筛选空选与全选分离，复习组卷仅使用当前结果中选中的错题。
+- 浏览器以独立内存 SQLite 数据检查练习选择/判分/恢复、公式及 1703px/850px 分栏/堆叠截图，已实际看图；检查时控制台无消息。自动化测试覆盖真实 Hono/SQLite 与 React 状态交互。最终测试命令结果见本节后续验证记录。
+- 已知后端边界：尚无崩溃/休眠心跳计时和脱离客户端的考试到期校验；文件夹归档可导出，现有导入器不支持文件夹 ZIP。上述边界未用 mock 或虚假成功掩盖，详见 `apps/web/README.md` 和架构 Phase 3 记录。
+- 最终验证：`npx pnpm --filter @quarry/web test` 通过 25 项；`npx pnpm --filter @quarry/web build` 通过并生成 `dist/`；`npx pnpm test` 通过全部 147 项（shared 32、core 16、database 13、server 61、web 25）；`npx pnpm build` 六包全部成功。Core 覆盖率保持 100%；web TypeScript lint 通过。构建无 chunk 超限或循环分块警告。
+
 ### 后端交接文档收敛（2026-11-10）
 
 - 新增frontend-current-spec.md作为最终交互基线；backend-handoff.md明确源码核实差异、优先级、待定方案和验收。旧设计补丁迁至frontend-design-history.md。

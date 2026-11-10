@@ -47,6 +47,12 @@ export class QuestionService {
   async save(input: Record<string, unknown>, id?: string) {
     const old = id ? await this.get(id) : undefined;
     const merged: Record<string, unknown> = { ...old, ...input };
+    // A type change replaces the variant fields while retaining identity and ownership.
+    // Otherwise fields from the previous variant fail the strict shared schema.
+    if (old && input.type && input.type !== old.type) {
+      for (const field of ['options', 'options_order_fixed', 'blanks', 'reference_answer', 'max_score', 'score_mode'])
+        if (!(field in input)) delete merged[field];
+    }
     const { material_parent_id: rawParent, material: rawMaterial, ...content } = merged;
     const question = parse(QuestionSchema, { id: id ?? randomUUID(), version: 1, ...content,
       ...(id ? { id, version: found(old).version + 1 } : {}) });

@@ -1,1 +1,1 @@
-export const pkgName = '@quarry/web';
+export { BackendClient, BackendError } from "./api/client.js";

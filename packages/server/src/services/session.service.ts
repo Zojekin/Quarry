@@ -38,7 +38,8 @@ export class SessionService {
       const { reference_answer, ...manual } = safe;
       return manual;
     };
-    return { ...fields, draft_answers: JSON.parse(row.draft_answers_json ?? '{}') as Record<string, StudyAnswer>, seed: state.seed, question_order: state.items.map(i => i.question.id),
+    return { ...fields, paper_name: state.paper.name, time_limit_seconds: state.paper.time_limit_seconds, paused_at: state.paused_at,
+      draft_answers: JSON.parse(row.draft_answers_json ?? '{}') as Record<string, StudyAnswer>, seed: state.seed, question_order: state.items.map(i => i.question.id),
       option_order: Object.fromEntries(state.items.filter(i => 'options' in i.question).map(i =>
         [i.question.id, 'options' in i.question ? i.question.options.map(o => o.id) : []])),
       items: state.items.map(item => ({ id: item.id, source_question_id: item.source_question_id,

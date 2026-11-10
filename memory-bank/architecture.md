@@ -3,9 +3,9 @@
 ## 当前实施入口（2026-11-10）
 
 - 产品规则见 `design-document.md` 和 `frontend-current-spec.md`，本轮界面变化以current-spec为准；后端接手见 `backend-handoff.md`，区分源码核实差异、已有能力和待定方案。
-- 正式前端尚未接API，`apps/web/src/index.ts`仍占位。workspace-preview是独立mock原型，不是领域仓储或HTTP DTO，正式技术栈未因原型而重新定稿。
+- 正式前端位于 `apps/web/src`，使用 React 19 + Vite，通过独立 BackendClient 接入 Hono REST API；`workspace-preview` 保留为独立 mock 设计证据，正式应用不导入其 store 或模拟业务逻辑。
 - 业务数据经服务/仓储持久化；工作区标签和页面状态属于前端；产品元信息来自根product-info.json，版本只取根package.json，在构建期注入，不新增产品信息业务API。
-- 标签颜色最新是改色即保存，无逐行保存按钮；正式颜色存储契约尚待补齐。会话草稿/显式结束/时间、筛选OR/all-none和文件夹导出差异见交接，本次未修改后端。
+- 标签颜色、会话草稿/显式结束、错题 OR/all-none 查询和文件夹导出使用 Phase 1.5 已落地接口。计时与归档的剩余后端边界见下方 Phase 3 记录，历史交接文档不应被当作最新接口清单。
 - 下方原型逐次记录是历史证据，含已替代的字号、选中色、设置分组、侧栏宽度和筛选；不得覆盖当前基线。
 
 ## 原型实施历史记录（保留追溯，不作为当前定稿）
@@ -403,3 +403,14 @@
 - Broader handoff items (heartbeat/offline timing, exam deadline enforcement, retry result recovery and general content-query alignment) remain outside this task's enumerated changes.
 
 Phase 1.5 verification: `npx pnpm --filter @quarry/server test` passes 61 tests; `npx pnpm test` passes all 122 tests (shared 32, core 16, database 13, server 61; web/desktop have no test files). `npx pnpm build` passes all six packages. Core coverage remains 100%. New tests cover colors, draft restoration/locking/no side effects, explicit completion and attempt history, multidimensional historical-source filters, legacy migration backfill, and subtree export with attachment bytes.
+
+## Phase 3 production React frontend (2026-11-10)
+
+- `apps/web` now builds a standalone React 19 application with Vite: `tsc -p tsconfig.json && vite build` emits `dist/`; `pnpm dev` starts the web server. `src/api/client.ts` owns standard-fetch HTTP envelopes, structured errors, empty/OR query serialization, multipart uploads and binary downloads. Base URL priority is host-injected `window.__QUARRY_API_URL__`, `VITE_API_URL`, then `http://127.0.0.1:48123`. Production source does not depend on server/database/core implementations; real server imports exist only in integration tests.
+- `App.tsx` owns the 280px/72px shell and independent workspace tabs/history. `state.ts` and `ViewContext` own presentation state in sessionStorage: per-tab searches, facets, selections, local redo drafts and scroll restoration. Ordinary navigation replaces the active tab; only plus creates a tab and the last tab cannot be removed. Business writes remain backend-owned.
+- Page modules separate library/detail/editing/composition, study/results, and dashboard/mistakes/records/settings/trash. Shared React forms cover file properties, six question variants, stable option/blank identities, material, question/file tags, attachments, scoring rules, fixed groups, merged shuffle sections and source diff preview. Review papers are saved before study. Import preview is distinct from commit; folder/paper/bank exports, backups and trash use their existing API routes.
+- `visual.css` ports the verified preview tokens/primitives; `production.css` owns React layout geometry. Paper white is #F9F9F7, accent #386450 and pending selection #EDE5D0. Typography uses 15/17/20/28/48px and 400/500/600/700 weights. The bundled licensed serif and transparent logo are production assets. Markdown and KaTeX load in a separate chunk; raw HTML remains disabled. Product metadata and root package version are injected at build time. Turbo hashes metadata and `VITE_API_URL`.
+- Study selection writes drafts without grading; ordered requests preserve switch/pick order. Confirmation submits and locks; redo uses the next attempt index and preserves history. Because the backend rejects drafts for any previously submitted practice question, unsubmitted redo drafts are kept in sessionStorage until confirmation. Failed saves retain local answers and expose retry. Lost submission responses are recovered from persisted session records. Result scores use the latest attempt per question. Pause removes question content under a full-screen mask. Normal departure sends a best-effort keepalive pause; losing focus alone does not pause.
+- Two narrow server corrections support the frontend: changing question type removes obsolete variant fields before strict validation; session GET includes immutable `paper_name`, `time_limit_seconds` and `paused_at` from the existing snapshot. No migration or new business table is required. Active exam deadlines use the snapshot duration, not an edited live paper.
+- Existing backend boundaries remain explicit: no crash/sleep heartbeat protocol or server-enforced exam deadline; frontend expiry submits while the app is running and on restored expired sessions. Folder ZIP export exists, but the existing importer supports portable bank/paper documents, not folder archive import. No alternate mock persistence or fake success was added for these cases.
+- Verification: web unit/component/real-Hono-and-SQLite integration tests cover draft restoration/locking, immutable metadata, question type changes, exam concealment/expiry, pause masking, latest-attempt results, color request ordering, filters, selected review composition and trash recovery. Browser inspection at 1703px and 850px verifies split/stacked practice, formulas and revealed grading; browser console was empty during that check. Final command results are recorded in progress.md and apps/web/README.md.
