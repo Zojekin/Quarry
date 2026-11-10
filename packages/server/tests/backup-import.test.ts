@@ -137,3 +137,39 @@ it('rejects corrupt backup checksums before replacing current data', async () =>
   await expect(service.restore(zipSync(files))).rejects.toMatchObject({ code: 'IMPORT_FAILED' });
   expect(await database.repositories.questionBanks.list()).toHaveLength(1);
 });
+
+it('exports only the folder subtree with file tags, portable contents and referenced attachments', async () => {
+  const r = database.repositories;
+  const root = randomUUID(), child = randomUUID(), outside = randomUUID();
+  await r.folders.create({ id: root, parent_id: null, name: 'Root' });
+  await r.folders.create({ id: child, parent_id: root, name: 'Child' });
+  await r.folders.create({ id: outside, parent_id: null, name: 'Outside' });
+  const form = new FormData(); form.set('file', new File(['folder-picture'], 'folder.png', { type: 'image/png' }));
+  const attachment = (await (await app.request('/api/attachments', { method: 'POST', body: form })).json()).data;
+  const input = document(); input.questions[0]!.content = `attachment://${attachment.id}`;
+  const { url, ...metadata } = attachment;
+  const bank = await service.commit(JSON.stringify({ ...input, attachments: [metadata] }), 'json');
+  await r.questionBanks.update(bank.id, { folder_id: child });
+  const excluded = await service.commit(JSON.stringify(document()), 'json');
+  await r.questionBanks.update(excluded.id, { folder_id: outside });
+  const paperResponse = await app.request('/api/papers', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Nested paper', folder_id: root }) });
+  const paper = (await paperResponse.json()).data;
+  const tag = await r.tags.create({ id: randomUUID(), name: 'Folder tag', target_type: 'file', color: '#abcdef' });
+  await r.tags.addRelation({ id: randomUUID(), tag_id: tag.id, target_type: 'file', target_id: child });
+  const response = await app.request(`/api/export/folder/${root}`);
+  expect(response.status).toBe(200); expect(response.headers.get('content-disposition')).toContain('.quarry');
+  const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
+  const tree = JSON.parse(strFromU8(files['content.json']!));
+  expect(tree).toMatchObject({ version: 1, entity: 'folder', root_id: root });
+  expect(tree.folders.map((f: { id: string }) => f.id).sort()).toEqual([root, child].sort());
+  expect(tree.banks.map((b: { id: string }) => b.id)).toEqual([bank.id]);
+  expect(tree.papers.map((p: { id: string }) => p.id)).toEqual([paper.id]);
+  expect(tree.tags[0]).toMatchObject({ color: '#abcdef' });
+  expect(tree).not.toHaveProperty('study_records');
+  expect(strFromU8(files[`attachments/${attachment.sha256}`]!)).toBe('folder-picture');
+  expect(service.preview(strFromU8(files[`contents/${bank.id}.json`]!), 'json').questions).toHaveLength(2);
+  expect(files[`contents/${excluded.id}.json`]).toBeUndefined();
+  expect(JSON.parse(strFromU8(files['manifest.json']!)).format).toBe('quarry-folder');
+  expect((await app.request(`/api/export/folder/${randomUUID()}`)).status).toBe(404);
+});

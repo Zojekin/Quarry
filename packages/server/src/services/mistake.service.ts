@@ -1,13 +1,13 @@
 ﻿import { randomUUID } from 'node:crypto';
 import type { Repositories, Row } from '@quarry/database';
-import { IdSchema, StudyAnswerSchema, AppError, ErrorCode } from '@quarry/shared';
+import { IdSchema, QuestionType, StudyAnswerSchema, AppError, ErrorCode } from '@quarry/shared';
 import type { StudyAnswer } from '@quarry/shared';
 import { z } from 'zod';
 import { found, invalid, parse, nameSchema } from './common.js';
 import { PaperService } from './paper.service.js';
 import type { QuestionView } from './question.service.js';
 
-export interface MistakeHistory { study_record_id: string; answer: StudyAnswer; answered_at: string }
+export interface MistakeHistory { study_record_id: string; answer: StudyAnswer; answered_at: string; source_paper_id?: string | null; source_paper_name?: string | null; source_folder_id?: string | null }
 export class MistakeService {
   constructor(readonly repositories: Repositories) {}
   view(row: Row<'mistake_records'>) {
@@ -30,7 +30,8 @@ export class MistakeService {
       })));
     }
     return this.view(await this.repositories.mistakes.create({ id: randomUUID(), source_question_id: sourceId,
-      source_version: sourceVersion, question_snapshot_json: JSON.stringify(question),
+      source_version: sourceVersion, source_paper_id: history.source_paper_id ?? null,
+      source_paper_name: history.source_paper_name ?? null, source_folder_id: history.source_folder_id ?? null, question_snapshot_json: JSON.stringify(question),
       last_user_answer_json: JSON.stringify(history.answer), last_wrong_at: history.answered_at,
       history_json: JSON.stringify([history]) }));
   }
@@ -42,7 +43,7 @@ export class MistakeService {
     const item = found(state.items.find(i => i.question.id === record.question_id));
     if (!['subjective', 'free_fill_in_blank'].includes(item.question.type)) invalid('Only manual questions may be added manually');
     return this.record(item.question, item.source_question_id, item.source_version, {
-      study_record_id: record.id, answer: parse(StudyAnswerSchema, JSON.parse(record.user_answer_json)), answered_at: record.answered_at }, false);
+      study_record_id: record.id, answer: parse(StudyAnswerSchema, JSON.parse(record.user_answer_json)), answered_at: record.answered_at, source_paper_id: record.source_paper_id, source_paper_name: record.source_paper_name, source_folder_id: record.source_folder_id }, false);
   }
   async mastery(id: string, input: Record<string, unknown>) {
     const data = parse(z.strictObject({ mastery_status: z.enum(['reviewing', 'mastered']) }), input);
@@ -50,13 +51,35 @@ export class MistakeService {
   }
   async list(filters: Record<string, unknown> = {}) {
     const data = parse(z.strictObject({ type: z.string().optional(), tags: z.array(IdSchema).default([]),
-      source_question_id: IdSchema.optional(), source: IdSchema.optional(), mastery_status: z.enum(['reviewing', 'mastered']).optional(),
+      types: z.array(z.enum(QuestionType)).optional(), source_paper_ids: z.array(IdSchema).optional(),
+      folder_ids: z.array(IdSchema).optional(), tag_ids: z.array(IdSchema).optional(),
+      date_from: z.iso.date().optional(), date_to: z.iso.date().optional(), search: z.string().optional(),
+      source_question_id: IdSchema.optional(), source: IdSchema.optional(), mastery_status: z.enum(['reviewing', 'mastered', 'all']).optional(),
       ids: z.array(IdSchema).optional() }), filters);
-    return (await this.repositories.mistakes.list()).map(row => this.view(row)).filter(m =>
-      (!data.type || m.question_snapshot.type === data.type) &&
-      (!data.mastery_status || m.mastery_status === data.mastery_status) &&
-      (!(data.source_question_id ?? data.source) || m.source_question_id === (data.source_question_id ?? data.source)) &&
-      (!data.ids || data.ids.includes(m.id)) && data.tags.every(tag => m.question_snapshot.tag_ids.includes(tag)));
+    if (data.date_from && data.date_to && data.date_from > data.date_to) invalid('Invalid date range');
+    const folders = new Set(data.folder_ids);
+    if (data.folder_ids) {
+      const all = (await this.repositories.trash.snapshot()).folders;
+      let changed = true;
+      while (changed) { changed = false; for (const f of all) if (f.parent_id && folders.has(f.parent_id) && !folders.has(f.id)) {
+        folders.add(f.id); changed = true;
+      } }
+    }
+    return (await this.repositories.mistakes.list()).map(row => this.view(row)).filter(m => {
+      const sources = [m, ...m.history];
+      return (!data.type || m.question_snapshot.type === data.type) &&
+        (!data.types || data.types.includes(m.question_snapshot.type)) &&
+        (!data.mastery_status || data.mastery_status === 'all' || m.mastery_status === data.mastery_status) &&
+        (!(data.source_question_id ?? data.source) || m.source_question_id === (data.source_question_id ?? data.source)) &&
+        (!data.ids || data.ids.includes(m.id)) && data.tags.every(tag => m.question_snapshot.tag_ids.includes(tag)) &&
+        (!data.tag_ids || data.tag_ids.some(tag => m.question_snapshot.tag_ids.includes(tag))) &&
+        (!data.source_paper_ids || sources.some(h => h.source_paper_id && data.source_paper_ids!.includes(h.source_paper_id))) &&
+        (!data.folder_ids || sources.some(h => h.source_folder_id && folders.has(h.source_folder_id))) &&
+        (!data.date_from || m.created_at.slice(0, 10) >= data.date_from) &&
+        (!data.date_to || m.created_at.slice(0, 10) <= data.date_to) &&
+        (!data.search || [m.question_snapshot.content, ...sources.map(h => h.source_paper_name ?? '')]
+          .some(text => text.toLowerCase().includes(data.search!.toLowerCase())));
+    });
   }
   async createPaper(input: Record<string, unknown>) {
     const { name, ...filters } = input;

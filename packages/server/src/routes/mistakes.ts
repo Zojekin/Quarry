@@ -5,7 +5,9 @@ import { MistakeService } from '../services/mistake.service.js';
 export function createMistakeRoutes() {
   return new Hono<QuarryServerEnv>()
     .get('/', async c => c.json({ success: true, data: await new MistakeService(c.get('repositories')).list({
-      ...c.req.query(), tags: filterIds(c.req.query('tags')) }) }))
+      ...c.req.query(), tags: filterIds(c.req.query('tags')),
+      ...Object.fromEntries(['types', 'source_paper_ids', 'folder_ids', 'tag_ids', 'ids'].filter(key => c.req.query(key) !== undefined).map(key =>
+        [key, c.req.queries(key)!.flatMap(value => value.split(',').filter(Boolean))])) }) }))
     .get('/:id', async c => c.json({ success: true, data: new MistakeService(c.get('repositories')).view(
       found(await c.get('repositories').mistakes.findById(c.req.param('id')))) }))
     .post('/', async c => { const input = await body(c); return c.json({ success: true,

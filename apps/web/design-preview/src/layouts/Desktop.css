@@ -1,0 +1,49 @@
+.desktop-layout {
+  display: flex;
+  background: #f8faf8;
+}
+.desktop-tree {
+  flex: 0 0 180px;
+  width: 180px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 12px 22px;
+  background: #f5f8f4;
+  border-right: 1px solid #e2e9e0;
+}
+.desktop-tree-title {
+  margin: 0 9px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #72806d;
+  letter-spacing: .04em;
+}
+.desktop-tree-root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 9px;
+  margin-bottom: 12px;
+  background: #e7efdf;
+  border-radius: 8px;
+  color: #3a592d;
+  font-size: 14px;
+  font-weight: 600;
+}
+.desktop-tree-root svg { width: 18px; height: 18px; flex-shrink: 0; }
+.desktop-tree-root > span { margin-left: auto; font-size: 12px; font-weight: 400; color: #6d7b62; }
+.desktop-tree-tags { margin-top: 32px; padding-top: 23px; border-top: 1px solid #e2e9e0; }
+.desktop-tree-tag { display: flex; align-items: center; gap: 10px; padding: 9px; font-size: 13px; color: #65745f; }
+.desktop-tree-tag > span { width: 7px; height: 7px; background: #9bb487; border-radius: 50%; }
+.desktop-tree-tag:last-child > span { background: #b9b391; }
+.desktop-tree-caption { margin: auto 9px 0; font-size: 12px; color: #85907e; }
+.desktop-main { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.desktop-content { display: flex; flex: 1; min-height: 0; flex-direction: column; padding: 26px 32px 17px; }
+.desktop-files { flex: 1; min-height: 0; }
+.desktop-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 21px; }
+.desktop-section-heading h2 { margin: 0; font-size: 15px; font-weight: 600; color: #31462d; }
+.desktop-section-heading > span { font-size: 12px; color: #7b8874; }
+.desktop-hint { margin: 24px 0 0; font-size: 12px; color: #7b8874; }
+.desktop-resume { flex-shrink: 0; margin-top: 20px; }
+.desktop-footer { display: flex; justify-content: space-between; padding-top: 17px; font-size: 12px; color: #7d8975; }

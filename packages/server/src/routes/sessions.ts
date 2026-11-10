@@ -8,6 +8,10 @@ export function createSessionRoutes() {
     .get('/:id', async c => c.json({ success: true, data: await new SessionService(c.get('repositories')).get(c.req.param('id')) }))
     .post('/', async c => { const input = await body(c); return c.json({ success: true,
       data: await c.get('withTransaction')(r => new SessionService(r).start(input)) }, 201); })
+    .post('/:id/draft', async c => { const input = await body(c); return c.json({ success: true,
+      data: await c.get('withTransaction')(r => new SessionService(r).saveDraft(c.req.param('id'), input)) }); })
+    .post('/:id/complete', async c => c.json({ success: true,
+      data: await c.get('withTransaction')(r => new SessionService(r).finishPractice(c.req.param('id'))) }))
     .post('/:id/submit-question', async c => { const input = await body(c); return c.json({ success: true,
       data: await c.get('withTransaction')(r => new SessionService(r).submitQuestion(c.req.param('id'), input)) }); })
     .post('/:id/submit-exam', async c => { const input = await body(c); return c.json({ success: true,

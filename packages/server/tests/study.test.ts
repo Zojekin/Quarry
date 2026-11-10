@@ -159,3 +159,60 @@ describe('sessions, mistakes and analytics', () => {
   });
 });
 
+
+describe('Phase 1.5 contracts', () => {
+  it('creates and updates colors independently in both namespaces', async () => {
+    for (const target_type of ['file', 'question']) {
+      const tag = await request('/tags', { name: 'Color', target_type, color: '#aAbB09' }, 201);
+      expect(tag.color).toBe('#aAbB09');
+      expect(await request(`/tags/${tag.id}`, { name: 'Renamed', color: '#123456' }, 200, 'PUT'))
+        .toMatchObject({ name: 'Renamed', color: '#123456', target_type });
+      expect(await request(`/tags/${tag.id}`, { color: null }, 200, 'PUT')).toMatchObject({ color: null });
+      await request(`/tags/${tag.id}`, { color: 'red' }, 400, 'PUT');
+    }
+  });
+  it('restores drafts without side effects, locks submissions, preserves attempts and explicitly ends practice', async () => {
+    const { paper, correct } = await setup('single_choice', 2);
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-06T23:59:00Z'));
+    const session = await request('/sessions', { paper_id: paper.id, mode: 'practice', time_zone: 'UTC' }, 201);
+    const question_id = session.question_order[0];
+    const user_answer = { kind: 'choice', option_ids: [correct] };
+    await request(`/sessions/${session.id}/draft`, { current_index: 1, question_id, user_answer });
+    app = createQuarryServer({ db: db.db });
+    expect(await request(`/sessions/${session.id}`)).toMatchObject({ current_index: 1, draft_answers: { [question_id]: user_answer }, records: [] });
+    expect(await request('/mistakes')).toEqual([]);
+    expect((await request('/analytics/dashboard')).total_questions_answered).toBe(0);
+    await request(`/sessions/${session.id}/submit-question`, { question_id, answer: user_answer });
+    await request(`/sessions/${session.id}/draft`, { question_id, user_answer }, 409);
+    await request(`/sessions/${session.id}/submit-question`, { question_id, answer: user_answer, attempt_index: 2 });
+    expect((await request(`/sessions/${session.id}`)).status).toBe('in_progress');
+    vi.setSystemTime(new Date('2026-11-07T00:01:00Z'));
+    const completed = await request(`/sessions/${session.id}/complete`, {});
+    expect(completed).toMatchObject({ status: 'completed', answered_count: 1, effective_duration_seconds: 120 });
+    expect(completed.records).toHaveLength(2);
+    expect(completed.daily_metrics).toEqual([{ date: '2026-11-06', seconds: 60 }, { date: '2026-11-07', seconds: 60 }]);
+    expect((await request(`/sessions/${session.id}/complete`, {})).effective_duration_seconds).toBe(120);
+    await request(`/sessions/${session.id}/draft`, { current_index: 0 }, 409);
+  });
+  it('filters historical mistakes with OR within dimensions and AND across dimensions after source deletion', async () => {
+    const root = await request('/folders', { name: 'Root' }, 201);
+    const child = await request('/folders', { name: 'Child', parent_id: root.id }, 201);
+    const tag = await request('/tags', { name: 'Topic', target_type: 'question' }, 201);
+    const { paper, q } = await setup();
+    await request(`/papers/${paper.id}`, { folder_id: child.id }, 200, 'PUT');
+    await request(`/questions/${q.id}`, { tag_ids: [tag.id] }, 200, 'PUT');
+    await request(`/questions/${paper.sections[0].items[0].question.id}`, { tag_ids: [tag.id] }, 200, 'PUT');
+    const session = await request('/sessions', { paper_id: paper.id, mode: 'practice' }, 201);
+    await request(`/sessions/${session.id}/submit-question`, { question_id: session.question_order[0], answer: { kind: 'choice', option_ids: [] } });
+    await request(`/papers/${paper.id}`, { name: 'Renamed' }, 200, 'PUT');
+    await request(`/papers/${paper.id}`, undefined, 200, 'DELETE');
+    const mistake = (await request('/mistakes'))[0];
+    const date = mistake.created_at.slice(0, 10);
+    expect(mistake).toMatchObject({ source_paper_id: paper.id, source_paper_name: 'Paper', wrong_count: 1, mastery_status: 'reviewing' });
+    const query = `types=subjective,single_choice&source_paper_ids=${paper.id}&folder_ids=${root.id}&tag_ids=${randomUUID()},${tag.id}&mastery_status=all&date_from=${date}&date_to=${date}&search=Paper`;
+    expect(await request(`/mistakes?${query}`)).toHaveLength(1);
+    for (const filter of ['types=subjective', 'types=', `source_paper_ids=${randomUUID()}`, 'tag_ids=', 'mastery_status=mastered', 'search=Renamed', 'date_to=2000-01-01'])
+      expect(await request(`/mistakes?${filter}`)).toHaveLength(0);
+    expect(mistake.question_snapshot).toHaveProperty('options');
+  });
+});

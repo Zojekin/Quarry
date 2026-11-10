@@ -1,0 +1,31 @@
+.focus-layout { display: flex; background: #f8faf8; }
+.focus-main { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.focus-content { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr); gap: 30px; padding: 27px 32px 0; flex: 1; min-height: 0; }
+.focus-current { display: flex; flex-direction: column; min-width: 0; }
+.focus-recent { display: flex; flex-direction: column; min-width: 0; padding-left: 27px; border-left: 1px solid #e3e9df; }
+.focus-section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; }
+.focus-section-heading h2 { margin: 0; font-size: 15px; font-weight: 600; color: #31462d; }
+.focus-section-heading > span { font-size: 12px; color: #7b8874; white-space: nowrap; }
+.focus-paper { min-width: 0; }
+.focus-session { margin-top: 20px; min-width: 0; }
+.focus-table { min-width: 0; }
+.focus-hint { margin: 20px 0 0; font-size: 12px; line-height: 1.8; color: #7b8874; }
+.focus-location { display: flex; gap: 13px; align-items: center; padding: 22px 0; margin-top: auto; border-top: 1px solid #e3e9df; color: #74836c; }
+.focus-location > svg { width: 26px; height: 26px; }
+.focus-location span { font-size: 12px; }
+.focus-location p { margin: 3px 0 0; color: #485c40; font-size: 13px; }
+.focus-footer { display: flex; justify-content: space-between; padding: 18px 32px; color: #7d8975; font-size: 12px; flex-shrink: 0; }
+
+.focus-paper .paper-details{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:30px;align-items:start}
+.focus-paper .paper-head-icon{grid-column:1;grid-row:1;margin-bottom:14px}
+.focus-paper .eyebrow{grid-column:1;grid-row:2}
+.focus-paper h2{grid-column:1;grid-row:3;font-size:25px;margin:10px 0}
+.focus-paper .paper-details>p{grid-column:1;grid-row:4}
+.focus-paper .details-heading{grid-column:2;grid-row:1;margin:0;padding-top:12px}
+.focus-paper .type-bar{grid-column:2;grid-row:2;margin:0}
+.focus-paper .type-labels{grid-column:2;grid-row:3;margin-top:13px}
+.focus-paper .paper-details dl{grid-column:2;grid-row:4 / span 3;margin:0;padding-top:0;border:0}
+.focus-paper .detail-tags{grid-column:1;grid-row:5;margin-top:15px}
+.focus-paper .paper-subactions{grid-column:1;grid-row:6;margin-top:15px}
+.focus-session .resume-description h2{display:none}
+.focus-session{margin-top:30px}

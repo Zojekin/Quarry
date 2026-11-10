@@ -38,7 +38,7 @@ export class SessionService {
       const { reference_answer, ...manual } = safe;
       return manual;
     };
-    return { ...fields, seed: state.seed, question_order: state.items.map(i => i.question.id),
+    return { ...fields, draft_answers: JSON.parse(row.draft_answers_json ?? '{}') as Record<string, StudyAnswer>, seed: state.seed, question_order: state.items.map(i => i.question.id),
       option_order: Object.fromEntries(state.items.filter(i => 'options' in i.question).map(i =>
         [i.question.id, 'options' in i.question ? i.question.options.map(o => o.id) : []])),
       items: state.items.map(item => ({ id: item.id, source_question_id: item.source_question_id,
@@ -119,12 +119,16 @@ export class SessionService {
     const values = answer.kind === 'choice' ? answer.option_ids : answer.kind === 'blanks' ? answer.values : [answer.value];
     const result = scoreQuestion(item.question, values);
     const correct = result.isGraded && 'max_score' in item.question ? result.score === item.question.max_score : null;
+    const { paper } = JSON.parse(row.state_json) as SessionState;
     const record = await this.repositories.studySessions.addRecord({ id: randomUUID(), session_id: row.id,
+      source_paper_id: paper.id,
+      source_paper_name: paper.name,
+      source_folder_id: paper.folder_id,
       question_id: item.question.id, attempt_index: attempt, user_answer_json: JSON.stringify(answer),
       score: result.isGraded ? result.score : null, is_correct: correct === null ? null : correct ? 1 : 0,
       answered_at: this.now().toISOString() });
     if (result.isGraded && !correct) await new MistakeService(this.repositories).record(item.question,
-      item.source_question_id, item.source_version, { study_record_id: record.id, answer, answered_at: record.answered_at });
+      item.source_question_id, item.source_version, { study_record_id: record.id, answer, answered_at: record.answered_at, source_paper_id: record.source_paper_id, source_paper_name: record.source_paper_name, source_folder_id: record.source_folder_id });
     return { ...record, answer, locked: true, correct_answer: 'options' in item.question
       ? item.question.options.filter(o => o.is_correct).map(o => o.id) : 'blanks' in item.question
         ? item.question.blanks.map(b => b.valid_answers) : item.question.reference_answer,
@@ -132,8 +136,9 @@ export class SessionService {
   }
   private async complete(row: Row<'study_sessions'>, state: SessionState) {
     const end = this.now();
-    const effective = Math.max(0, (end.getTime() - Date.parse(row.start_time)) / 1000 - row.paused_duration_seconds);
-    state.daily_metrics = splitDurationAcrossMidnight(Date.parse(row.start_time), end.getTime(), effective, state.time_zone);
+    const endTime = state.paused_at ? Date.parse(state.paused_at) : end.getTime();
+    const effective = Math.max(0, (endTime - Date.parse(row.start_time)) / 1000 - row.paused_duration_seconds);
+    state.daily_metrics = splitDurationAcrossMidnight(Date.parse(row.start_time), endTime, effective, state.time_zone);
     await this.repositories.studySessions.update(row.id, { status: 'completed', end_time: end.toISOString(),
       effective_duration_seconds: effective, state_json: JSON.stringify(state) });
   }
@@ -147,9 +152,34 @@ export class SessionService {
     const latest = Math.max(0, ...records.filter(r => r.question_id === data.question_id).map(r => r.attempt_index));
     if (data.attempt_index !== latest + 1) conflict('Submission is locked; a re-attempt requires the next attempt_index');
     const result = await this.record(row, item, this.validateAnswer(item.question, data.answer), data.attempt_index);
-    if (row.status !== 'completed' && state.items.every(i => i.question.id === item.question.id || records.some(r => r.question_id === i.question.id)))
-      await this.complete(row, state);
+    const drafts = JSON.parse(row.draft_answers_json ?? '{}');
+    delete drafts[data.question_id];
+    await this.repositories.studySessions.update(id, { draft_answers_json: JSON.stringify(drafts) });
     return result;
+  }
+  async saveDraft(id: string, input: Record<string, unknown>) {
+    const data = parse(z.strictObject({ current_index: z.number().int().nonnegative().optional(),
+      question_id: IdSchema.optional(), user_answer: StudyAnswerSchema.optional() }), input);
+    const { row, state } = await this.load(id);
+    if (!['in_progress', 'paused'].includes(row.status)) conflict('Session is not active');
+    if (data.current_index !== undefined && data.current_index >= state.items.length) invalid('Invalid question position');
+    const drafts = JSON.parse(row.draft_answers_json ?? '{}');
+    if (data.user_answer !== undefined) {
+      const item = found(state.items.find(i => i.question.id === data.question_id));
+      if (row.mode === 'practice' && (await this.repositories.studySessions.listRecords(id)).some(r => r.question_id === item.question.id))
+        conflict('Submission is locked');
+      drafts[item.question.id] = this.validateAnswer(item.question, data.user_answer);
+    }
+    await this.repositories.studySessions.update(id, { current_index: data.current_index ?? row.current_index,
+      draft_answers_json: JSON.stringify(drafts) });
+    return this.get(id);
+  }
+  async finishPractice(id: string) {
+    const { row, state } = await this.load(id);
+    if (row.mode !== 'practice' || !['in_progress', 'paused', 'completed'].includes(row.status)) conflict('Practice session is not active');
+    if (row.status !== 'completed') await this.complete(row, state);
+    const session = await this.get(id);
+    return { ...session, answered_count: new Set(session.records.map(r => r.question_id)).size };
   }
   async submitExam(id: string, input: Record<string, unknown>) {
     const data = parse(z.strictObject({ answers: z.array(z.strictObject({ question_id: IdSchema, answer: StudyAnswerSchema })).default([]) }), input);

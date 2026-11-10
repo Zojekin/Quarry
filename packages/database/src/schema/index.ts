@@ -56,13 +56,15 @@ export interface PaperItemsTable extends EntityTable {
   group_id: string | null;
   sort_order: number;
 }
-export interface TagsTable extends EntityTable { name: string; target_type: TagNamespace }
+export interface TagsTable extends EntityTable { name: string; target_type: TagNamespace; color: Generated<string | null> }
 export interface TagRelationsTable extends EntityTable {
   tag_id: string;
   target_type: TagNamespace;
   target_id: string;
 }
 export interface StudySessionsTable extends MutableTable {
+  current_index: Generated<number>;
+  draft_answers_json: Generated<string | null>;
   state_json: Generated<string>;
   paper_id: string;
   mode: 'practice' | 'exam';
@@ -73,6 +75,9 @@ export interface StudySessionsTable extends MutableTable {
   effective_duration_seconds: Generated<number>;
 }
 export interface StudyRecordsTable {
+  source_paper_id: Generated<string | null>;
+  source_paper_name: Generated<string | null>;
+  source_folder_id: Generated<string | null>;
   id: string;
   session_id: string;
   question_id: string;
@@ -83,6 +88,9 @@ export interface StudyRecordsTable {
   answered_at: string;
 }
 export interface MistakeRecordsTable extends MutableTable {
+  source_paper_id: Generated<string | null>;
+  source_paper_name: Generated<string | null>;
+  source_folder_id: Generated<string | null>;
   history_json: Generated<string>;
   source_question_id: string | null;
   source_version: number | null;

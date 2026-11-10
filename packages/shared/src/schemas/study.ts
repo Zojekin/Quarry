@@ -3,7 +3,14 @@ import { MasteryStatus, SessionStatus, StudyMode } from '../enums/index.js';
 import { entityShape, IdSchema, TimestampSchema } from './common.js';
 import { PaperSchema } from './content.js';
 import { QuestionSchema } from './question.js';
+export const StudyAnswerSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('choice'), option_ids: z.array(IdSchema).refine((a) => new Set(a).size === a.length) }),
+  z.strictObject({ kind: z.literal('blanks'), values: z.array(z.string()) }),
+  z.strictObject({ kind: z.literal('text'), value: z.string() }),
+]);
 export const StudySessionSchema = z.strictObject({
+  current_index: z.number().int().nonnegative().optional(),
+  draft_answers: z.record(IdSchema, StudyAnswerSchema).optional(),
   ...entityShape, paper_id: IdSchema, paper_snapshot: PaperSchema,
   mode: z.enum(StudyMode), status: z.enum(SessionStatus),
   started_at: TimestampSchema, completed_at: TimestampSchema.nullable(),
@@ -26,12 +33,8 @@ export const StudySessionSchema = z.strictObject({
     (s.completed_at !== null && Date.parse(s.completed_at) < Date.parse(s.started_at)))
     ctx.addIssue({ code: 'custom', path: ['completed_at'], message: 'Invalid completion time' });
 });
-export const StudyAnswerSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('choice'), option_ids: z.array(IdSchema).refine((a) => new Set(a).size === a.length) }),
-  z.strictObject({ kind: z.literal('blanks'), values: z.array(z.string()) }),
-  z.strictObject({ kind: z.literal('text'), value: z.string() }),
-]);
 export const StudyRecordSchema = z.strictObject({
+  source_paper_id: IdSchema.nullable().optional(), source_paper_name: z.string().nullable().optional(),
   ...entityShape, session_id: IdSchema, question_snapshot: QuestionSchema,
   attempt_index: z.number().int().positive(), answer: StudyAnswerSchema,
   completed_at: TimestampSchema.nullable(), elapsed_ms: z.number().int().nonnegative(),
@@ -48,6 +51,8 @@ export const StudyRecordSchema = z.strictObject({
     ctx.addIssue({ code: 'custom', path: ['score'], message: 'Invalid grading for question' });
 });
 export const MistakeRecordSchema = z.strictObject({
+  source_paper_id: IdSchema.nullable().optional(), source_paper_name: z.string().nullable().optional(),
+  wrong_count: z.number().int().positive().optional(), last_wrong_at: TimestampSchema.optional(),
   ...entityShape, source_question_id: IdSchema.nullable(), source_version: z.number().int().positive().nullable(),
   question_snapshot: QuestionSchema, answer: StudyAnswerSchema,
   study_record_ids: z.array(IdSchema).min(1).refine((ids) => new Set(ids).size === ids.length),

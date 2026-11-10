@@ -1,0 +1,57 @@
+.directory-canvas {
+  display: flex;
+  align-items: stretch;
+}
+
+.directory-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fdfdfb;
+}
+
+.directory-header {
+  flex: none;
+  min-width: 0;
+}
+
+.directory-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 24px;
+  padding: 24px 30px 14px;
+}
+
+.directory-resume {
+  flex: none;
+  min-height: 112px;
+}
+
+.directory-folders {
+  flex: none;
+  min-width: 0;
+}
+
+.directory-files {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.directory-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  margin-top: -12px;
+  color: #65715f;
+  font-size: 12px;
+  line-height: 20px;
+}

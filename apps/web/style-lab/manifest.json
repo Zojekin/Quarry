@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "lang": "zh",
+  "round": "题匣 · 新风格探索",
+  "nativeViewport": "1440x900",
+  "candidates": [
+    {
+      "id": "a-archive",
+      "source": "a-archive.html",
+      "name": "朱砂档案",
+      "concept": "让每一份资料都有清楚的位置，以连续目录承载日常整理。",
+      "typography": "宋体标题 · Segoe UI / 微软雅黑正文",
+      "palette": [
+        "#f8f6f1",
+        "#aa4436",
+        "#302f2b",
+        "#eeece6"
+      ],
+      "traits": [
+        "推荐 · 管理效率",
+        "通栏文件清单",
+        "朱砂索引轨",
+        "低干扰续答"
+      ]
+    },
+    {
+      "id": "b-folios",
+      "source": "b-folios.html",
+      "name": "钴蓝题册",
+      "concept": "把题库与套题变成易于辨认、随手拿取的个人题册。",
+      "typography": "粗无衬线题册标题 · Consolas 索引",
+      "palette": [
+        "#f1f4ff",
+        "#2149c5",
+        "#152555",
+        "#e0e8fc"
+      ],
+      "traits": [
+        "封面网格",
+        "顶端主导航",
+        "厚页题库 / 薄册套题",
+        "对象浏览优先"
+      ]
+    },
+    {
+      "id": "c-studio",
+      "source": "c-studio.html",
+      "name": "莓紫研习室",
+      "concept": "资料在左，正在学的套题在右，打开即接着上次的位置。",
+      "typography": "等线标题 · 微软雅黑正文 · 等宽题号",
+      "palette": [
+        "#f5f2f6",
+        "#643651",
+        "#f2dfd8",
+        "#352437"
+      ],
+      "traits": [
+        "管理与学习双区",
+        "常显套题任务面",
+        "窄轨导航",
+        "继续练习优先"
+      ]
+    }
+  ]
+}

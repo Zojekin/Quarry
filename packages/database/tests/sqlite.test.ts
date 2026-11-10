@@ -216,3 +216,39 @@ describe('learning and attachment repositories', () => {
     expect(await r.findBySha256(attachment.sha256)).toBeUndefined();
   });
 });
+
+it('persists Phase 1.5 defaults, draft state, colors and historical paper identity', async () => {
+  const r = await seed();
+  expect(await r.tags.create({ id: 'colored', name: 'Color', target_type: 'file', color: '#123456' })).toMatchObject({ color: '#123456' });
+  expect(await r.tags.update('colored', { color: null })).toMatchObject({ color: null });
+  expect(await r.studySessions.create({ id: 'draft', paper_id: 'paper', mode: 'practice', start_time: now, end_time: null }))
+    .toMatchObject({ current_index: 0, draft_answers_json: null });
+  await r.studySessions.update('draft', { current_index: 2, draft_answers_json: '{"q":{"kind":"text","value":"draft"}}' });
+  await initializeDatabase(database.db);
+  expect(await r.studySessions.findById('draft')).toMatchObject({ current_index: 2 });
+  await r.studySessions.addRecord({ id: 'historical', session_id: 'draft', question_id: 'q', attempt_index: 1,
+    user_answer_json: '{}', score: null, is_correct: null, answered_at: now, source_paper_id: 'paper', source_paper_name: 'Original' });
+  await database.db.deleteFrom('papers').where('id', '=', 'paper').execute();
+  expect((await r.studySessions.listRecords('draft'))[0]).toMatchObject({ source_paper_id: 'paper', source_paper_name: 'Original' });
+});
+
+it('upgrades existing study history using the session paper snapshot rather than live paper names', async () => {
+  const r = await seed();
+  await r.studySessions.create({ id: 'legacy-session', paper_id: 'paper', mode: 'practice', start_time: now, end_time: null,
+    state_json: JSON.stringify({ paper: { id: 'paper', name: 'Historical name', folder_id: 'folder' } }) });
+  await r.studySessions.addRecord({ id: 'legacy-record', session_id: 'legacy-session', question_id: 'q', attempt_index: 1,
+    user_answer_json: '{}', score: 0, is_correct: 0, answered_at: now });
+  await r.mistakes.create({ id: 'legacy-mistake', source_question_id: 'q', source_version: 1,
+    question_snapshot_json: '{}', last_user_answer_json: '{}', last_wrong_at: now,
+    history_json: JSON.stringify([{ study_record_id: 'legacy-record' }]) });
+  for (const table of ['study_records', 'mistake_records']) for (const column of ['source_paper_id', 'source_paper_name', 'source_folder_id'])
+    await sql.raw(`ALTER TABLE ${table} DROP COLUMN ${column}`).execute(database.db);
+  await sql`ALTER TABLE tags DROP COLUMN color`.execute(database.db);
+  await sql`ALTER TABLE study_sessions DROP COLUMN current_index`.execute(database.db);
+  await sql`ALTER TABLE study_sessions DROP COLUMN draft_answers_json`.execute(database.db);
+  await sql`DELETE FROM kysely_migration WHERE name = '005_phase_1_5'`.execute(database.db);
+  await r.papers.update('paper', { name: 'Renamed later' });
+  await initializeDatabase(database.db);
+  expect((await r.studySessions.listRecords('legacy-session'))[0]).toMatchObject({ source_paper_name: 'Historical name' });
+  expect(await r.mistakes.findById('legacy-mistake')).toMatchObject({ source_paper_id: 'paper', source_paper_name: 'Historical name' });
+});

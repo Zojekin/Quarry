@@ -1,0 +1,65 @@
+{
+  "title": "题匣 Quarry · 学习首页设计方向",
+  "nativeViewport": "1440x900",
+  "candidates": [
+    {
+      "source": "a-desk.html",
+      "name": "松间案台",
+      "concept": "把未完成的套题放回手边。",
+      "typography": "思源宋体：中文标题、英文与展示数字 · 无衬线操作文字",
+      "palette": [
+        "#F4F1E9",
+        "#FBFAF6",
+        "#EEEEE5",
+        "#386450",
+        "#252C29",
+        "#D8DCD2"
+      ],
+      "traits": [
+        "侧边导航",
+        "叠页套题卡",
+        "横向年度热力图"
+      ],
+      "interactive": true
+    },
+    {
+      "source": "b-instrument.html",
+      "name": "蓝图仪表",
+      "concept": "用清晰的数字关系，看见学习投入与下一步。",
+      "typography": "微软雅黑 · Consolas数字",
+      "palette": [
+        "#F5F7FA",
+        "#3F6FF4",
+        "#15243B",
+        "#DCE3EF"
+      ],
+      "traits": [
+        "顶栏导航",
+        "数据矩阵",
+        "右侧任务面板"
+      ]
+    },
+    {
+      "source": "c-trail.html",
+      "name": "朱砂轨迹",
+      "concept": "从已经留下的学习轨迹，接着往前走。",
+      "typography": "宋体标题 · 微软雅黑 · 等宽数字",
+      "palette": [
+        "#F7F5EF",
+        "#A44D38",
+        "#282923",
+        "#E9DDCD"
+      ],
+      "traits": [
+        "纵向学习路径",
+        "十二月历热力图",
+        "非卡片式累计指标"
+      ]
+    }
+  ],
+  "serve": {
+    "command": "node apps/web/dashboard-lab/serve.mjs",
+    "cwd": "D:\\Documents\\My Documents\\共享文件夾（Hermes）\\項目\\写意编程\\题匣\\",
+    "url": "http://127.0.0.1:4176/"
+  }
+}

@@ -58,6 +58,17 @@ export async function initializeDatabase(db: Kysely<QuarryDatabase>): Promise<vo
           await sql`ALTER TABLE study_sessions ADD COLUMN state_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(state_json))`.execute(database);
           await sql`ALTER TABLE mistake_records ADD COLUMN history_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(history_json))`.execute(database);
         } },
+        '005_phase_1_5': { async up(database) {
+          await sql`ALTER TABLE tags ADD COLUMN color TEXT`.execute(database);
+          await sql`ALTER TABLE study_sessions ADD COLUMN current_index INTEGER NOT NULL DEFAULT 0 CHECK(current_index >= 0)`.execute(database);
+          await sql`ALTER TABLE study_sessions ADD COLUMN draft_answers_json TEXT CHECK(draft_answers_json IS NULL OR json_valid(draft_answers_json))`.execute(database);
+          for (const table of ['study_records', 'mistake_records']) {
+            for (const column of ['source_paper_id', 'source_paper_name', 'source_folder_id'])
+              await sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`).execute(database);
+          }
+          await sql`UPDATE study_records SET source_paper_id = (SELECT json_extract(state_json, '$.paper.id') FROM study_sessions WHERE id = session_id), source_paper_name = (SELECT json_extract(state_json, '$.paper.name') FROM study_sessions WHERE id = session_id), source_folder_id = (SELECT json_extract(state_json, '$.paper.folder_id') FROM study_sessions WHERE id = session_id)`.execute(database);
+          await sql`UPDATE mistake_records SET source_paper_id = (SELECT source_paper_id FROM study_records WHERE id = json_extract(history_json, '$[0].study_record_id')), source_paper_name = (SELECT source_paper_name FROM study_records WHERE id = json_extract(history_json, '$[0].study_record_id')), source_folder_id = (SELECT source_folder_id FROM study_records WHERE id = json_extract(history_json, '$[0].study_record_id'))`.execute(database);
+        } },
         '004_batch_b_trash': { async up(database) {
           for (const table of ['folders', 'question_banks', 'papers', 'questions'])
             await sql.raw(`ALTER TABLE ${table} ADD COLUMN deleted_batch_id TEXT`).execute(database);

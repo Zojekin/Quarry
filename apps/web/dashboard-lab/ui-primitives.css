@@ -1,0 +1,190 @@
+/* Shared shape tokens: every A-direction surface/control uses this curve. */
+:root {
+  --quarry-corner-shape: superellipse(2);
+  --quarry-radius-surface: 36px;
+  --quarry-radius-control: 20px;
+  --quarry-radius-cell: 4px;
+  --quarry-radius-track: 5px;
+  --quarry-header-height: 102px;
+  --quarry-sidebar-width: 192px;
+  --quarry-sidebar-rail-width: 72px;
+  --quarry-surface-shadow: 0 5px 0 -2px #e7e6dd, 0 6px 0 -2px #cdd3c6;
+  --quarry-column-inset: 52px;
+  --quarry-text-detail: 14px;
+  --quarry-text-action: 16px;
+  --muted: #62695f;
+}
+
+.q-surface { border-radius: var(--quarry-radius-surface); }
+.q-control { border-radius: var(--quarry-radius-control); }
+.q-cell, .cells .q-cell, .legend .q-cell { border-radius: var(--quarry-radius-cell); }
+.q-track, .q-track > i { border-radius: var(--quarry-radius-track); }
+.q-surface, .q-control, .q-cell, .q-track, .q-track > i {
+  corner-shape: var(--quarry-corner-shape);
+}
+
+aside { padding: 0; width: var(--quarry-sidebar-width); }
+.sidebar-header {
+  height: var(--quarry-header-height);
+  padding: 0 18px 1px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+aside nav { margin: 11px 18px 0; }
+aside .nav-item {
+  height: 46.4px;
+  padding: 12px;
+  font-size: 16px;
+  line-height: 22.4px;
+}
+aside .nav-item svg { width: 24px; height: 24px; }
+.top {
+  height: var(--quarry-header-height);
+  justify-content: flex-start;
+  gap: 12px;
+}
+.top .date { margin-left: auto; }
+.stats {
+  padding-bottom: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.stat:not(:first-child) { padding-left: var(--quarry-column-inset); }
+.middle {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 0;
+}
+.middle > section:first-child {
+  grid-column: span 2;
+  min-width: 0;
+  padding-right: 34px;
+}
+.mistakes {
+  min-width: 0;
+  /* Include the separator's 1px border in the shared text inset. */
+  padding-left: calc(var(--quarry-column-inset) - 1px);
+}
+
+/* Match text by its role, across both papers and all review rows. */
+.paper-category, .paper-top .status, .paper-progress > span,
+.paper-progress em, .paper-bottom > span, .section-title > span {
+  font-size: var(--quarry-text-detail);
+}
+.paper-category { color: var(--muted); }
+.paper h3 { margin: 18px 0 24px; }
+.paper button, .breakdown, .review-link, .page-footer, .utilities {
+  font-size: var(--quarry-text-action);
+}
+.paper button { gap: 0; }
+.date { font-size: 14px; font-weight: 500; }
+.months { font-size: 13px; font-weight: 500; }
+.weekdays, .legend { font-size: 12px; font-weight: 500; }
+.paper-category, .paper-top .status, .paper-bottom > span { font-weight: 500; }
+.mistake-number { margin-bottom: 16px; }
+.breakdown { margin: 0; padding: 7px 0; }
+
+.activity-tools { display: flex; align-items: center; gap: 16px; }
+.activity-heading { display: flex; align-items: baseline; gap: 14px; }
+.activity .section-title { align-items: flex-start; }
+.activity-year { color: var(--muted); font: 14px Consolas, monospace; }
+.metric-switch {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(2, 78px);
+  padding: 3px;
+  background: var(--soft);
+}
+.metric-switch::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: 78px;
+  background: var(--surface);
+  border-radius: calc(var(--quarry-radius-control) - 3px);
+  corner-shape: var(--quarry-corner-shape);
+  box-shadow: 0 1px 3px #252c2914;
+  transition: transform 180ms ease-out;
+}
+.metric-switch[data-metric="duration"]::before { transform: translateX(78px); }
+.metric-switch button {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding: 5px 8px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.metric-switch button[aria-pressed="true"] { color: var(--accent); }
+.metric-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cells i { transition: background-color 180ms; }
+.cells .is-future, .legend .is-future {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.future-key { display: inline-flex; align-items: center; gap: 5px; margin-left: 14px; }
+.papers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.paper, .paper.p1 {
+  background: var(--surface);
+  box-shadow: var(--quarry-surface-shadow);
+}
+
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 160ms, color 160ms, transform 100ms;
+}
+.sidebar-toggle svg { width: 20px; height: 20px; }
+.sidebar-toggle:hover { background: var(--soft); color: var(--accent); }
+.sidebar-toggle:active { transform: scale(.96); }
+.sidebar-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sidebar-open { display: none; }
+body[data-sidebar="collapsed"] aside { width: var(--quarry-sidebar-rail-width); }
+body[data-sidebar="collapsed"] main { margin-left: var(--quarry-sidebar-rail-width); }
+body[data-sidebar="collapsed"] .sidebar-header {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  padding: 0 0 1px;
+}
+body[data-sidebar="collapsed"] .brand,
+body[data-sidebar="collapsed"] .brand > b,
+body[data-sidebar="collapsed"] .brand > span,
+body[data-sidebar="collapsed"] .sidebar-toggle:not(.sidebar-open),
+body[data-sidebar="collapsed"] .nav-item > span,
+body[data-sidebar="collapsed"] .nav-item > small { display: none; }
+body[data-sidebar="collapsed"] .sidebar-open { display: inline-flex; }
+body[data-sidebar="collapsed"] aside nav { margin: 11px 12px 0; }
+body[data-sidebar="collapsed"] .nav-item {
+  width: 48px;
+  justify-content: center;
+  gap: 0;
+}
+body[data-sidebar="collapsed"] .utilities { left: 12px; right: 12px; }
+body[data-sidebar="collapsed"] .utilities > div {
+  width: 48px;
+  justify-content: center;
+  font-size: 0;
+  gap: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-switch::before, .cells i { transition: none; }
+  .sidebar-toggle { transition: none; }
+  .sidebar-toggle:active { transform: none; }
+}

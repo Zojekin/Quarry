@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { TagTargetType } from '../enums/index.js';
 import { entityShape, IdSchema, NonEmptyTextSchema } from './common.js';
-export const TagSchema = z.strictObject({ ...entityShape, name: NonEmptyTextSchema, target_type: z.enum(TagTargetType) });
+export const TagColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable();
+export const TagSchema = z.strictObject({ ...entityShape, name: NonEmptyTextSchema, color: TagColorSchema.optional(), target_type: z.enum(TagTargetType) });
 // Repositories additionally verify the persisted tag's namespace against tag_type.
 export const TagRelationSchema = z.discriminatedUnion('target_type', [
   z.strictObject({ tag_id: IdSchema, tag_type: z.literal(TagTargetType.File),

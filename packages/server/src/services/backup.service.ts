@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { z } from 'zod';
 import type { DatabaseSnapshot, ISnapshotRepository, ITransactionRunner, Repositories } from '@quarry/database';
-import { AppError, ErrorCode, IdSchema, QuestionSchema, QuestionType, ScoreMode } from '@quarry/shared';
+import { AppError, ErrorCode, IdSchema, QuestionSchema, QuestionType, ScoreMode, TagColorSchema } from '@quarry/shared';
 import type { IAttachmentStorage } from './attachment.service.js';
 import type { QuestionView } from './question.service.js';
 import { QuestionService } from './question.service.js';
@@ -33,7 +33,7 @@ const paperConfigSchema = z.strictObject({ full_score: z.number().nonnegative(),
 const documentSchema = z.strictObject({ version: z.literal(1), entity: z.enum(['bank', 'paper']),
   name: z.string().trim().min(1), description: z.string().default(''),
   questions: z.array(portableQuestion),
-  tags: z.array(z.strictObject({ id: IdSchema, name: z.string().min(1), target_type: z.enum(['file', 'question']) })).default([]),
+  tags: z.array(z.strictObject({ id: IdSchema, name: z.string().min(1), target_type: z.enum(['file', 'question']), color: TagColorSchema.optional() })).default([]),
   attachments: z.array(z.strictObject({ id: IdSchema, sha256: z.string().regex(/^[a-f0-9]{64}$/),
     filename: z.string(), mime_type: z.string(), file_size: z.number().int().nonnegative(), created_at: z.string() })).default([]),
   paper: paperConfigSchema.optional(),
@@ -229,6 +229,7 @@ export class BackupService {
     return commit ? this.commit(content, 'json', files) : document;
   }
   async export(entity: string, id: string, format: string) {
+    if (entity === 'folder') return this.exportFolder(id);
     if (!['bank', 'banks', 'paper', 'papers'].includes(entity)) invalid('Unsupported export entity');
     const isBank = entity === 'bank' || entity === 'banks';
     const owner = found(await (isBank ? this.repositories.questionBanks : this.repositories.papers).findById(id));
@@ -249,7 +250,7 @@ export class BackupService {
     const attachmentIds = new Set([...serialized.matchAll(/attachment:\/\/([a-f0-9-]{36})/gi)].map(match => match[1]));
     const document: ContentDocument = { version: 1, entity: isBank ? 'bank' : 'paper', name: owner.name,
       description: owner.description, questions,
-      tags: (await this.repositories.tags.list()).filter(tag => tagIds.has(tag.id)).map(({ id, name, target_type }) => ({ id, name, target_type })),
+      tags: (await this.repositories.tags.list()).filter(tag => tagIds.has(tag.id)).map(({ id, name, target_type, color }) => ({ id, name, target_type, color })),
       attachments: (await this.repositories.attachments.list()).filter(attachment => attachmentIds.has(attachment.id)) };
     if (!isBank) {
       const paper = await new PaperService(this.repositories).get(id);
@@ -266,6 +267,35 @@ export class BackupService {
     if (format !== 'quarry') invalid('Unsupported export format');
     const files: Files = { 'content.json': strToU8(json) };
     await this.attachments(files, document.attachments);
+    return { bytes: zipSync(files), extension: 'quarry', mime: 'application/zip' };
+  }
+  private async exportFolder(id: string) {
+    found(await this.repositories.folders.findById(id));
+    const all = await this.repositories.folders.list();
+    const ids = new Set([id]);
+    let changed = true;
+    while (changed) { changed = false; for (const folder of all) if (folder.parent_id && ids.has(folder.parent_id) && !ids.has(folder.id)) {
+      ids.add(folder.id); changed = true;
+    } }
+    const folders = all.filter(f => ids.has(f.id)).map(f => ({ ...f, parent_id: f.id === id ? null : f.parent_id }));
+    const banks = (await this.repositories.questionBanks.list()).filter(b => b.folder_id && ids.has(b.folder_id));
+    const papers = (await this.repositories.papers.list()).filter(p => p.folder_id && ids.has(p.folder_id));
+    const files: Files = {};
+    for (const [entity, owners] of [['bank', banks], ['paper', papers]] as const) for (const owner of owners) {
+      const result = await this.export(entity, owner.id, 'quarry');
+      const content = unpack(result.bytes);
+      files[`contents/${owner.id}.json`] = content['content.json']!;
+      for (const [path, bytes] of Object.entries(content)) if (path.startsWith('attachments/')) files[path] = bytes;
+    }
+    const targets = new Set([...ids, ...banks.map(b => b.id), ...papers.map(p => p.id)]);
+    const tags = []; const relations = [];
+    for (const tag of await this.repositories.tags.list()) if (tag.target_type === 'file') {
+      const selected = (await this.repositories.tags.listRelations(tag.id)).filter(r => targets.has(r.target_id));
+      if (selected.length) { tags.push(tag); relations.push(...selected); }
+    }
+    files['content.json'] = strToU8(JSON.stringify({ version: 1, entity: 'folder', root_id: id, folders, banks, papers, tags, tag_relations: relations }));
+    files['manifest.json'] = strToU8(JSON.stringify({ format: 'quarry-folder', version: 1,
+      checksums: Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, hash(bytes)])) }));
     return { bytes: zipSync(files), extension: 'quarry', mime: 'application/zip' };
   }
   private async attachments(files: Files, rows: { sha256: string }[]) {

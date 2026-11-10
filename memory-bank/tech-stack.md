@@ -1,26 +1,27 @@
 # 自定义题目软件 技术栈规范 (Tech Stack Specification)
 
+> 2026-11-10：下文前端框架/组件库是此前生产方案，原生JS视觉原型不表示已实现React/HeroUI/shadcn。用户已授权前端探索不受旧栈约束，正式前端栈需另定。后端Node/Hono、shared Zod、领域/仓储分层继续沿用。当前交接入口见frontend-current-spec.md及backend-handoff.md。
+
 基于 `design-document.md` 的产品定位与架构约束，本技术栈遵循 **“简单、健壮、高度解耦、全链路类型安全”** 的核心原则，採用 **TypeScript 端到端同构架构 (pnpm Monorepo)**，满足 Windows 桌面离线使用、严格分层、可替换数据库适配器以及未来平滑演进至自託管服务器的需求。
 
 * * *
 
 ## 1. 架构总览与选型矩阵
 
-| 分层领域               | 推荐选型                        | 关键库 / 工具                                   | 核心职责与选型理由                                                                      |
-| ------------------ | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
-| **Monorepo 管理**    | pnpm Workspaces             | `pnpm` + `turborepo`                       | 严格隔离前端、后端、核心领域与共享类型，共享依赖硬链接节省磁盘空间，构建快速。                                        |
-| **桌面外壳**           | Electron                    | `electron-vite`                            | 成熟度最高，生命週期可控；内嵌託管本地后端进程，在 Windows 全版本环境中稳定可靠，避免 Webview 兼容性碎片化。                |
-| **前端框架**           | React 19 + Vite             | `react`, `react-dom`, `vite`               | 响应式组件生态成熟，複杂文档树、交互式表单与题目渲染的开发效率高。                                              |
-| **样式与 UI 体系**      | Tailwind CSS + shadcn/ui    | `@radix-ui/*`, `lucide-react`              | 零运行时 CSS；基于 Radix 原生无障碍组件，完美实现文件管理器佈局、抽屉浮层、主题切换（浅色/深色/跟随系统）。                   |
-| **富文本与排版**         | Markdown + KaTeX + Prism    | `markdown-it`, `katex`, `prismjs`          | 满足 Markdown 排版、数学公式与代码高亮。KaTeX 速度极快且离线字体包完整；markdown-it 插件体系稳定高效。              |
-| **拖拽与列表虚拟化**       | @dnd-kit + TanStack Virtual | `@dnd-kit/core`, `@tanstack/react-virtual` | `@dnd-kit` 支持题目分区、固定组整组移动等複杂约束；`react-virtual` 保障考试模式整卷长列表滚动丝滑不卡顿。             |
-| **客户端状态管理**        | Zustand + TanStack Query    | `zustand`, `@tanstack/react-query`         | Zustand 管理计时器、暂停遮罩、侧边栏抽屉等纯前端状态；TanStack Query 负责接口缓存、异步请求与乐观更新。                |
-| **后端运行时与 Web 框架**  | Node.js (LTS) + Hono        | `hono`, `@hono/node-server`                | 启动耗时 <10ms，内存开销极低（十馀 MB）；标准 Web API 接口规范；自带 `hono/client` 实现端到端类型安全 RPC。       |
-| **数据校验与模型契约**      | Zod                         | `zod`                                      | 前后端共享 DTO 与实体校验，严格拦截非法输入，保证导入导出时“一票否决”式校验。                                     |
-| **业务核心层 (Domain)** | 纯 TypeScript 模块             | 无外部副作用库                                    | 单选/多选/不定项/填空等 6 大题型判分逻辑、种子随机打乱、用时跨午夜切分纯函数，100% 单元测试覆盖。                         |
-| **数据库接入与抽象**       | Kysely (Repository 模式)      | `kysely`, `better-sqlite3`                 | 仓储接口解耦。Kysely 是零二进制依赖的类型安全 SQL 构建器；首版走 `better-sqlite3` WAL 模式，未来更换数据库只需替换适配器。 |
-| **附件与存储**          | 虚拟化存储适配器                    | 本地文件系统 + `crypto` (SHA-256)                | 附件独立封装，按哈希去重存放于应用数据目录，对外仅暴露资源 ID，前端不直接感知绝对路径。                                  |
-| **导出与备份打包**        | 归档工具                        | `archiver`, `unzipper`                     | 支持将题目模型、JSON/Markdown 与附件打包为 `.zip` 容器；导入前强制校验数据结构与版本号并支持事务回滚。                 |
+| 分层领域                                   | 推荐选型                        | 关键库 / 工具                                   | 核心职责与选型理由                                                                      |
+| -------------------------------------- | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
+| **Monorepo 管理**                        | pnpm Workspaces             | `pnpm` + `turborepo`                       | 严格隔离前端、后端、核心领域与共享类型，共享依赖硬链接节省磁盘空间，构建快速。                                        |
+| **桌面外壳**                               | Electron                    | `electron-vite`                            | 成熟度最高，生命週期可控；内嵌託管本地后端进程，在 Windows 全版本环境中稳定可靠，避免 Webview 兼容性碎片化。                |
+| **前端框架**                               | React 19 + Vite             | `react`, `react-dom`, `vite`               | 响应式组件生态成熟，複杂文档树、交互式表单与题目渲染的开发效率高。                                              |
+| **富文本与排版** | Markdown + KaTeX + Prism    | `markdown-it`, `katex`, `prismjs`          | 满足 Markdown 排版、数学公式与代码高亮。KaTeX 速度极快且离线字体包完整；markdown-it 插件体系稳定高效。              |
+| **拖拽与列表虚拟化**                           | @dnd-kit + TanStack Virtual | `@dnd-kit/core`, `@tanstack/react-virtual` | `@dnd-kit` 支持题目分区、固定组整组移动等複杂约束；`react-virtual` 保障考试模式整卷长列表滚动丝滑不卡顿。             |
+| **客户端状态管理**                            | Zustand + TanStack Query    | `zustand`, `@tanstack/react-query`         | Zustand 管理计时器、暂停遮罩、侧边栏抽屉等纯前端状态；TanStack Query 负责接口缓存、异步请求与乐观更新。                |
+| **后端运行时与 Web 框架**                      | Node.js (LTS) + Hono        | `hono`, `@hono/node-server`                | 启动耗时 <10ms，内存开销极低（十馀 MB）；标准 Web API 接口规范；自带 `hono/client` 实现端到端类型安全 RPC。       |
+| **数据校验与模型契约**                          | Zod                         | `zod`                                      | 前后端共享 DTO 与实体校验，严格拦截非法输入，保证导入导出时“一票否决”式校验。                                     |
+| **业务核心层 (Domain)**                     | 纯 TypeScript 模块             | 无外部副作用库                                    | 单选/多选/不定项/填空等 6 大题型判分逻辑、种子随机打乱、用时跨午夜切分纯函数，100% 单元测试覆盖。                         |
+| **数据库接入与抽象**                           | Kysely (Repository 模式)      | `kysely`, `better-sqlite3`                 | 仓储接口解耦。Kysely 是零二进制依赖的类型安全 SQL 构建器；首版走 `better-sqlite3` WAL 模式，未来更换数据库只需替换适配器。 |
+| **附件与存储**                              | 虚拟化存储适配器                    | 本地文件系统 + `crypto` (SHA-256)                | 附件独立封装，按哈希去重存放于应用数据目录，对外仅暴露资源 ID，前端不直接感知绝对路径。                                  |
+| **导出与备份打包**                            | 归档工具                        | `archiver`, `unzipper`                     | 支持将题目模型、JSON/Markdown 与附件打包为 `.zip` 容器；导入前强制校验数据结构与版本号并支持事务回滚。                 |
 
 * * *
 

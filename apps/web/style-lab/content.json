@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {"name": "高等数学", "count": 3},
+    {"name": "计算机基础", "count": 2},
+    {"name": "英语", "count": 1}
+  ],
+  "files": [
+    {"name": "高等数学 · 极限与连续", "type": "question_bank", "count": 128, "tag": "基础巩固", "modified": "今天 10:42", "folder": "高等数学", "code": "MATH / 01"},
+    {"name": "线性代数 · 向量与矩阵", "type": "question_bank", "count": 86, "tag": "重点章节", "modified": "昨天 16:20", "folder": "高等数学", "code": "MATH / 02"},
+    {"name": "数据结构 · 树与图", "type": "question_bank", "count": 96, "tag": "基础巩固", "modified": "11 月 05 日", "folder": "计算机基础", "code": "CS / 01"},
+    {"name": "高等数学 · 期中模拟卷 03", "type": "paper", "count": 30, "tag": "考前练习", "modified": "今天 11:08", "folder": "高等数学", "code": "PAPER / 03"},
+    {"name": "数据结构 · 章节练习 02", "type": "paper", "count": 24, "tag": "章节练习", "modified": "昨天 15:36", "folder": "计算机基础", "code": "PAPER / 02"},
+    {"name": "英语 · 阅读理解专项", "type": "paper", "count": 20, "tag": "专项训练", "modified": "11 月 04 日", "folder": "英语", "code": "PAPER / 01"}
+  ],
+  "session": {"paper_name": "高等数学 · 期中模拟卷 03", "answered": 12, "current": 13, "total": 30, "elapsed": "18:42", "mode": "practice"}
+}
