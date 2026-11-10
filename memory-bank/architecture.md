@@ -1,5 +1,13 @@
 # 题匣 (Quarry) 系统架构设计说明书 (Architecture Specification)
 
+## Phase 2 desktop host and Phase 6 packaging configuration (2026-11-10)
+
+- `apps/desktop/src/backend-manager.ts` owns an in-process Hono listener bound only to `127.0.0.1`, OS-assigned random ports, bounded health polling and idempotent shutdown. SQLite's factory performs initialization/migrations. The application data directory contains `quarry.sqlite`, `attachments/` and durable `recovery-points/`. Startup failures destroy the database; shutdown drains HTTP requests before destroying SQLite, with a five-second bound for open connections.
+- `src/main.ts` coordinates readiness, window activation and asynchronous quit, including quit during startup and window-load failures. The 1440×900 window has 900×600 minimum dimensions, sandboxing, context isolation and no Node integration. `src/preload.ts` exposes only a validated loopback URL string as `window.__QUARRY_API_URL__`; no IPC or filesystem bridge is exported. New windows and renderer navigation are denied.
+- Production uses `loadFile` for bundled web assets; development optionally uses `VITE_DEV_SERVER_URL`. Desktop composition permits opaque `null` CORS origins for file-based renderer requests/preflight; ordinary shared-server CORS remains unchanged. Vite's relative asset base makes local file asset loading work without disabling web security.
+- TypeScript compilation remains the desktop `build` command. The packaging hook bundles workspace source into `dist/runtime/main.js` and sandbox-compatible `preload.cjs`; `better-sqlite3` remains external for electron-builder ABI rebuilding and ASAR unpacking. Static frontend assets ship as `resources/web`. Windows x64 NSIS and portable targets use product name `题匣` and app ID `com.quarry.app`. See `apps/desktop/README.md` for development/build commands and native ABI guidance.
+- Backend integration tests exercise real TCP/SQLite and the production BackendClient, including CRUD/persistence, concurrent ports, file-origin preflight, failure cleanup and port/file release. Preload tests verify its single-value exposure and invalid URL rejection. Packaging configuration does not establish clean-machine installer/offline GUI acceptance; those remain release checks.
+
 ## 当前实施入口（2026-11-10）
 
 - 产品规则见 `design-document.md` 和 `frontend-current-spec.md`，本轮界面变化以current-spec为准；后端接手见 `backend-handoff.md`，区分源码核实差异、已有能力和待定方案。

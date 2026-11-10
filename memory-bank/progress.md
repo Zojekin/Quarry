@@ -291,3 +291,11 @@
 - Broader handoff items (heartbeat/offline timing, exam deadline enforcement, retry result recovery and general content-query alignment) remain outside this task's enumerated changes.
 
 Phase 1.5 verification: `npx pnpm --filter @quarry/server test` passes 61 tests; `npx pnpm test` passes all 122 tests (shared 32, core 16, database 13, server 61; web/desktop have no test files). `npx pnpm build` passes all six packages. Core coverage remains 100%. New tests cover colors, draft restoration/locking/no side effects, explicit completion and attempt history, multidimensional historical-source filters, legacy migration backfill, and subtree export with attachment bytes.
+
+## Phase 2 desktop host / Phase 6 packaging configuration (2026-11-10)
+
+- Implemented backend manager, health readiness, persistent application data and recovery-point paths, idempotent bounded HTTP/SQLite shutdown and startup failure cleanup.
+- Implemented Electron lifecycle/window host and sandboxed preload exposing only the actual API URL. Production file loading uses relative web assets; desktop-local composition supplies file-origin CORS without changing the shared server policy.
+- Configured Windows x64 NSIS/portable, native SQLite rebuild/unpacking, web resource copying and bundled executable workspace dependencies. Added desktop setup documentation, backend integration and preload contract tests.
+- Verification: `npx pnpm --filter @quarry/desktop test` passes 8 tests; `npx pnpm --filter @quarry/desktop build` passes; `npx pnpm test` passes all 155 tests (shared 32, core 16, database 13, server 61, web 25, desktop 8); `npx pnpm build` passes all six packages. Core coverage remains 100%. `node apps/desktop/scripts/bundle.mjs` also passes. Electron's install script is explicitly allowed in pnpm workspace settings so fresh installations obtain the runtime. Installer generation and clean-machine offline GUI acceptance remain separate release checks.
+- An optional `electron --version` check triggered the first runtime download and was stopped while that download was pending. No Electron GUI launch or installer execution is claimed. All four required verification commands above completed successfully before this optional check.

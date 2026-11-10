@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/
 out/
+apps/desktop/release/
 .turbo/
 .pnpm-store/
 coverage/
