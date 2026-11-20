@@ -3,3 +3,5 @@ export * from './question.js';
 export * from './tag.js';
 export * from './content.js';
 export * from './study.js';
+
+export * from './portable.js';

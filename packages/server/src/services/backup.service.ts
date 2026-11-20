@@ -5,40 +5,14 @@ import { join } from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { z } from 'zod';
 import type { DatabaseSnapshot, ISnapshotRepository, ITransactionRunner, Repositories } from '@quarry/database';
-import { AppError, ErrorCode, IdSchema, QuestionSchema, QuestionType, ScoreMode, TagColorSchema } from '@quarry/shared';
+import { AppError, ErrorCode, ContentDocumentSchema, validateContentReferences, ScoreMode } from '@quarry/shared';
+import type { ContentDocument } from '@quarry/shared';
 import type { IAttachmentStorage } from './attachment.service.js';
 import type { QuestionView } from './question.service.js';
 import { QuestionService } from './question.service.js';
 import { PaperService } from './paper.service.js';
 import { found, invalid } from './common.js';
 
-// Strip the material extension before applying the strict domain schema.
-const portableQuestion = z.unknown().transform((value, ctx) => {
-  const base = z.record(z.string(), z.unknown()).safeParse(value);
-  if (!base.success) { ctx.addIssue({ code: 'custom', message: 'Expected question object' }); return z.NEVER; }
-  const { material, material_parent_id, ...content } = base.data;
-  const parsed = QuestionSchema.safeParse(content);
-  if (!parsed.success) { for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message }); return z.NEVER; }
-  const extension = z.strictObject({ material: z.string().nullable().default(null),
-    material_parent_id: IdSchema.nullable().default(null) }).safeParse({ material, material_parent_id });
-  if (!extension.success) { for (const issue of extension.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message }); return z.NEVER; }
-  return { ...parsed.data, ...extension.data };
-});
-const paperConfigSchema = z.strictObject({ full_score: z.number().nonnegative(), score_mode: z.enum(ScoreMode),
-  time_limit_seconds: z.number().int().positive().nullable(), shuffle_options: z.boolean(), shuffle_sections: z.boolean(),
-  shuffle_materials: z.boolean(), merged_shuffle_sections: z.array(z.array(IdSchema)),
-  sections: z.array(z.strictObject({ id: IdSchema, title: z.string().min(1), question_type: z.enum(QuestionType),
-    shuffle_questions: z.boolean(), fixed_groups: z.array(z.array(IdSchema)),
-    items: z.array(z.strictObject({ id: IdSchema, question_id: IdSchema })) })) });
-const documentSchema = z.strictObject({ version: z.literal(1), entity: z.enum(['bank', 'paper']),
-  name: z.string().trim().min(1), description: z.string().default(''),
-  questions: z.array(portableQuestion),
-  tags: z.array(z.strictObject({ id: IdSchema, name: z.string().min(1), target_type: z.enum(['file', 'question']), color: TagColorSchema.optional() })).default([]),
-  attachments: z.array(z.strictObject({ id: IdSchema, sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    filename: z.string(), mime_type: z.string(), file_size: z.number().int().nonnegative(), created_at: z.string() })).default([]),
-  paper: paperConfigSchema.optional(),
-});
-type ContentDocument = z.infer<typeof documentSchema>;
 type Files = Record<string, Uint8Array>;
 function hash(bytes: Uint8Array) { return createHash('sha256').update(bytes).digest('hex'); }
 /** Locate parsed JSON paths without confusing repeated field names in different questions. */
@@ -99,7 +73,7 @@ export class BackupService {
         message: String(error) }]);
     }
     const locations = jsonLocations(source);
-    const result = documentSchema.safeParse(value);
+    const result = ContentDocumentSchema.safeParse(value);
     if (!result.success) reject(result.error.issues.map(issue => {
       const path = [...issue.path];
       while (path.length && !locations.has(JSON.stringify(path))) path.pop();
@@ -114,48 +88,7 @@ export class BackupService {
       const position = locations.get(JSON.stringify(path)) ?? 0;
       return reject([{ line: offset + source.slice(0, position).split('\n').length, path: originalPath.join('.'), message }]);
     };
-    const ids = new Set(document.questions.map(question => question.id));
-    const tags = new Map(document.tags.map(tag => [tag.id, tag]));
-    const attachmentIds = new Set(document.attachments.map(attachment => attachment.id));
-    if (ids.size !== document.questions.length || tags.size !== document.tags.length)
-      reject([{ line: 1, message: 'Duplicate question or tag IDs' }]);
-    if (attachmentIds.size !== document.attachments.length
-      || new Set(document.attachments.map(attachment => attachment.sha256)).size !== document.attachments.length)
-      reject([{ line: 1, message: 'Duplicate attachment identities' }]);
-    for (const [questionIndex, question] of document.questions.entries()) {
-      if (question.tag_ids.some(id => tags.get(id)?.target_type !== 'question'))
-        referenceError(['questions', questionIndex, 'tag_ids'], `Invalid question tag reference: ${question.id}`);
-      for (const match of JSON.stringify(question).matchAll(/attachment:\/\/([a-f0-9-]{36})/gi))
-        if (!attachmentIds.has(match[1]!)) referenceError(['questions', questionIndex], `Invalid attachment reference: ${match[1]}`);
-      const visited = new Set([question.id]);
-      let parent = question.material_parent_id;
-      while (parent) {
-        if (!ids.has(parent) || visited.has(parent)) referenceError(['questions', questionIndex, 'material_parent_id'], 'Invalid material parent reference');
-        visited.add(parent); parent = document.questions.find(entry => entry.id === parent)!.material_parent_id;
-      }
-    }
-    if (document.entity === 'bank' && document.paper) reject([{ line: 1, message: 'Bank cannot contain paper configuration' }]);
-    if (document.paper) {
-      const sections = new Set(document.paper.sections.map(section => section.id));
-      const items = document.paper.sections.flatMap(section => section.items);
-      if (sections.size !== document.paper.sections.length || new Set(items.map(item => item.id)).size !== items.length
-        || new Set(items.map(item => item.question_id)).size !== items.length)
-        reject([{ line: 1, message: 'Duplicate paper section or item' }]);
-      const merged = document.paper.merged_shuffle_sections.flat();
-      if (merged.some(id => !sections.has(id)) || new Set(merged).size !== merged.length)
-        reject([{ line: 1, message: 'Invalid merged section reference' }]);
-      for (const [sectionIndex, section] of document.paper.sections.entries()) {
-        if (section.items.some(item => !ids.has(item.question_id)
-          || document.questions.find(question => question.id === item.question_id)?.type !== section.question_type))
-          referenceError(['paper', 'sections', sectionIndex, 'items'], 'Invalid paper question reference or type');
-        const grouped = section.fixed_groups.flat();
-        if (new Set(grouped).size !== grouped.length || section.fixed_groups.some(group => group.length < 2
-          || group.some((id, i) => {
-            const position = section.items.findIndex(item => item.id === id);
-            return position < 0 || (i > 0 && position !== section.items.findIndex(item => item.id === group[i - 1]) + 1);
-          }))) referenceError(['paper', 'sections', sectionIndex, 'fixed_groups'], 'Invalid fixed group');
-      }
-    }
+    validateContentReferences(document, referenceError);
     return document;
   }
   async commit(content: string, format: string, files: Files = {}) {
