@@ -1,5 +1,19 @@
 # 题匣 (Quarry) 研发进度与里程碑看板 (Progress Tracking)
 
+### Phase 6 Windows 应用打包与分发落地（2026-11-20）
+
+- **图标与应用视觉**：基于官方矢量透明标 `apps/web/public/assets/logo.svg`，生成包含 16x16 至 256x256 全尺寸规范的 `icon.ico` 与 `icon.png`，存入 `apps/desktop/resources/`。主进程 `createWindow` 配置窗口 `icon`，安装向导、卸载程序、任务栏及主执行程序图标完整统一。
+- **NSIS 向导式安装包** (`题匣 Setup 0.1.0.exe`)：
+  - 采用向导模式 (`oneClick: false`) 与简体中文向导界面（LCID 2052）；
+  - 默认全机所有用户安装模式 (`selectPerMachineByDefault: true`, `allowElevation: true`)；
+  - 允许自定义安装目录 (`allowToChangeInstallationDirectory: true`)，主执行程序与默认目录名称统一为英文 `Quarry`，规避路径编码风险；
+  - 桌面与开始菜单快捷方式采用向导复选框由用户自选生成，快捷方式统一命名为“题匣”；
+  - 集成完整卸载程序 (`Uninstall 题匣.exe`)，并配置 `deleteAppDataOnUninstall: false`，卸载或重装时严禁清除用户本地 SQLite 数据库与附件；
+- **分发格式补齐**：除 NSIS 安装包外，同步输出单文件便携免安装版 (`题匣 0.1.0.exe`) 与绿色解压免安装包 (`题匣-0.1.0-win.zip`)，解压即可直接双击运行 `Quarry.exe`。
+- **自动化原生 ABI 管理**：针对 `better-sqlite3` 在 Windows 下缺少 Visual Studio C++ 编译套件及路径空格导致 `node-gyp` 失败的问题，实现自动化双 ABI 调度（打包时自动置入 Electron ABI 模块，打包后与测试/开发前自动恢复 Node ABI 模块），彻底免除手动编译。
+- **根目录快捷命令**：根目录 `package.json` 增加 `"package"`（全格式打包输出）与 `"package:dir"`（解包目录快速测试）。
+- **全量验证**：自动化测试 10/10 任务全部成功（含 shared 32 项、core 16 项且覆盖率 100%、database 13 项、web 25 项、server 61 项、desktop 8 项，全链路共计 155 项测试全部通过）；打包生成 `apps/desktop/release/` 下全部三大分发制品及 `win-unpacked`，执行成功，退出码 0。
+
 ### Phase 3 正式 React 19 前端（2026-11-10）
 
 - `apps/web` 从占位包转为可构建的 React 19 + Vite 应用，提供独立工作区标签、首页、资料库/题库/套题管理、六题型编辑、编排与来源差异、练习/考试、结果、错题复习组卷、学习记录、设置与回收站。统一 BackendClient 接入实际 Hono HTTP 接口，不使用原型模拟仓储。

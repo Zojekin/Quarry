@@ -10,7 +10,9 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "package": "pnpm --filter @quarry/desktop run dist",
+    "package:dir": "pnpm --filter @quarry/desktop run pack"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

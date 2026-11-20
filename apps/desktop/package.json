@@ -6,13 +6,17 @@
   "main": "dist/runtime/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "pretest": "node scripts/restore-sqlite.cjs",
     "test": "vitest run",
+    "predev": "node scripts/restore-sqlite.cjs",
     "dev": "node scripts/bundle.mjs && electron .",
     "lint": "tsc -p tsconfig.json --noEmit",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "prepack": "pnpm --filter @quarry/web build && pnpm build",
-    "predist": "pnpm --filter @quarry/web build && pnpm build"
+    "postpack": "node scripts/restore-sqlite.cjs",
+    "predist": "pnpm --filter @quarry/web build && pnpm build",
+    "postdist": "node scripts/restore-sqlite.cjs"
   },
   "dependencies": {
     "@quarry/shared": "workspace:*",
@@ -30,6 +34,7 @@
   },
   "build": {
     "productName": "题匣",
+    "executableName": "Quarry",
     "appId": "com.quarry.app",
     "directories": {
       "output": "release"
@@ -42,10 +47,15 @@
       {
         "from": "../web/dist",
         "to": "web"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
       }
     ],
     "beforePack": "./scripts/before-pack.cjs",
     "win": {
+      "icon": "resources/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -58,12 +68,34 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "selectPerMachineByDefault": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "题匣",
+      "uninstallDisplayName": "题匣",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "language": "2052"
     },
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
     ],
-    "npmRebuild": true
+    "npmRebuild": false
   }
 }

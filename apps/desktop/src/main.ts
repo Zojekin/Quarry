@@ -11,8 +11,12 @@ let canQuit = false;
 
 async function createWindow(): Promise<void> {
   if (!backend || quitting) return;
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.resolve(directory, '../../resources/icon.png');
   const window = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(directory, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
