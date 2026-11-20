@@ -3,6 +3,9 @@ const path = require('node:path');
 
 module.exports = async function () {
   await import('./bundle.mjs');
+  // Packaging only targets Windows currently; guard platform
+  if (process.platform !== 'win32') return;
+
   // Ensure Electron ABI better_sqlite3 is in place for packaging
   const electronNodePath = path.resolve(__dirname, '../resources/electron-better_sqlite3.node');
   if (fs.existsSync(electronNodePath)) {
