@@ -313,3 +313,7 @@ Phase 1.5 verification: `npx pnpm --filter @quarry/server test` passes 61 tests;
 - Configured Windows x64 NSIS/portable, native SQLite rebuild/unpacking, web resource copying and bundled executable workspace dependencies. Added desktop setup documentation, backend integration and preload contract tests.
 - Verification: `npx pnpm --filter @quarry/desktop test` passes 8 tests; `npx pnpm --filter @quarry/desktop build` passes; `npx pnpm test` passes all 155 tests (shared 32, core 16, database 13, server 61, web 25, desktop 8); `npx pnpm build` passes all six packages. Core coverage remains 100%. `node apps/desktop/scripts/bundle.mjs` also passes. Electron's install script is explicitly allowed in pnpm workspace settings so fresh installations obtain the runtime. Installer generation and clean-machine offline GUI acceptance remain separate release checks.
 - An optional `electron --version` check triggered the first runtime download and was stopped while that download was pending. No Electron GUI launch or installer execution is claimed. All four required verification commands above completed successfully before this optional check.
+
+## Issue #5 ? Quarry CLI ????? Skill
+
+?? `quarry validate`?`quarry convert` ? `quarry spec`??????????????Loose JSON ????? Markdown??????? Skill ????????????????????UUID ????????CLI ?????????
