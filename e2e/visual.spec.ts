@@ -7,7 +7,7 @@ const bankName = '地质学基础';
 const paperName = '火山与岩石';
 const stem = '下列哪种岩石由岩浆冷却形成？';
 const button = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: true });
-const nav = (page: Page, name: string) => page.locator('.production-sidebar').getByRole('button', { name, exact: true });
+const nav = (page: Page, name: string) => page.locator('.app-sidebar').getByRole('button', { name, exact: true });
 const id = (n: number) => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 
 async function seed(page: Page) {
@@ -85,41 +85,50 @@ for (const layout of layouts) {
     };
 
     await page.getByLabel('年份').selectOption('2024');
-    await capture('home', [page.locator('.metrics .display-number').first()]);
+    await expect(page.locator('.heat-grid > i')).toHaveCount(53 * 7);
+    await capture('home', [
+      page.locator('.metric-row .big-number').first(),
+      page.locator('.paper-card .card-bottom > span'),
+    ]);
     await nav(page, '资料库').click();
-    await button(page, /地质学基础$/).waitFor();
-    await capture('library-list');
-    await button(page, '卡片').click();
+    await button(page, bankName).waitFor();
+    const tag = page.locator('.tag-chip.tag-color').first();
+    await expect(tag).toHaveCSS('background-color', 'rgb(56, 100, 80)');
+    await expect(tag).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await capture('library-list', [page.locator('.library-content tbody td:nth-child(5)')]);
+    await button(page, '图标视图').click();
     await expect(page.locator('.document-grid')).toBeVisible();
     await capture('library-grid');
-    await button(page, /地质学基础$/).click();
+    await button(page, bankName).click();
     await expect(page.getByText(stem, { exact: true })).toBeVisible();
     await capture('bank-detail');
     await nav(page, '资料库').click();
-    await button(page, /火山与岩石$/).click();
+    await button(page, paperName).click();
     await expect(page.getByRole('heading', { name: paperName })).toBeVisible();
-    await capture('paper-detail', [page.locator('.properties dd').filter({ hasText: /^\d{4}-\d{2}-\d{2}T/ })]);
+    await capture('paper-detail', [page.locator('.paper-property-list div').filter({ has: page.getByText('最后修改') }).locator('dd')]);
     await nav(page, '错题本').click();
     const mistake = page.locator('.mistake-row');
     await expect(mistake.getByText(stem, { exact: true })).toBeVisible();
-    await capture('mistakes', [mistake.getByText(/^\d{4}-\d{2}-\d{2}$/)]);
+    await capture('mistakes', [mistake.locator('time'), page.locator('.history-item > :first-child')]);
     await nav(page, '设置').click();
+    await page.getByLabel('标签类型').selectOption('question');
     await expect(page.getByLabel('岩石分类颜色')).toBeVisible();
     await capture('settings');
     await nav(page, '回收站').click();
     await expect(page.getByText('旧版课程笔记')).toBeVisible();
     await capture('trash');
     await nav(page, '学习记录').click();
-    await expect(page.getByRole('button', { name: '继续', exact: true })).toHaveCount(2);
+    await expect(page.getByRole('button', { name: '继续作答', exact: true })).toHaveCount(2);
     await capture('records', [page.locator('tbody td:nth-child(5), tbody td:nth-child(6)')]);
     for (const [mode, view] of [['练习', 'study-practice'], ['考试', 'study-exam']] as const) {
       await page.clock.setFixedTime(new Date(sessions[mode].start_time));
       const session = page.getByRole('row').filter({ hasText: mode }).filter({ hasText: '进行中' });
-      await session.getByRole('button', { name: '继续' }).click();
-      await expect(page.locator('.study-stem').getByText(stem, { exact: true })).toBeVisible();
+      await session.getByRole('button', { name: '继续作答' }).click();
+      await expect(page.locator('.question-stem').getByText(stem, { exact: true })).toBeVisible();
       await capture(view, [page.locator('.clock')]);
-      if (layout.compact) await nav(page, '学习记录').click();
-      else await page.locator('.study-rail').getByRole('button', { name: '学习记录' }).click();
+      if (layout.compact) await button(page, '展开侧栏').click();
+      await button(page, '退出答题').click();
+      if (layout.compact) await button(page, '收起侧栏').click();
     }
   });
 }

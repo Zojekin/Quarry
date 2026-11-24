@@ -137,6 +137,8 @@ Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二
 
 ### 6. Electron 端到端与视觉回归
 
+桌面工作区沿用题匣视觉系统，覆盖展开侧栏、收起侧栏和窄屏布局。资料库支持列表和卡片视图，设置中的文件标签与题目标签可分开选色并自动保存。
+
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
 * `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用。
 * `pnpm exec playwright test --project=visual` 对比当前平台的截图基线。使用 `pnpm run test:e2e:update-snapshots` 更新基线，或设置 `QUARRY_CAPTURE_REVIEW=1` 生成 `e2e/review-screenshots/` 中的审阅图。

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { afterEach, it, expect, vi } from "vitest";
 import {
   cleanup,
@@ -23,6 +23,7 @@ it("opens a production create form and saves the current folder ownership", asyn
   vi.spyOn(client.folders, "list").mockResolvedValue([]);
   vi.spyOn(client.banks, "list").mockResolvedValue([]);
   vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.questions, "list").mockResolvedValue([]);
   vi.spyOn(client.tags, "list").mockResolvedValue([]);
   const create = vi
     .spyOn(client.folders, "create")
@@ -31,11 +32,13 @@ it("opens a production create form and saves the current folder ownership", asyn
     <Library
       folder="parent"
       navigate={() => {}}
+      navigation={{ back: () => {}, forward: () => {}, home: () => {}, canBack: false, canForward: false }}
       search=""
       setSearch={() => {}}
     />,
   );
-  fireEvent.click(screen.getByText("新建文件夹"));
+  fireEvent.click(screen.getByText("＋ 新建"));
+  fireEvent.click(screen.getByRole("button", { name: "新建文件夹" }));
   fireEvent.change(screen.getByLabelText("名称"), {
     target: { value: "New folder" },
   });
@@ -68,6 +71,7 @@ it("serializes color saves and acknowledges only the final persisted color", asy
     )
     .mockResolvedValue({ ...tag, color: "#222222" });
   render(<Settings />);
+  fireEvent.change(screen.getByLabelText("标签类型"), { target: { value: "question" } });
   const picker = await screen.findByLabelText("Math颜色");
   fireEvent.change(picker, { target: { value: "#111111" } });
   fireEvent.change(picker, { target: { value: "#222222" } });
@@ -121,6 +125,7 @@ const session: Session = {
         owner_type: "paper",
         type: "single_choice",
         content: "Pick one",
+        max_score: 6,
         tag_ids: [],
         options: [
           { id: "a", content: "Alpha" },
@@ -181,8 +186,7 @@ it("counts the latest question attempt once in the result score", async () => {
     ],
   });
   render(<Result id="s" />);
-  await screen.findByText("3 分");
-  expect(screen.queryByText("4 分")).toBeNull();
+  await waitFor(() => expect(document.querySelector(".result-hero .score")?.textContent).toBe("3/ 6 分"));
 });
 
 it("auto-submits persisted exam drafts when the immutable deadline expires", async () => {
@@ -216,7 +220,7 @@ it("masks and removes the question content while paused", async () => {
   });
   vi.spyOn(client.papers, "list").mockResolvedValue([]);
   render(<Study id="s" navigate={() => {}} onRail={() => {}} />);
-  await screen.findByRole("dialog", { name: "练习已暂停" });
+  await screen.findByRole("dialog", { name: "答题已暂停" });
   expect(screen.queryByText("Pick one")).toBeNull();
   expect(screen.queryByText("Alpha")).toBeNull();
 });

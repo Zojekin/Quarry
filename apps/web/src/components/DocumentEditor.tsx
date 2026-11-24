@@ -1,7 +1,7 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { client } from "../api/client.js";
 import type { Document, Paper, Tag } from "../api/client.js";
-import { Button, Notice } from "./ui.js";
+import { Button, Modal, Notice, types } from "./ui.js";
 export function DocumentEditor({
   kind,
   document,
@@ -76,71 +76,15 @@ export function DocumentEditor({
     }
   }
   return (
-    <div className="modal-backdrop">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label="文件属性"
-        className="card editor"
-      >
-        <h2>
-          {document
-            ? "编辑属性"
-            : "新建" +
-              { folders: "文件夹", banks: "题库", papers: "套题" }[kind]}
-        </h2>
-        <label>
-          名称
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        {kind !== "folders" && (
-          <label>
-            简介
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </label>
-        )}
-        <label>
-          文件标签（英文逗号分隔）
-          <input value={names} onChange={(e) => setNames(e.target.value)} />
-        </label>
-        {kind === "papers" && (
-          <>
-            <label>
-              考试时间（分钟，空白为不限时）
-              <input
-                type="number"
-                min="1"
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-              />
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={shuffleOptions}
-                onChange={(e) => setShuffleOptions(e.target.checked)}
-              />
-              打乱选项
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={shuffleSections}
-                onChange={(e) => setShuffleSections(e.target.checked)}
-              />
-              打乱分区
-            </label>
-          </>
-        )}
-        <Notice error={error} loading={busy} />
-        <div className="toolbar">
+    <Modal
+      title={
+        document
+          ? "编辑属性"
+          : "新建" + { folders: "文件夹", banks: "题库", papers: "套题" }[kind]
+      }
+      onClose={onClose}
+      actions={
+        <>
           <Button onClick={onClose}>取消</Button>
           <Button
             primary
@@ -149,9 +93,65 @@ export function DocumentEditor({
           >
             保存
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <label className="field">
+        <span>名称</span>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      {kind !== "folders" && (
+        <label className="field">
+          <span>简介</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+      )}
+      <label className="field">
+        <span>文件标签（英文逗号分隔）</span>
+        <input value={names} onChange={(e) => setNames(e.target.value)} />
+      </label>
+      {kind === "papers" && (
+        <>
+          <label className="field">
+            <span>考试时间（分钟，空白为不限时）</span>
+            <input
+              type="number"
+              min="1"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+            />
+          </label>
+          <label className="editor-switch-line">
+            <span>打乱选项</span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch-control"
+              checked={shuffleOptions}
+              onChange={(e) => setShuffleOptions(e.target.checked)}
+            />
+          </label>
+          <label className="editor-switch-line">
+            <span>打乱分区</span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch-control"
+              checked={shuffleSections}
+              onChange={(e) => setShuffleSections(e.target.checked)}
+            />
+          </label>
+        </>
+      )}
+      <Notice error={error} loading={busy} />
+    </Modal>
   );
 }
 export function ComposerEditor({
@@ -204,110 +204,11 @@ export function ComposerEditor({
     }
   }
   return (
-    <div className="modal-backdrop">
-      <section
-        className="card editor"
-        role="dialog"
-        aria-modal="true"
-        aria-label="套题编排"
-      >
-        <h2>套题编排</h2>
-        {sections.map((section, i) => (
-          <section key={section.id}>
-            <h3>
-              {i + 1}. {section.title}
-            </h3>
-            <label>
-              <input
-                type="checkbox"
-                checked={section.shuffle_questions}
-                onChange={(e) =>
-                  setSections(
-                    sections.map((s) =>
-                      s.id === section.id
-                        ? { ...s, shuffle_questions: e.target.checked }
-                        : s,
-                    ),
-                  )
-                }
-              />
-              分区内打乱
-            </label>
-            {section.items.map((item, n) => (
-              <div className="toolbar" key={item.id}>
-                <span className="grow">
-                  {n + 1}. {item.question.content}
-                </span>
-                <Button
-                  disabled={n === 0}
-                  onClick={() =>
-                    setSections(
-                      sections.map((s) => {
-                        if (s.id !== section.id) return s;
-                        const items = [...s.items];
-                        [items[n - 1], items[n]] = [items[n]!, items[n - 1]!];
-                        return { ...s, items };
-                      }),
-                    )
-                  }
-                >
-                  上移
-                </Button>
-              </div>
-            ))}
-            <label>
-              固定组（题号用逗号，组间用分号）
-              <input
-                defaultValue={section.fixed_groups
-                  .map((g) =>
-                    g
-                      .map(
-                        (id) => section.items.findIndex((i) => i.id === id) + 1,
-                      )
-                      .join(","),
-                  )
-                  .join(";")}
-                onBlur={(e) => {
-                  try {
-                    const groups = e.target.value.trim()
-                      ? e.target.value.split(";").map((g) =>
-                          g.split(",").map((n) => {
-                            const item = section.items[Number(n) - 1];
-                            if (!item) throw new Error("固定组题号无效");
-                            return item.id;
-                          }),
-                        )
-                      : [];
-                    setSections(
-                      sections.map((s) =>
-                        s.id === section.id
-                          ? { ...s, fixed_groups: groups }
-                          : s,
-                      ),
-                    );
-                    setError("");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              />
-            </label>
-          </section>
-        ))}
-        <label>
-          合并打乱分区（编号用逗号，组间用分号）
-          <input value={merged} onChange={(e) => setMerged(e.target.value)} />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={materials}
-            onChange={(e) => setMaterials(e.target.checked)}
-          />
-          共用材料组间打乱
-        </label>
-        <Notice error={error} loading={busy} />
-        <div className="toolbar">
+    <Modal
+      title="套题编排"
+      onClose={onClose}
+      actions={
+        <>
           <Button onClick={onClose}>取消</Button>
           <Button
             primary
@@ -316,8 +217,110 @@ export function ComposerEditor({
           >
             保存编排
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      {sections.map((section, i) => (
+        <section key={section.id}>
+          <h3>
+            {i + 1}.{" "}
+            {section.title === section.question_type
+              ? (types.find((type) => type.id === section.question_type)
+                  ?.name ?? section.title)
+              : section.title}
+          </h3>
+          <label className="editor-switch-line">
+            <span>分区内打乱</span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch-control"
+              checked={section.shuffle_questions}
+              onChange={(e) =>
+                setSections(
+                  sections.map((s) =>
+                    s.id === section.id
+                      ? { ...s, shuffle_questions: e.target.checked }
+                      : s,
+                  ),
+                )
+              }
+            />
+          </label>
+          {section.items.map((item, n) => (
+            <div className="composer-item actions" key={item.id}>
+              <span className="composer-item-title">
+                {n + 1}. {item.question.content}
+              </span>
+              <Button
+                disabled={n === 0}
+                onClick={() =>
+                  setSections(
+                    sections.map((s) => {
+                      if (s.id !== section.id) return s;
+                      const items = [...s.items];
+                      [items[n - 1], items[n]] = [items[n]!, items[n - 1]!];
+                      return { ...s, items };
+                    }),
+                  )
+                }
+              >
+                上移
+              </Button>
+            </div>
+          ))}
+          <label className="field">
+            <span>固定组（题号用逗号，组间用分号）</span>
+            <input
+              defaultValue={section.fixed_groups
+                .map((g) =>
+                  g
+                    .map(
+                      (id) => section.items.findIndex((i) => i.id === id) + 1,
+                    )
+                    .join(","),
+                )
+                .join(";")}
+              onBlur={(e) => {
+                try {
+                  const groups = e.target.value.trim()
+                    ? e.target.value.split(";").map((g) =>
+                        g.split(",").map((n) => {
+                          const item = section.items[Number(n) - 1];
+                          if (!item) throw new Error("固定组题号无效");
+                          return item.id;
+                        }),
+                      )
+                    : [];
+                  setSections(
+                    sections.map((s) =>
+                      s.id === section.id ? { ...s, fixed_groups: groups } : s,
+                    ),
+                  );
+                  setError("");
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            />
+          </label>
+        </section>
+      ))}
+      <label className="field">
+        <span>合并打乱分区（编号用逗号，组间用分号）</span>
+        <input value={merged} onChange={(e) => setMerged(e.target.value)} />
+      </label>
+      <label className="editor-switch-line">
+        <span>共用材料组间打乱</span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="switch-control"
+          checked={materials}
+          onChange={(e) => setMaterials(e.target.checked)}
+        />
+      </label>
+      <Notice error={error} loading={busy} />
+    </Modal>
   );
 }

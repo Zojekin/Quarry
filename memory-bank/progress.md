@@ -16,6 +16,7 @@
 | **Issue #5** | **Quarry CLI 与题目转换 Skill** | 🟢 已完成 | `packages/shared` Portable Schema、`packages/cli`（`spec`/`validate`/`convert`）、`skills/question-converter/SKILL.md` |
 | **工程治理** | **仓库清理、文档收敛与自动化流水线** | 🟢 已完成 | 清理历史原型与重复大文件、归档过时文档、收敛 `AGENTS.md`/`memory-bank`、建立双平台 CI、PR 标题门禁、`release-please` 动态发版与 Windows Release 自动打包 |
 | **Phase A** | **桌面开发与回归验证** | 🟢 已实现 | Web / Desktop Dev 实时启动、离线资源与附件修复、应用内确认与输入弹窗、文件夹归档校验与事务导入、Electron 冒烟与业务流程、三种布局视觉基线 |
+| **Phase B** | **桌面视觉恢复** | 已实现，待截图审阅 | React 工作区与页面恢复已确认的视觉系统，标签文字按背景亮度计算，使用真实数据生成三种布局的 33 张审阅截图 |
 
 ---
 

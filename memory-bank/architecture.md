@@ -158,4 +158,5 @@
 - `pnpm run dev:web` 在同一 Node 进程运行开发 API 和 Vite，通过 `VITE_API_URL` 连接，使用工作树内 `.quarry-dev-data/`。
 - `pnpm run dev:desktop` 等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
 - `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
+- React 工作区和页面复用 `apps/web/src/visual.css` 的布局、选择器、按钮和状态药丸。`production.css` 提供 Markdown、KaTeX 和 React 表单与导航的适配样式。资料、标签、会话和错题继续由 `BackendClient` 读取与保存。
 - 视觉项目从真实 API 播种，验证展开、收起与窄屏三种布局。详细入口见 [代码库地图](codebase-map.md)。

@@ -9,18 +9,18 @@ test('boots with a live backend, workspace tabs and packaged renderer assets', a
   await assertPageHealthy(page);
 
   await page.getByRole('button', { name: '收起侧栏' }).click();
-  const sidebar = page.locator('.production-sidebar');
+  const sidebar = page.locator('.app-sidebar');
   await expect(sidebar).toHaveCSS('width', '72px');
   await page.getByRole('button', { name: '展开侧栏' }).click();
   await expect(sidebar).toHaveCSS('width', '280px');
 
   await sidebar.getByRole('button', { name: '资料库' }).click();
-  await expect(page.getByRole('heading', { name: '资料库' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '所有资料' })).toBeVisible();
   await page.getByRole('button', { name: '新建标签页' }).click();
   await expect(page.getByRole('tab')).toHaveCount(2);
   await expect(page.getByRole('tab', { name: '首页' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: '资料库' }).click();
-  await expect(page.getByRole('heading', { name: '资料库' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '所有资料' })).toBeVisible();
   await page.getByRole('button', { name: '关闭资料库' }).click();
   await expect(page.getByRole('tab')).toHaveCount(1);
 

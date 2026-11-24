@@ -1,7 +1,15 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { client } from "../api/client.js";
 import type { Paper, Tag, ComposerSection } from "../api/client.js";
-import { Button, Facet, Notice, types, useLoad } from "./ui.js";
+import {
+  Button,
+  Facet,
+  Modal,
+  Notice,
+  SearchField,
+  types,
+  useLoad,
+} from "./ui.js";
 import { Markdown } from "./Markdown.js";
 export function QuestionPicker({
   paperId,
@@ -70,72 +78,11 @@ export function QuestionPicker({
     }
   }
   return (
-    <div className="modal-backdrop">
-      <section
-        className="card editor"
-        role="dialog"
-        aria-modal="true"
-        aria-label="从题库选题"
-      >
-        <h2>从题库选题</h2>
-        <div className="toolbar">
-          <select
-            aria-label="题库"
-            value={bank}
-            onChange={(e) => {
-              setBank(e.target.value);
-              setSelected([]);
-            }}
-          >
-            <option value="">选择题库</option>
-            {data?.[0].map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <Facet
-            label="题型"
-            options={types}
-            value={filter}
-            onChange={setFilter}
-          />
-          <input
-            className="search"
-            aria-label="搜索选题"
-            placeholder="搜索题目"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Notice error={error || message} loading={!data} />
-        <label>
-          <input
-            type="checkbox"
-            checked={rows.length > 0 && ids.length === rows.length}
-            onChange={(e) =>
-              setSelected(e.target.checked ? rows.map((q) => q.id) : [])
-            }
-          />
-          全选当前结果
-        </label>
-        {rows.map((q) => (
-          <label className="picker-question" key={q.id}>
-            <input
-              type="checkbox"
-              checked={ids.includes(q.id)}
-              onChange={(e) =>
-                setSelected(
-                  e.target.checked
-                    ? [...ids, q.id]
-                    : ids.filter((id) => id !== q.id),
-                )
-              }
-            />
-            <Markdown text={q.content} />
-          </label>
-        ))}
-        <div className="toolbar">
+    <Modal
+      title="从题库选题"
+      onClose={onClose}
+      actions={
+        <>
           <Button onClick={onClose}>取消</Button>
           <Button
             primary
@@ -144,9 +91,67 @@ export function QuestionPicker({
           >
             加入 {ids.length} 道题目
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <div className="toolbar">
+        <select
+          className="filter"
+          aria-label="题库"
+          value={bank}
+          onChange={(e) => {
+            setBank(e.target.value);
+            setSelected([]);
+          }}
+        >
+          <option value="">选择题库</option>
+          {data?.[0].map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <Facet
+          label="题型"
+          options={types}
+          value={filter}
+          onChange={setFilter}
+        />
+        <SearchField
+          label="搜索选题"
+          placeholder="搜索题目"
+          value={search}
+          onChange={setSearch}
+        />
+      </div>
+      <Notice error={error || message} loading={!data} />
+      <label>
+        <input
+          type="checkbox"
+          checked={rows.length > 0 && ids.length === rows.length}
+          onChange={(e) =>
+            setSelected(e.target.checked ? rows.map((q) => q.id) : [])
+          }
+        />
+        全选当前结果
+      </label>
+      {rows.map((q) => (
+        <label className="picker-question" key={q.id}>
+          <input
+            type="checkbox"
+            checked={ids.includes(q.id)}
+            onChange={(e) =>
+              setSelected(
+                e.target.checked
+                  ? [...ids, q.id]
+                  : ids.filter((id) => id !== q.id),
+              )
+            }
+          />
+          <Markdown text={q.content} />
+        </label>
+      ))}
+    </Modal>
   );
 }
 export function FollowDialog({
@@ -208,47 +213,44 @@ export function FollowDialog({
     }
   }
   return (
-    <div className="modal-backdrop">
-      <section
-        className="card editor"
-        role="dialog"
-        aria-modal="true"
-        aria-label="来源差异预览"
-      >
-        <h2>来源差异预览</h2>
-        <Notice error={error || message} loading={!data} />
-        {data?.length === 0 && <p>来源内容没有变化。</p>}
-        {data?.map((diff, i) => (
-          <section key={diff.item_id}>
-            <h3>
-              变更题目 {i + 1}
-              {diff.source_invalid ? " · 来源已失效" : ""}
-            </h3>
-            {Object.entries(diff.changes).map(([key, change]) => (
-              <div key={key}>
-                <h3>{fields[key] ?? key}</h3>
-                <div className="diff-columns">
-                  <div>
-                    <p>当前内容</p>
-                    <Markdown text={value(change.before)} />
-                  </div>
-                  <div>
-                    <p>来源内容</p>
-                    <Markdown text={value(change.after)} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </section>
-        ))}
-        <div className="toolbar">
+    <Modal
+      title="来源差异预览"
+      onClose={onClose}
+      actions={
+        <>
           <Button onClick={onClose}>取消</Button>
           <Button primary disabled={busy || !data} onClick={() => void apply()}>
             {paper.follow_source ? "应用更新" : "开启跟随并应用"}
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <Notice error={error || message} loading={!data} />
+      {data?.length === 0 && <p>来源内容没有变化。</p>}
+      {data?.map((diff, i) => (
+        <section key={diff.item_id}>
+          <h3>
+            变更题目 {i + 1}
+            {diff.source_invalid ? " · 来源已失效" : ""}
+          </h3>
+          {Object.entries(diff.changes).map(([key, change]) => (
+            <div key={key}>
+              <h3>{fields[key] ?? key}</h3>
+              <div className="diff-columns">
+                <div>
+                  <p>当前内容</p>
+                  <Markdown text={value(change.before)} />
+                </div>
+                <div>
+                  <p>来源内容</p>
+                  <Markdown text={value(change.after)} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+      ))}
+    </Modal>
   );
 }
 export function ImportDialog({
@@ -267,39 +269,11 @@ export function ImportDialog({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   return (
-    <div className="modal-backdrop">
-      <section
-        className="card editor"
-        role="dialog"
-        aria-modal="true"
-        aria-label="导入预览"
-      >
-        <h2>导入预览</h2>
-        <Notice error={error || message} loading={!data && !error} />
-        {data && (
-          <>
-            <h3>{data.name}</h3>
-            {data.entity === "folder" ? (
-              <p>
-                {data.summary.folders} 个文件夹 · {data.summary.banks} 个题库 ·{" "}
-                {data.summary.papers} 份套题 · {data.summary.questions} 道题目 ·{" "}
-                {data.summary.attachments} 个附件
-              </p>
-            ) : (
-              <>
-                <p>
-                  {data.entity === "bank" ? "题库" : "套题"} ·{" "}
-                  {data.questions.length} 道题目 · {data.attachments.length} 个附件
-                </p>
-                <Markdown text={data.description} preview />
-                {data.questions.map((q) => (
-                  <article key={q.id}><Markdown text={q.content} preview /></article>
-                ))}
-              </>
-            )}
-          </>
-        )}
-        <div className="toolbar">
+    <Modal
+      title="导入预览"
+      onClose={onClose}
+      actions={
+        <>
           <Button onClick={onClose}>取消</Button>
           <Button
             primary
@@ -318,8 +292,36 @@ export function ImportDialog({
           >
             确认导入为新文件
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <Notice error={error || message} loading={!data && !error} />
+      {data && (
+        <>
+          <h3>{data.name}</h3>
+          {data.entity === "folder" ? (
+            <p>
+              {data.summary.folders} 个文件夹 · {data.summary.banks} 个题库 ·{" "}
+              {data.summary.papers} 份套题 · {data.summary.questions} 道题目 ·{" "}
+              {data.summary.attachments} 个附件
+            </p>
+          ) : (
+            <>
+              <p>
+                {data.entity === "bank" ? "题库" : "套题"} ·{" "}
+                {data.questions.length} 道题目 · {data.attachments.length}{" "}
+                个附件
+              </p>
+              <Markdown text={data.description} preview />
+              {data.questions.map((q) => (
+                <article key={q.id}>
+                  <Markdown text={q.content} preview />
+                </article>
+              ))}
+            </>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }
