@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Zojekin/Quarry/compare/0.2.1...0.3.0) (2026-11-24)
+
+
+### Features
+
+* **desktop:** 还原桌面端视觉与图标、修复前后端缺陷并建立 Playwright E2E 与视觉回归门禁 ([#13](https://github.com/Zojekin/Quarry/issues/13)) ([055d9fb](https://github.com/Zojekin/Quarry/commit/055d9fb8f37003c971b261883c7b2319ee5b0777))
+
 ## [0.2.1](https://github.com/Zojekin/Quarry/compare/0.2.0...0.2.1) (2026-11-24)
 
 
