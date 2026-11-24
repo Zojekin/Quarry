@@ -11,8 +11,8 @@ const nav = (page: Page, name: string) => page.locator('.app-sidebar').getByRole
 const id = (n: number) => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 
 async function seed(page: Page) {
-  const fileTag = await api<{ id: string }>(page, 'tags', { name: '地球科学', target_type: 'file', color: '#386450' });
-  const questionTag = await api<{ id: string }>(page, 'tags', { name: '岩石分类', target_type: 'question', color: '#946037' });
+  const fileTag = await api<{ id: string }>(page, 'tags', { name: '地球科学', target_type: 'file' });
+  const questionTag = await api<{ id: string }>(page, 'tags', { name: '岩石分类', target_type: 'question' });
   const bank = await api<{ id: string }>(page, 'banks', {
     name: bankName, description: '岩石、火山活动与地表变迁。', tag_ids: [fileTag.id],
   });
@@ -100,8 +100,8 @@ for (const layout of layouts) {
     await nav(page, '资料库').click();
     await button(page, bankName).waitFor();
     const tag = page.locator('.tag-chip.tag-color').first();
-    await expect(tag).toHaveCSS('background-color', 'rgb(56, 100, 80)');
-    await expect(tag).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(tag).toHaveCSS('background-color', 'rgb(228, 234, 222)');
+    await expect(tag).toHaveCSS('color', 'rgb(37, 49, 40)');
     await capture('library-list');
     await button(page, '图标视图').click();
     await expect(page.locator('.document-grid')).toBeVisible();
