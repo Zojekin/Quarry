@@ -1,9 +1,11 @@
 {
   "name": "@quarry/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "bin": { "quarry": "./dist/index.js" },
+  "bin": {
+    "quarry": "./dist/index.js"
+  },
   "scripts": {
     "quarry": "node dist/index.js",
     "build": "tsc --noEmit && node build.mjs",
