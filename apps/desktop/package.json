@@ -65,12 +65,6 @@
           ]
         },
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "zip",
           "arch": [
             "x64"
@@ -94,9 +88,6 @@
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
       "language": "2052"
-    },
-    "portable": {
-      "artifactName": "Quarry-Portable-${version}-${arch}.${ext}"
     },
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"

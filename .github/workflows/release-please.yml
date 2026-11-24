@@ -68,7 +68,6 @@ jobs:
           $releaseDir = "apps/desktop/release"
           $expected = @(
             "Quarry-Setup-$env:RELEASE_VERSION-x64.exe",
-            "Quarry-Portable-$env:RELEASE_VERSION-x64.exe",
             "Quarry-$env:RELEASE_VERSION-win-x64.zip"
           )
           $assets = @()

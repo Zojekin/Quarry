@@ -69,7 +69,7 @@
 | 层次 | 现行选型 | 核心依赖 / 工具 | 职责说明 |
 | :--- | :--- | :--- | :--- |
 | **工程管理** | pnpm Workspaces + Turborepo | `pnpm@10.28.2`, `turbo`, `typescript@^5.9.3`, `vitest` | 隔离依赖、缓存构建/测试/类型检查流水线 |
-| **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `esbuild` | 窗口托管、随机端口本地服务进程、Windows NSIS/Portable/ZIP 打包 |
+| **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `esbuild` | 窗口托管、随机端口本地服务进程、Windows NSIS/ZIP 打包 |
 | **网页前端** | React 19 + Vite 6 | `react`, `react-dom`, `vite`, `@testing-library/react`, `jsdom` | 单页应用、多标签工作区（sessionStorage）、自研视觉样式系统 |
 | **富文本排版** | React Markdown + KaTeX | `react-markdown`, `remark-math`, `rehype-katex`, `katex` | 离线 LaTeX 数学公式、代码块、表格，禁用原始 HTML，独立分块懒加载 |
 | **后端服务** | Node.js (>=22.13) + Hono | `hono`, `@hono/node-server`, `fflate` | 轻量 RESTful API、附件流式传输、ZIP 导入导出与备份打包 |
@@ -139,8 +139,7 @@
   - `scripts/before-pack.cjs` 与 `scripts/restore-sqlite.cjs` 在 Windows 上动态定位 `better-sqlite3` 安装目录，自动在 `resources/electron-better_sqlite3.node`（Electron ABI）与 `resources/node-better_sqlite3.node`（Node ABI）间无痛切换，避免缺少 VS C++ 编译环境或路径空格导致 `node-gyp` 失败；在 Linux/macOS（如 CI）上自动跳过。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
   1. NSIS 向导安装包：`Quarry-Setup-<version>-x64.exe`（支持自定义路径、`deleteAppDataOnUninstall: false` 保护本地题库）
-  2. 单文件便携版：`Quarry-Portable-<version>-x64.exe`
-  3. 绿色压缩包：`Quarry-<version>-win-x64.zip`
+  2. 绿色压缩包：`Quarry-<version>-win-x64.zip`
 
 ---
 
