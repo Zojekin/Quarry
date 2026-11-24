@@ -81,7 +81,7 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
         env, executablePath, timeout: 20_000,
         args: [
           '--user-data-dir=' + join(data, 'renderer'),
-          ...(testInfo.project.name === 'visual' ? ['--force-device-scale-factor=1'] : []),
+          '--force-device-scale-factor=1',
           ...(!packaged ? [resolve('apps/desktop/dist/runtime/main.js')] : []),
         ],
       });
@@ -96,6 +96,7 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
         app.on('web-contents-created', (_event, contents) => monitor(contents));
       });
       const page = await current.firstWindow();
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.waitForLoadState('networkidle');
       const observe = (target: Page) => {
         target.on('console', message => {
