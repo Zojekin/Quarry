@@ -179,10 +179,6 @@ textarea,
   corner-shape: var(--curve);
 }
 
-.button.danger {
-  color: var(--danger);
-}
-
 .button:hover:not(:disabled) {
   background: var(--soft);
 }
@@ -2187,11 +2183,6 @@ input.switch-control[type="checkbox"]:checked::before {
   max-width: 100%;
 }
 
-.button.paper-new-question:hover {
-  background: transparent;
-  color: var(--accent);
-}
-
 .paper-question-group {
   margin-top: var(--space-6);
 }
@@ -2637,19 +2628,6 @@ input.switch-control[type="checkbox"]:checked::before {
   background: var(--error-bg);
 }
 
-.paper-new-question {
-  font-weight: var(--weight-bold) !important;
-}
-
-.paper-new-question:hover {
-  background: var(--filter-active-bg) !important;
-}
-
-.paper-new-question:focus-visible {
-  outline: var(--accent) solid 2px;
-  outline-offset: 2px;
-}
-
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -2669,7 +2647,6 @@ input.switch-control[type="checkbox"]:checked::before {
 }
 
 .mistake-filter-row {
-  flex-wrap: wrap;
   margin-bottom: var(--space-6);
   display: grid;
   grid-template-columns: minmax(0px, 1fr) 380px;
@@ -2679,7 +2656,7 @@ input.switch-control[type="checkbox"]:checked::before {
 
 .mistake-filter-row .filter-card-list {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(116px, 100%), 1fr));
   gap: var(--space-2);
   min-width: 0px;
 }
@@ -2691,14 +2668,9 @@ input.switch-control[type="checkbox"]:checked::before {
   width: 100%;
 }
 
-.mistake-filter-row .search {
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-}
-
 .mistake-filter-row .select-trigger {
   min-width: 0px;
+  gap: var(--space-1);
 }
 
 .filter-value {
@@ -2757,8 +2729,6 @@ input.switch-control[type="checkbox"]:checked::before {
 .mistake-filter-row > .search {
   margin-left: auto;
   width: 260px;
-  min-width: 220px;
-  max-width: 320px;
   min-height: 48px;
   height: 48px;
 }
@@ -3329,6 +3299,10 @@ b {
   min-height: var(--control-compact);
 }
 
+.button.danger {
+  color: var(--danger);
+}
+
 .button.tab,
 .segmented .tab {
   font-size: var(--text-body);
@@ -3368,19 +3342,7 @@ b {
 }
 
 .button.paper-new-question {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0px;
-  width: 38px;
-  height: 38px;
-  padding: 0px;
-  color: var(--muted);
-  list-style: none;
-  cursor: pointer;
-  font: var(--weight-semibold) var(--text-section)/1 var(--font-sans);
-  min-height: var(--control-compact);
+  font-size: var(--text-section);
 }
 
 .button.slay-button {
@@ -3458,6 +3420,7 @@ b {
 .status-pill {
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
+  white-space: nowrap;
 }
 
 .paper-property-list .pill,
@@ -3471,6 +3434,7 @@ b {
   color: var(--ink);
   font-size: var(--text-small);
   font-weight: var(--weight-semibold);
+  white-space: nowrap;
 }
 
 .data-table td {
@@ -3816,7 +3780,7 @@ b {
 }
 
 /* Responsive / accessibility variant. */
-@media (min-width: 851px) {
+@media (min-width: 1001px) {
   .home-middle {
     grid-template-columns: 2fr 1fr;
   }
@@ -3829,17 +3793,16 @@ b {
     margin-top: 0px;
   }
 
-  .study-sidebar .question-nav {
-    grid-template-columns: repeat(5, minmax(0px, 1fr));
-  }
-}
-
-/* Responsive / accessibility variant. */
-@media (min-width: 1001px) {
   .study-question-card .question-stem {
     position: sticky;
     top: 130px;
     align-self: start;
+  }
+}
+
+@media (min-width: 851px) {
+  .study-sidebar .question-nav {
+    grid-template-columns: repeat(5, minmax(0px, 1fr));
   }
 }
 
@@ -3918,17 +3881,14 @@ b {
     max-width: 660px;
   }
 
-  .library-content .data-table .optional {
-    display: table-cell;
-  }
-
   .mistake-filter-row {
-    grid-template-columns: minmax(0px, 1fr) 300px;
-    gap: var(--space-6);
+    grid-template-columns: minmax(0px, 1fr);
+    gap: var(--space-4);
   }
 
-  .mistake-filter-row .filter-card-list {
-    grid-template-columns: repeat(3, minmax(0px, 1fr));
+  .mistake-filter-row > .search {
+    width: 100%;
+    max-width: none;
   }
 
   .study-question-card {
@@ -3952,6 +3912,33 @@ b {
 
 /* Responsive / accessibility variant. */
 @media (max-width: 1000px) {
+  .mistake-layout,
+  .paper-grid {
+    grid-template-columns: minmax(0px, 1fr);
+  }
+
+  .mistake-preview.inspector {
+    border-left: 0;
+  }
+
+  .home-middle {
+    gap: var(--space-8);
+  }
+
+  .home-review {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .detail-navigation {
+    flex-wrap: wrap;
+  }
+
+  .detail-navigation > .actions {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
   .study-sidebar .study-side {
     padding: 0 var(--space-4) var(--space-6);
   }
@@ -4019,10 +4006,6 @@ b {
     display: none;
   }
 
-  .mistake-layout {
-    grid-template-columns: 1fr;
-  }
-
   .inspector,
   .settings-panel {
     position: static;
@@ -4085,18 +4068,6 @@ b {
 
   .data-table td {
     padding: var(--space-4) var(--space-2);
-  }
-
-  .library-content .data-table .optional {
-    display: none;
-  }
-
-  .detail-navigation {
-    flex-wrap: wrap;
-  }
-
-  .detail-navigation > .actions {
-    margin-left: 0px;
   }
 
   .learning-toolbar > .actions {
@@ -4183,20 +4154,6 @@ b {
     grid-template-columns: 20px 18px minmax(0px, 1fr) 32px;
   }
 
-  .home-middle {
-    grid-template-columns: 1fr;
-  }
-
-  .home-middle > section:first-child {
-    padding: 0px;
-  }
-
-  .home-review {
-    padding-left: 0px;
-    border-left: 0px;
-    margin-top: var(--space-8);
-  }
-
   .study-sidebar .brand-row {
     padding: 0 var(--space-4);
   }
@@ -4240,11 +4197,6 @@ b {
     max-width: none;
   }
 
-  .mistake-filter-row > .search {
-    width: 100%;
-    max-width: none;
-  }
-
   .library-filter-cards {
     width: 100%;
   }
@@ -4258,14 +4210,6 @@ b {
   .date-filter-popover {
     right: auto;
     left: 0px;
-  }
-
-  .mistake-filter-row {
-    grid-template-columns: minmax(0px, 1fr);
-  }
-
-  .mistake-filter-row .filter-card-list {
-    grid-template-columns: repeat(3, minmax(0px, 1fr));
   }
 
   .bank-filter-toolbar {
@@ -4332,7 +4276,6 @@ b {
 
 /* Responsive / accessibility variant. */
 @media (max-width: 540px) {
-  .paper-grid,
   .document-grid {
     grid-template-columns: 1fr;
   }

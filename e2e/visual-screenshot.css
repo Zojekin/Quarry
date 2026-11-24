@@ -1,0 +1,14 @@
+/* Keep masked dates from resizing table columns or wrapping as the calendar changes. */
+[data-dynamic-date="date"],
+[data-dynamic-date="timestamp"] {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+[data-dynamic-date="date"] {
+  inline-size: 11ch;
+}
+
+[data-dynamic-date="timestamp"] {
+  inline-size: 24ch;
+}

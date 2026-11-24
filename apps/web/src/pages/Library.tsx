@@ -345,7 +345,9 @@ export function Library({
                       <TagPills ids={row.tag_ids} tags={data[3]} chips />
                     </td>
                     <td className="optional muted">
-                      {dateLabel(row.updated_at)}
+                      <time dateTime={row.updated_at} data-dynamic-date="date">
+                        {dateLabel(row.updated_at)}
+                      </time>
                     </td>
                     <td>{rowActions(row)}</td>
                   </tr>
@@ -556,7 +558,11 @@ export function Detail({
               </div>
               <div>
                 <dt>最后修改</dt>
-                <dd>{dateLabel(data.doc.updated_at)}</dd>
+                <dd>
+                  <time dateTime={data.doc.updated_at} data-dynamic-date="date">
+                    {dateLabel(data.doc.updated_at)}
+                  </time>
+                </dd>
               </div>
               <div>
                 <dt>标签</dt>
@@ -615,7 +621,7 @@ export function Detail({
                 />
                 <details className="menu-wrap">
                   <summary
-                    className="button paper-new-question"
+                    className="button icon-only paper-new-question"
                     aria-label="添加题目"
                   >
                     ＋
@@ -746,7 +752,7 @@ export function Detail({
                     <th>题目</th>
                     <th>题型</th>
                     <th className="optional">题目标签</th>
-                    <th>操作</th>
+                    <th className="file-action-column">操作</th>
                   </tr>
                 </thead>
                 <tbody>

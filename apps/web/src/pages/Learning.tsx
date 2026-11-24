@@ -31,6 +31,15 @@ import { QuestionPreview } from "../components/QuestionPreview.js";
 import { TagPills } from "../components/QuestionEditor.js";
 import { Icon } from "../components/Icons.js";
 import { download } from "./Library.js";
+
+function compareSessions(a: Session, b: Session) {
+  return (
+    b.start_time.localeCompare(a.start_time) ||
+    a.mode.localeCompare(b.mode) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 function sessionProgress(session: Session) {
   return new Set([
     ...session.records.map((record) => record.question_id),
@@ -84,7 +93,9 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
   const [year, setYear] = useViewState("year", currentYear);
   const seconds = data?.[0].total_duration_seconds ?? 0;
   const pending =
-    data?.[1].filter((session) => session.status !== "completed") ?? [];
+    data?.[1]
+      .filter((session) => session.status !== "completed")
+      .sort(compareSessions) ?? [];
   const reviewing =
     data?.[3].filter((mistake) => mistake.mastery_status === "reviewing") ?? [];
   const entries = new Map(
@@ -115,7 +126,7 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
           <div className="metric-row">
             <div className="metric">
               <span className="label">累计用时</span>
-              <div className="big-number">
+              <div className="big-number" data-dynamic-date="duration">
                 {Math.floor(seconds / 3600)}
                 <span className="unit">时</span>
                 {Math.floor((seconds % 3600) / 60)}
@@ -179,7 +190,7 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
                         />
                       </div>
                       <div className="card-bottom">
-                        <span>
+                        <span data-dynamic-date="duration">
                           已用时{" "}
                           {formatTime(session.effective_duration_seconds)}
                         </span>
@@ -356,12 +367,7 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
           (mode === undefined || mode.includes(session.mode)) &&
           name.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
       )
-      .sort(
-        ({ session: a }, { session: b }) =>
-          b.start_time.localeCompare(a.start_time) ||
-          a.mode.localeCompare(b.mode) ||
-          a.id.localeCompare(b.id),
-      ) ?? [];
+      .sort((a, b) => compareSessions(a.session, b.session)) ?? [];
   return (
     <>
       <div className="page-heading">
@@ -411,7 +417,7 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
                 <th>状态</th>
                 <th className="optional">用时</th>
                 <th className="optional">开始日期</th>
-                <th>操作</th>
+                <th className="file-action-column">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -436,24 +442,30 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
                     </StatusPill>
                   </td>
                   <td className="optional muted">
-                    {formatTime(session.effective_duration_seconds)}
+                    <span data-dynamic-date="duration">
+                      {formatTime(session.effective_duration_seconds)}
+                    </span>
                   </td>
                   <td className="optional muted">
-                    {new Date(session.start_time).toLocaleDateString("zh-CN")}
+                    <time dateTime={session.start_time} data-dynamic-date="date">
+                      {new Date(session.start_time).toLocaleDateString("zh-CN")}
+                    </time>
                   </td>
                   <td>
-                    <Button
-                      className="quiet"
-                      onClick={() =>
-                        navigate({
-                          page:
-                            session.status === "completed" ? "result" : "study",
-                          id: session.id,
-                        })
-                      }
-                    >
-                      {session.status === "completed" ? "查看结果" : "继续作答"}
-                    </Button>
+                    <div className="row-actions">
+                      <Button
+                        className="quiet"
+                        onClick={() =>
+                          navigate({
+                            page:
+                              session.status === "completed" ? "result" : "study",
+                            id: session.id,
+                          })
+                        }
+                      >
+                        {session.status === "completed" ? "查看结果" : "继续作答"}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -750,7 +762,9 @@ export function Mistakes({
                     />
                     <p className="small muted">
                       错误 {item.wrong_count} 次 ·{" "}
-                      <time>{item.created_at.slice(0, 10)}</time>
+                      <time dateTime={item.created_at} data-dynamic-date="date">
+                        {item.created_at.slice(0, 10)}
+                      </time>
                     </p>
                   </div>
                   <button
@@ -812,9 +826,9 @@ export function Mistakes({
               <h2 className="preview-history-heading">错误历史</h2>
               {inspect.history.map((item, index) => (
                 <div className="history-item" key={index}>
-                  <div>
+                  <time dateTime={item.answered_at} data-dynamic-date="timestamp">
                     {new Date(item.answered_at).toLocaleString("zh-CN")}
-                  </div>
+                  </time>
                   <div>
                     当时作答：
                     {answerLabel(item.answer, inspect.question_snapshot) ||
@@ -1099,8 +1113,7 @@ export function Trash() {
               <tr>
                 <th>名称</th>
                 <th>类型</th>
-                <th>恢复</th>
-                <th>永久删除</th>
+                <th className="file-action-column">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1109,32 +1122,30 @@ export function Trash() {
                   <td>{item.name ?? item.stem}</td>
                   <td className="muted">{trashTypes[item.entity]}</td>
                   <td>
-                    <Button
-                      className="quiet"
-                      onClick={() =>
-                        void action(() =>
-                          client.trash.restore(item.entity, item.id),
-                        )
-                      }
-                    >
-                      恢复
-                    </Button>
-                  </td>
-                  <td>
-                    <Button
-                      className="quiet danger"
-                      onClick={() =>
-                        confirmation.ask(
-                          "永久删除？此操作不可撤销。",
-                          () =>
+                    <div className="row-actions">
+                      <Button
+                        className="quiet"
+                        onClick={() =>
+                          void action(() =>
+                            client.trash.restore(item.entity, item.id),
+                          )
+                        }
+                      >
+                        恢复
+                      </Button>
+                      <Button
+                        className="quiet danger"
+                        onClick={() =>
+                          confirmation.ask("永久删除？此操作不可撤销。", () =>
                             void action(() =>
                               client.trash.purge(item.entity, item.id),
                             ),
-                        )
-                      }
-                    >
-                      永久删除
-                    </Button>
+                          )
+                        }
+                      >
+                        永久删除
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

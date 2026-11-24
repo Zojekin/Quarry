@@ -50,7 +50,12 @@ async function seed(page: Page) {
     answer: { kind: 'choice', option_ids: [id(3)] }, attempt_index: 1,
   });
   await api(page, 'sessions/' + history.id + '/complete', {});
-  return { '练习': await start('practice'), '考试': await start('exam') };
+  // The server timestamps starts to millisecond precision. Keep all three rows in a fixed order.
+  await expect.poll(Date.now).toBeGreaterThan(Date.parse(history.start_time));
+  const practice = await start('practice');
+  await expect.poll(Date.now).toBeGreaterThan(Date.parse(practice.start_time));
+  const exam = await start('exam');
+  return { '练习': practice, '考试': exam };
 }
 
 const layouts = [
@@ -67,7 +72,7 @@ for (const layout of layouts) {
     await page.clock.setFixedTime(new Date('2024-12-31T12:00:00Z'));
     await page.reload();
     if (layout.compact) await button(page, '收起侧栏').click();
-    const capture = async (view: string, mask: ReturnType<Page['locator']>[] = []) => {
+    const capture = async (view: string) => {
       await test.step(view, async () => {
         await expect(page.getByText('正在加载…', { exact: true })).toHaveCount(0);
         await page.waitForLoadState('networkidle');
@@ -78,24 +83,26 @@ for (const layout of layouts) {
           const directory = resolve('e2e/review-screenshots');
           await mkdir(directory, { recursive: true });
           await page.screenshot({ ...options, path: resolve(directory, name) });
-        } else {
-          await expect(page).toHaveScreenshot(name, { ...options, mask, maskColor: '#deded8' });
+        } else if (process.platform === 'win32') {
+          await expect(page).toHaveScreenshot(name, {
+            ...options,
+            mask: [page.locator('[data-dynamic-date]:visible')],
+            maskColor: '#deded8',
+            stylePath: resolve('e2e/visual-screenshot.css'),
+          });
         }
       });
     };
 
     await page.getByLabel('年份').selectOption('2024');
     await expect(page.locator('.heat-grid > i')).toHaveCount(53 * 7);
-    await capture('home', [
-      page.locator('.metric-row .big-number').first(),
-      page.locator('.paper-card .card-bottom > span'),
-    ]);
+    await capture('home');
     await nav(page, '资料库').click();
     await button(page, bankName).waitFor();
     const tag = page.locator('.tag-chip.tag-color').first();
     await expect(tag).toHaveCSS('background-color', 'rgb(56, 100, 80)');
     await expect(tag).toHaveCSS('color', 'rgb(255, 255, 255)');
-    await capture('library-list', [page.locator('.library-content tbody td:nth-child(5)')]);
+    await capture('library-list');
     await button(page, '图标视图').click();
     await expect(page.locator('.document-grid')).toBeVisible();
     await capture('library-grid');
@@ -105,11 +112,17 @@ for (const layout of layouts) {
     await nav(page, '资料库').click();
     await button(page, paperName).click();
     await expect(page.getByRole('heading', { name: paperName })).toBeVisible();
-    await capture('paper-detail', [page.locator('.paper-property-list div').filter({ has: page.getByText('最后修改') }).locator('dd')]);
+    await expect(page.locator('summary.paper-new-question')).toHaveCSS('border-top-style', 'solid');
+    await capture('paper-detail');
     await nav(page, '错题本').click();
     const mistake = page.locator('.mistake-row');
     await expect(mistake.getByText(stem, { exact: true })).toBeVisible();
-    await capture('mistakes', [mistake.locator('time'), page.locator('.history-item > :first-child')]);
+    const filterLabels = page.locator('.mistake-filter-row .select-trigger [data-select-value]');
+    await expect(filterLabels).toHaveText(['来源套题', '文件夹', '题目标签', '题型', '日期']);
+    expect(await filterLabels.evaluateAll(labels =>
+      labels.filter(label => label.scrollWidth > label.clientWidth).map(label => label.textContent),
+    ), 'truncated mistake filter labels').toEqual([]);
+    await capture('mistakes');
     await nav(page, '设置').click();
     await page.getByLabel('标签类型').selectOption('question');
     await expect(page.getByLabel('岩石分类颜色')).toBeVisible();
@@ -119,13 +132,13 @@ for (const layout of layouts) {
     await capture('trash');
     await nav(page, '学习记录').click();
     await expect(page.getByRole('button', { name: '继续作答', exact: true })).toHaveCount(2);
-    await capture('records', [page.locator('tbody td:nth-child(5), tbody td:nth-child(6)')]);
+    await capture('records');
     for (const [mode, view] of [['练习', 'study-practice'], ['考试', 'study-exam']] as const) {
       await page.clock.setFixedTime(new Date(sessions[mode].start_time));
       const session = page.getByRole('row').filter({ hasText: mode }).filter({ hasText: '进行中' });
       await session.getByRole('button', { name: '继续作答' }).click();
       await expect(page.locator('.question-stem').getByText(stem, { exact: true })).toBeVisible();
-      await capture(view, [page.locator('.clock')]);
+      await capture(view);
       if (layout.compact) await button(page, '展开侧栏').click();
       await button(page, '退出答题').click();
       if (layout.compact) await button(page, '收起侧栏').click();

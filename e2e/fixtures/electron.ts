@@ -81,6 +81,7 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
         env, executablePath, timeout: 20_000,
         args: [
           '--user-data-dir=' + join(data, 'renderer'),
+          ...(testInfo.project.name === 'visual' ? ['--force-device-scale-factor=1'] : []),
           ...(!packaged ? [resolve('apps/desktop/dist/runtime/main.js')] : []),
         ],
       });

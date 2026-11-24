@@ -15,6 +15,7 @@
 | `packages/cli` | `quarry spec / validate / convert` 命令和 Markdown DSL |
 | `skills/question-converter` | 将题目材料转换为便携文档的工作流程 |
 | `playwright.config.ts` / `e2e/` | Electron 冒烟、业务流程、视觉回归 |
+| `.github/workflows/ci.yml` | PR 标题、双平台构建验证与 `e2e-windows` 回归门禁 |
 
 ## 启动与平台接口
 
@@ -31,12 +32,14 @@
 
 ## 渲染器
 
-- `apps/web/src/main.tsx` 挂载 React，加载 `visual.css` 令牌、组件原语和 `production.css` 页面布局。
+- `apps/web/src/main.tsx` 挂载 React，加载 `visual.css` 的令牌、组件原语和页面布局，以及 `production.css` 的 Markdown 与控件适配。
 - `apps/web/src/App.tsx` 负责导航、工作区标签、前进后退和每个视图的滚动恢复。
 - `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供基础组件与可访问弹窗。
 - `apps/web/src/api/client.ts` 包装 HTTP、错误与文件处理。API 地址优先使用 preload，其次使用 `VITE_API_URL`。
 - `pages/Library.tsx` 管理文件夹、题库和套题，`components/DocumentEditor.tsx` 编辑资料属性与套题编排。
 - `components/QuestionEditor.tsx` 编辑六种题型、题目标记与上传图片。
+- `components/Icons.tsx` 提供共用的导航和操作图标。
+- `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
 - `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
 - `pages/Study.tsx` 管理草稿、练习锁定、重做、暂停、考试交卷及结果展示。
 - `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。
@@ -73,14 +76,14 @@
 | 全仓构建 | `pnpm run build` |
 | Electron 开发运行时冒烟及工作流 | `pnpm run test:e2e` |
 | 解包产物及同套 E2E | `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged` |
-| 视觉对比 / 更新 | `pnpm exec playwright test --project=visual` / `pnpm run test:e2e:update-snapshots` |
+| 视觉对比 / 更新全部 Windows 基线 | `pnpm exec playwright test --project=visual` / `pnpm run test:e2e:update-snapshots all` |
 | PNG 审阅图 | 设置 `QUARRY_CAPTURE_REVIEW=1` 后运行视觉项目 |
 
 - `e2e/setup.ts` 为开发运行时构建 Web 并打包主进程。打包测试直接加载当前解包目录。
 - `e2e/fixtures/electron.ts` 管理临时目录与重启，监控预加载、控制台、网络和渲染错误。
-- `e2e/visual.spec.ts` 写入固定题目和打乱种子，对比 11 页 × 3 种尺寸或侧栏状态。
-- 视觉基线按平台保存在 `e2e/snapshots/`，审阅 PNG 输出到 Git 忽略的 `e2e/review-screenshots/`。
-- 失败时 Playwright 在 `test-results/` 保留截图与 trace。
+- `e2e/visual.spec.ts` 写入固定题目、打乱种子和有序会话，检查 11 个页面的 3 种布局。Windows 对比 `e2e/snapshots/win32/` 中的基线，其他平台检查页面健康。
+- `[data-dynamic-date]` 标记界面中的日期和计时，`e2e/visual-screenshot.css` 固定遮罩日期的占位宽度。保留真实时间的审阅 PNG 输出到 Git 忽略的 `e2e/review-screenshots/`。
+- `e2e-windows` 在 Windows 上构建并验证解包 `Quarry.exe`，随后对比视觉基线。失败时上传 `playwright-report/` 和 `test-results/`，保留 7 天。
 
 ## 桌面排查
 

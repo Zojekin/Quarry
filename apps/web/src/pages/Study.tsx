@@ -321,7 +321,7 @@ export function Study({
             <span className="small muted">
               {session.mode === "exam" && deadline ? "剩余时间" : "已用时"}
             </span>
-            <span className="study-timer">
+            <span className="study-timer" data-dynamic-date="duration">
               {formatTime(
                 session.mode === "exam" && deadline
                   ? (deadline - now) / 1000
@@ -693,7 +693,12 @@ export function Result({
                   {entries.filter(({ record }) => !!record?.is_correct).length}{" "}
                   题
                 </span>
-                <span>用时 {formatTime(data.effective_duration_seconds)}</span>
+                <span>
+                  用时{" "}
+                  <span data-dynamic-date="duration">
+                    {formatTime(data.effective_duration_seconds)}
+                  </span>
+                </span>
                 <span>累计 {data.records.length} 次作答</span>
               </div>
             </div>

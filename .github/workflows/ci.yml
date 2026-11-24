@@ -67,3 +67,50 @@ jobs:
 
       - name: Run Build
         run: pnpm run build
+
+  e2e-windows:
+    name: Packaged E2E & Visual Regression (Windows)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm run build
+
+      - name: Build unpacked application
+        run: pnpm run package:dir
+
+      - name: Test packaged application
+        run: pnpm run test:e2e:packaged
+
+      # Playwright launches Electron with its bundled Chromium.
+      - name: Check Windows visual baselines
+        run: pnpm exec playwright test --project=visual
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-windows-failure
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

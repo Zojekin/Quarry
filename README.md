@@ -141,7 +141,9 @@ Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二
 
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
 * `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用。
-* `pnpm exec playwright test --project=visual` 对比当前平台的截图基线。使用 `pnpm run test:e2e:update-snapshots` 更新基线，或设置 `QUARRY_CAPTURE_REVIEW=1` 生成 `e2e/review-screenshots/` 中的审阅图。
+* `pnpm exec playwright test --project=visual` 在 Windows 比对 33 张截图基线，日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
+* 在 Windows 用 `pnpm run test:e2e:update-snapshots all` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
+* GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流和重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
 
 ---
 
