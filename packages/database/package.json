@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@quarry/shared": "workspace:*",
-    "kysely": "^0.28.8",
+    "kysely": "^0.28.19",
     "better-sqlite3": "^12.4.1"
   },
   "devDependencies": {

@@ -52,8 +52,8 @@ importers:
         specifier: ^26.0.12
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)
       esbuild:
-        specifier: ^0.25.0
-        version: 0.25.12
+        specifier: ^0.28.2
+        version: 0.28.2
 
   apps/web:
     dependencies:
@@ -136,7 +136,7 @@ importers:
         specifier: ^12.4.1
         version: 12.11.1
       kysely:
-        specifier: ^0.28.8
+        specifier: ^0.28.19
         version: 0.28.19
     devDependencies:
       '@types/better-sqlite3':
@@ -173,7 +173,7 @@ importers:
   packages/shared:
     dependencies:
       zod:
-        specifier: ^4.3.0
+        specifier: ^4.6.7
         version: 4.6.7
 
 packages:
