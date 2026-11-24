@@ -56,15 +56,10 @@
     "beforePack": "./scripts/before-pack.cjs",
     "win": {
       "icon": "resources/icon.ico",
+      "artifactName": "Quarry-${version}-win-${arch}.${ext}",
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
           "arch": [
             "x64"
           ]
@@ -78,6 +73,7 @@
       ]
     },
     "nsis": {
+      "artifactName": "Quarry-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,

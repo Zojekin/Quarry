@@ -129,7 +129,7 @@ pnpm quarry convert draft.md -o questions.json
 # 仅生成解包目录用于本地快速验证 (apps/desktop/release/win-unpacked)
 pnpm package:dir
 
-# 构建 Windows x64 全套分发包 (NSIS 安装包 / 便携版 exe / 绿色 zip)
+# 构建 Windows x64 分发包 (NSIS 安装包 / 绿色 zip)
 pnpm package
 ```
 *(Windows 原生 `better-sqlite3` 的 Electron / Node 双 ABI 切换已由生命周期脚本自动接管，无需手动配置 `node-gyp`。)*

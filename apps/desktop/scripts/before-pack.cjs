@@ -1,16 +1,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { getSqlitePaths } = require('./sqlite-abi.cjs');
 
 module.exports = async function () {
   await import('./bundle.mjs');
   // Packaging only targets Windows currently; guard platform
   if (process.platform !== 'win32') return;
 
-  // Ensure Electron ABI better_sqlite3 is in place for packaging
-  const electronNodePath = path.resolve(__dirname, '../resources/electron-better_sqlite3.node');
-  if (fs.existsSync(electronNodePath)) {
-    const targetDir = path.resolve(__dirname, '../../../node_modules/.pnpm/better-sqlite3@12.11.1/node_modules/better-sqlite3/build/Release');
-    fs.mkdirSync(targetDir, { recursive: true });
-    fs.copyFileSync(electronNodePath, path.join(targetDir, 'better_sqlite3.node'));
+  const { targetFile, electronBinary, backupFile } = getSqlitePaths();
+  if (!fs.existsSync(electronBinary)) return;
+
+  // Preserve the current Node ABI binary (e.g. Node 22 in CI or Node 26 locally) before swapping in Electron's.
+  if (fs.existsSync(targetFile) && !fs.readFileSync(targetFile).equals(fs.readFileSync(electronBinary))) {
+    fs.mkdirSync(path.dirname(backupFile), { recursive: true });
+    fs.copyFileSync(targetFile, backupFile);
   }
+
+  fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+  fs.copyFileSync(electronBinary, targetFile);
 };
