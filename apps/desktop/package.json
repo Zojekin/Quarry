@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "dev": "node scripts/bundle.mjs && electron .",
+    "dev": "node scripts/dev.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --publish never",

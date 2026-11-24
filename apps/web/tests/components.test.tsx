@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   cleanup,
@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useState } from "react";
-import { Facet } from "../src/components/ui.js";
+import { Facet, tagColorStyle } from "../src/components/ui.js";
 import { Answer, emptyAnswer } from "../src/pages/Study.js";
 import { closeTab, navigateTab, newTab, formatTime } from "../src/state.js";
 import type { QuestionView } from "../src/api/client.js";
@@ -73,9 +73,16 @@ describe("Workspace and study interactions", () => {
     );
     fireEvent.click(screen.getByText("Alpha"));
     expect(changed).not.toHaveBeenCalled();
-    expect(screen.getByRole("img", { name: "正确" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "漏选" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "选错" })).toBeTruthy();
     expect(screen.getByText("Explanation")).toBeTruthy();
+  });
+  it("uses readable ink over both persisted and fallback tag colors", () => {
+    expect(tagColorStyle("#386450", "地球科学")).toMatchObject({
+      "--tag-bg": "#386450", "--tag-ink": "#FFFFFF", "--tag-outline": "#244134",
+    });
+    expect(tagColorStyle(null, "地球科学")).toEqual(tagColorStyle(null, "地球科学"));
+    expect(tagColorStyle(null, "地球科学")).toMatchObject({ "--tag-ink": "#253128" });
   });
   it("keeps a multi-select menu mounted and distinguishes all from none", () => {
     function Example() {
@@ -95,7 +102,7 @@ describe("Workspace and study interactions", () => {
     render(<Example />);
     const all = screen.getByLabelText("全选");
     fireEvent.click(all);
-    expect(screen.getByText("题型 · 未选择")).toBeTruthy();
+    expect(screen.getByText("未选择")).toBeTruthy();
     expect((screen.getByLabelText("甲") as HTMLInputElement).checked).toBe(
       false,
     );

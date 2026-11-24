@@ -57,7 +57,7 @@ CI 的 `PR Title (Conventional Commits)` 检查会强制校验 PR 标题格式�
 4. **提交、提 PR 与 T3 Code 值守**：
    - 推送分支并提交 PR（自动带入 `.github/pull_request_template.md` 核对清单）。
    - 在 T3 Code 中使用 `link_pull_request` 关联 PR，按需生成 `PR Guide` 或启动独立 Review 子 Agent 预审，并开启 `watch_pull_request` 值守。
-   - 等待 GitHub Actions 双平台门禁（`pr-title` + `ubuntu-latest` + `windows-latest` 全量 `lint / test / build`）全绿。
+   - 等待 GitHub Actions 的 `pr-title`、双平台 `lint / test / build`，以及 Windows 解包应用和视觉回归作业 `e2e-windows` 全绿。
 5. **合并与自动 Settle**：
    - 人工确认无误后点击 **Squash and merge**。
    - T3 Code 自动将线程标记为 Settled 并触发 `stopOnSettle` 停止后台预览服务。

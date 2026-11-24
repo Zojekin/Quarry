@@ -11,14 +11,20 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "dev:web": "node scripts/dev-web.mjs",
+    "dev:desktop": "pnpm --filter @quarry/desktop dev",
+    "test:e2e": "playwright test --project=electron",
+    "test:e2e:packaged": "node scripts/run-packaged-e2e.mjs",
+    "test:e2e:update-snapshots": "playwright test --project=visual --update-snapshots",
+    "lint": "tsc -p e2e/tsconfig.json && turbo run lint",
     "package": "pnpm --filter @quarry/desktop run dist",
     "package:dir": "pnpm --filter @quarry/desktop run pack"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^22.19.0",
     "turbo": "^2.7.0",
-    "vitest": "^3.2.4",
-    "@types/node": "^22.19.0"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

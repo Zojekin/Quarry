@@ -20,7 +20,7 @@
     {
       "id": "web-dev",
       "name": "Web Dev",
-      "command": "pnpm --filter @quarry/web dev",
+      "command": "pnpm run dev:web",
       "icon": "play",
       "runOnWorktreeCreate": false,
       "async": true,
@@ -31,7 +31,7 @@
     {
       "id": "desktop-dev",
       "name": "Desktop Dev",
-      "command": "pnpm --filter @quarry/desktop dev",
+      "command": "pnpm run dev:desktop",
       "icon": "play",
       "runOnWorktreeCreate": false,
       "async": true,

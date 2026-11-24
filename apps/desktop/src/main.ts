@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startLocalBackend, type LocalBackend } from './backend-manager.js';
@@ -23,7 +23,13 @@ async function createWindow(): Promise<void> {
       additionalArguments: [`--quarry-api-url=${backend.url}`],
     },
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    const target = URL.parse(url);
+    if (target && ['http:', 'https:', 'mailto:'].includes(target.protocol)) {
+      void shell.openExternal(url).catch(error => console.error('Could not open external URL', error));
+    }
+    return { action: 'deny' };
+  });
   window.webContents.on('will-navigate', event => event.preventDefault());
   if (process.env.VITE_DEV_SERVER_URL) await window.loadURL(process.env.VITE_DEV_SERVER_URL);
   else await window.loadFile(app.isPackaged
@@ -32,6 +38,9 @@ async function createWindow(): Promise<void> {
 }
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+process.on('message', message => {
+  if (message === 'quarry-dev-quit') app.quit();
+});
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) void createWindow().catch(fail);
 });
@@ -59,7 +68,8 @@ function fail(error: unknown): void {
 
 void app.whenReady().then(() => {
   startup = (async () => {
-    backend = await startLocalBackend({ userDataDir: app.getPath('userData') });
+    const userDataDir = process.env.QUARRY_USER_DATA_DIR || app.getPath('userData');
+    backend = await startLocalBackend({ userDataDir });
     await createWindow();
   })();
   return startup;

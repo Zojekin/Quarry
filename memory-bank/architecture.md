@@ -98,6 +98,7 @@
 ### 4.3 数据库迁移、导入导出与事务回滚
 - **SQLite 迁移**：`packages/database/src/migrations` 包含 `001`~`005`（11 张主表 + `composer_json` + 会话状态/草稿 + 标签色 + 历史来源固化 + 软删除批次）。
 - **一票否决导入**：`/api/import/{preview,commit}` 对 JSON / `# Quarry` Markdown / `.quarry` ZIP 执行严格 Zod 与引用校验，任一错误整份拒绝并给出具体行号/字段路径。
+- **文件夹归档往返**：`GET /api/export/folder/:id` 导出 `quarry-folder` 格式的 `.quarry` ZIP。导入校验清单中的文件与 SHA-256、子树引用及附件内容，并预览文件夹、题库、套题、题目与唯一附件数量。提交通过同一仓储事务在根目录创建新子树，重新映射资料、题目 ID 和子树内套题来源，并按标签命名空间与附件哈希去重。
 - **备份与恢复防线**：`/api/backup/create` 导出包含校验清单、全表数据与附件的 `.quarry-backup` ZIP；`/api/backup/restore` 先持久化当前数据库恢复点（`recoveryPointsDir`）并先写入新附件，若数据库事务替换失败则回滚数据库并清理新写入附件，保留旧快照可恢复。
 
 ---
@@ -114,19 +115,20 @@
 
 **已知后端边界**：
 - 尚未实现崩溃/休眠心跳协议或脱离客户端的独立服务端考试超时强交卷（当前依赖客户端运行期定时与重启恢复超时提交）。
-- `GET /api/export/folder/:id` 已支持文件夹子树 `.quarry` 导出，现有导入器暂仅支持单题库/单套题 Portable 文档导入，尚未开放文件夹归档整包导入。
 
 ---
 
 ## 6. 正式网页前端架构 (`apps/web`)
 
 - **构建与注入**：`tsc -p tsconfig.json && vite build` 输出至 `apps/web/dist/`（`base: './'` 兼容桌面端 `loadFile` 离线加载）。`vite.config.ts` 在构建期将根目录 `product-info.json` 与根 `package.json` 的 `version` 注入 `__PRODUCT__`，不为此创建额外后端 API。
+- **资源与附件**：logo 与衬线字体经 Vite 打包，题干存储 `attachment://<id>`，渲染时由 `BackendClient` 解析至当前 API。旧的 `/api/attachments/<id>` 和随机端口 loopback 地址继续可读。
 - **BackendClient 地址解析顺序**：
   1. 宿主注入的 `window.__QUARRY_API_URL__`
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史；一级栏目为首页（学习看板）、资料库、错题本、学习记录，另含设置与回收站。
-- **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML；打包产物内置思源宋体 `public/assets/serif.woff2` 与透明图标 `public/assets/logo.svg`。
+- **共用视觉组件**：`components/Icons.tsx` 提供导航和操作按钮所用的 SVG 图标。`components/QuestionPreview.tsx` 供资料详情和错题本复用，按页面状态展示题目、答案与解析。`visual.css` 定义视觉令牌、组件原语和页面布局，`production.css` 适配 Markdown、KaTeX 与 React 控件。
+- **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML；打包产物内置 `src/assets/serif.woff2` 思源宋体与 `src/assets/logo.svg` 透明图标。
 
 ---
 
@@ -151,3 +153,11 @@
   - `quarry validate <file>`：校验 `.md` 或 `.json` 草稿并输出错误行号/字段或统计摘要；
   - `quarry convert <file> -o <output> [--format json|md]`：输出可直接导入题匣的标准化 JSON 或 `# Quarry` Markdown 文件。
 - `skills/question-converter/SKILL.md` 为 AI Agent 提供将各类原始文本/文档规范转换为题匣可导入题库的操作指南。
+
+## 9. 实时开发与桌面测试
+
+- `scripts/dev-web.mjs` 由 `pnpm run dev:web` 调用，在同一 Node 进程运行开发 API 和 Vite，通过 `VITE_API_URL` 连接，使用工作树内 `.quarry-dev-data/`。
+- `apps/desktop/scripts/dev.mjs` 由 `pnpm run dev:desktop` 调用，等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
+- `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
+- 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 33 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
+- `.github/workflows/ci.yml` 的 `e2e-windows` 作业构建解包应用，运行 `Quarry.exe` 冒烟、业务流程和重启持久化测试，再执行 Windows 视觉回归。Electron 自带 Chromium；失败时保留 Playwright HTML 报告与测试工件 7 天。
