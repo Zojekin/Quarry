@@ -1,6 +1,6 @@
 # 题匣视觉系统
 
-本文件记录 workspace-preview 已应用的视觉规则。最新用户批注优先；历史探索页不作为当前规范。基础变量与组件定义统一位于 `styles.css`，页面通过 `ui.js` 的按钮、药丸、表单、选择器等原语复用。`#/components` 是可运行的规范预览，使用同一套组件类。
+本文件记录题匣正式前端（`apps/web`）沿用的视觉规则。最新用户批注优先。基础变量与组件原语统一位于 `apps/web/src/visual.css`，页面布局位于 `apps/web/src/production.css`，页面通过 `apps/web/src/components/ui.tsx` 的按钮、药丸、表单、选择器等原语复用。
 
 ## 字体与层级
 
