@@ -69,13 +69,12 @@ CI 的 `PR Title (Conventional Commits)` 检查会强制校验 PR 标题格式�
 本项目使用 **`release-please` Manifest 模式**管理发版：
 1. **日常累积变更（不立即发版）**：
    - 每次有新的 `feat:` / `fix:` PR 合入 `main` 时，`.github/workflows/release-please.yml` 自动计算下一个版本号，创建或滚动更新一个动态 **Release PR**（同步更新根 `package.json`、全部 7 个子包 `package.json`、`.release-please-manifest.json` 及 `CHANGELOG.md`）。
-   - **版本命名约定**：Git Tag 与发布版本号**不带 `v` 前缀**（例如 `0.2.0`，由 `release-please-config.json` 中 `"include-v-in-tag": false` 控制）。
+   - **版本命名约定**：Git Tag 与 GitHub Release 标题均使用**不带 `v` 前缀**的版本号（例如 `0.2.1`）。Tag 格式由 `release-please-config.json` 中的 `"include-v-in-tag": false` 控制。
    - 如需手动指定目标版本号，可在提交信息正文附加 `Release-As: X.Y.Z`。
 2. **手动定格正式 Release**：
    - 当积累的功能与修复达到发版时机时，审查并点击合并该 **Release PR**。
    - 合并瞬间自动完成：
      1. 打出 `X.Y.Z` Git Tag 并创建 GitHub Release；
      2. 自动触发 `build-windows` 任务在 `windows-latest` 上执行 `pnpm run package`；
-     3. 生成 Windows x64 两件套及逐文件 `.sha256` 校验文件并上传至该 Release：
-        - `Quarry-Setup-<version>-x64.exe` + `.sha256`
-        - `Quarry-<version>-win-x64.zip` + `.sha256`
+     3. 上传 Windows x64 安装包 `Quarry-Setup-<version>-x64.exe` 与绿色压缩包 `Quarry-<version>-win-x64.zip`。GitHub Releases 为每个附件提供原生 SHA-256 摘要。
+     4. 将 Release 标题设为版本号，并自动移除 Release 正文开头重复的版本标题。`CHANGELOG.md` 保留完整版本标题。

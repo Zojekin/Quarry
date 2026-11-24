@@ -81,7 +81,7 @@ quarry/
 ## 🚀 快速上手
 
 ### 环境要求
-* **Node.js**: `>= 22.13.0`
+* **Node.js**: 22.14.0 及以上的 22.x，或 23.6.0 及以上（支持 Node-API 10）
 * **pnpm**: `>= 10.0.0`
 
 ### 1. 安装依赖
@@ -132,7 +132,7 @@ pnpm package:dir
 # 构建 Windows x64 分发包 (NSIS 安装包 / 绿色 zip)
 pnpm package
 ```
-*(Windows 原生 `better-sqlite3` 的 Electron / Node 双 ABI 切换已由生命周期脚本自动接管，无需手动配置 `node-gyp`。)*
+Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二进制。Node.js 与 Electron 共用同一份原生绑定，无需切换 ABI 或运行 `node-gyp`。
 
 ---
 

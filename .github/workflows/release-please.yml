@@ -57,7 +57,7 @@ jobs:
       - name: Build Windows packages
         run: pnpm run package
 
-      - name: Generate per-file SHA256 sidecars & upload assets
+      - name: Upload Windows assets & normalize release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,16 +73,26 @@ jobs:
           $assets = @()
           foreach ($name in $expected) {
             $filePath = Join-Path $releaseDir $name
-            if (-not (Test-Path $filePath)) {
+            if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
               throw "Expected release artifact not found: $filePath"
             }
-            $hash = (Get-FileHash -Algorithm SHA256 -Path $filePath).Hash.ToLowerInvariant()
-            $sidecarPath = "$filePath.sha256"
-            [System.IO.File]::WriteAllText($sidecarPath, "$hash  $name`n", (New-Object System.Text.UTF8Encoding($false)))
             $assets += $filePath
-            $assets += $sidecarPath
           }
           gh release upload $env:RELEASE_TAG @assets --clobber
           if ($LASTEXITCODE -ne 0) {
             throw "gh release upload failed with exit code $LASTEXITCODE"
+          }
+
+          $meta = gh release view $env:RELEASE_TAG --json body | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release view failed with exit code $LASTEXITCODE"
+          }
+          $escapedVersion = [regex]::Escape($env:RELEASE_VERSION)
+          $cleanedBody = ([string]$meta.body) -replace "(?s)^\s*#{1,3}\s+\[?v?$escapedVersion\]?(?:\([^\)]*\))?(?:\s*\([^)]*\))?\s*(?:\r?\n)+", ""
+          $cleanedBody = $cleanedBody.Trim()
+          $notesFile = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          [System.IO.File]::WriteAllText($notesFile, $cleanedBody, (New-Object System.Text.UTF8Encoding($false)))
+          gh release edit $env:RELEASE_TAG --title $env:RELEASE_VERSION --notes-file $notesFile
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release edit failed with exit code $LASTEXITCODE"
           }

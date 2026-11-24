@@ -72,7 +72,7 @@
 | **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `esbuild` | 窗口托管、随机端口本地服务进程、Windows NSIS/ZIP 打包 |
 | **网页前端** | React 19 + Vite 6 | `react`, `react-dom`, `vite`, `@testing-library/react`, `jsdom` | 单页应用、多标签工作区（sessionStorage）、自研视觉样式系统 |
 | **富文本排版** | React Markdown + KaTeX | `react-markdown`, `remark-math`, `rehype-katex`, `katex` | 离线 LaTeX 数学公式、代码块、表格，禁用原始 HTML，独立分块懒加载 |
-| **后端服务** | Node.js (>=22.13) + Hono | `hono`, `@hono/node-server`, `fflate` | 轻量 RESTful API、附件流式传输、ZIP 导入导出与备份打包 |
+| **后端服务** | Node.js（Node-API 10，`^22.14.0 \|\| >=23.6.0`）+ Hono | `hono`, `@hono/node-server`, `fflate` | 轻量 RESTful API、附件流式传输、ZIP 导入导出与备份打包 |
 | **领域与契约** | Pure TypeScript + Zod 4 | `zod` | 端到端 Schema 校验、一票否决导入检验、纯函数判分/打乱/跨天计时 |
 | **数据持久** | Kysely + better-sqlite3 | `kysely`, `better-sqlite3` | 仓储接口隔离、SQLite WAL 模式、外键约束与版本化迁移 |
 | **题目 CLI** | Node CLI + YAML/JSONC | `commander`, `yaml`, `jsonc-parser`, `esbuild` | 校验/转换 Markdown 题目 DSL 与 Loose JSON |
@@ -134,9 +134,9 @@
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
 - **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 仅校验并暴露只读字符串 `window.__QUARRY_API_URL__`，不暴露任何 IPC 或文件系统桥接。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
-- **运行时打包与双 ABI 自动管理**：
-  - `scripts/bundle.mjs` 用 `esbuild` 将 TypeScript 主进程打包为 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
-  - `scripts/before-pack.cjs` 与 `scripts/restore-sqlite.cjs` 在 Windows 上动态定位 `better-sqlite3` 安装目录，自动在 `resources/electron-better_sqlite3.node`（Electron ABI）与 `resources/node-better_sqlite3.node`（Node ABI）间无痛切换，避免缺少 VS C++ 编译环境或路径空格导致 `node-gyp` 失败；在 Linux/macOS（如 CI）上自动跳过。
+- **运行时打包与 N-API 原生绑定**：
+  - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
+  - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
   1. NSIS 向导安装包：`Quarry-Setup-<version>-x64.exe`（支持自定义路径、`deleteAppDataOnUninstall: false` 保护本地题库）
   2. 绿色压缩包：`Quarry-<version>-win-x64.zip`
