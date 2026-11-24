@@ -173,3 +173,77 @@ it('exports only the folder subtree with file tags, portable contents and refere
   expect(JSON.parse(strFromU8(files['manifest.json']!)).format).toBe('quarry-folder');
   expect((await app.request(`/api/export/folder/${randomUUID()}`)).status).toBe(404);
 });
+
+it('previews and imports a verified folder archive into a fresh database', async () => {
+  const r = database.repositories;
+  const root = await r.folders.create({ id: randomUUID(), name: 'Root', parent_id: null });
+  const child = await r.folders.create({ id: randomUUID(), name: 'Nested', parent_id: root.id });
+  const fileTag = await r.tags.create({ id: randomUUID(), name: 'Files', target_type: 'file', color: '#aabbcc' });
+  await r.tags.addRelation({ id: randomUUID(), tag_id: fileTag.id, target_type: 'file', target_id: child.id });
+  const form = new FormData();
+  form.set('file', new File(['folder-image'], 'image.png', { type: 'image/png' }));
+  const { url, ...image } = (await (await app.request('/api/attachments', { method: 'POST', body: form })).json()).data;
+  const questionTag = { id: randomUUID(), name: 'Questions', target_type: 'question', color: '#abc123' };
+  const input = document();
+  const bank = await service.commit(JSON.stringify({ ...input, tags: [questionTag], questions: [
+    { ...input.questions[0], content: '![image](http://127.0.0.1:49111/api/attachments/' + image.id + ')',
+      tag_ids: [questionTag.id] },
+  ] }), 'json');
+  await r.questionBanks.update(bank.id, { folder_id: child.id });
+  const paper = await service.commit(JSON.stringify({ ...document(), entity: 'paper', name: 'Review' }), 'json');
+  const source = (await r.questions.list()).find(question => question.bank_id === bank.id)!;
+  const linked = await app.request('/api/papers/' + paper.id + '/items', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_question_id: source.id }) });
+  expect(linked.status).toBe(201);
+  await r.papers.update(paper.id, { folder_id: root.id, time_limit_seconds: 90, follow_source: 1 });
+  const { bytes } = await service.export('folder', root.id, 'quarry');
+  const target = await createSqliteDatabase(':memory:');
+  try {
+    const storage = new LocalAttachmentStorage(join(directory, 'target'));
+    const importer = new BackupService(target.repositories, target.withTransaction, new SqliteSnapshotRepository(target.db), storage);
+    const files = unzipSync(bytes);
+    files['attachments/' + image.sha256] = strToU8('tampered');
+    for (const commit of [false, true])
+      await expect(importer.importArchive(zipSync(files), commit)).rejects.toMatchObject({ code: 'IMPORT_FAILED' });
+    expect(await importer.importArchive(bytes, false)).toEqual({ entity: 'folder', name: 'Root',
+      summary: { folders: 2, banks: 1, papers: 1, questions: 4, attachments: 1 } });
+    expect(await target.repositories.folders.list()).toEqual([]);
+    const failing = new BackupService(target.repositories, target.withTransaction, new SqliteSnapshotRepository(target.db), {
+      exists: sha => storage.exists(sha), readStream: sha => storage.readStream(sha), delete: sha => storage.delete(sha),
+      upload: async (sha, data) => { await storage.upload(sha, data); throw new Error('Write failed'); },
+    });
+    await expect(failing.importArchive(bytes, true)).rejects.toThrow('Write failed');
+    expect(await target.repositories.folders.list()).toEqual([]);
+    expect(await target.repositories.attachments.list()).toEqual([]);
+    expect(await storage.exists(image.sha256)).toBe(false);
+    const imported = await importer.importArchive(bytes, true);
+    expect(imported).toMatchObject({ entity: 'folder', imported_count: 4 });
+    expect(imported).toHaveProperty('id');
+    const folders = await target.repositories.folders.list();
+    const importedRoot = folders.find(folder => folder.name === 'Root')!;
+    const nested = folders.find(folder => folder.name === 'Nested')!;
+    expect(imported).toHaveProperty('id', importedRoot.id);
+    expect(importedRoot.id).not.toBe(root.id);
+    expect(nested.parent_id).toBe(importedRoot.id);
+    const [importedBank] = await target.repositories.questionBanks.list();
+    expect(importedBank?.folder_id).toBe(nested.id);
+    const [importedPaper] = await target.repositories.papers.list();
+    expect(importedPaper).toMatchObject({ name: 'Review', folder_id: importedRoot.id, time_limit_seconds: 90, follow_source: 1 });
+    const importedItems = await target.repositories.papers.listItems(importedPaper!.id);
+    expect(importedItems).toHaveLength(3);
+    const tags = await target.repositories.tags.list();
+    const restoredFileTag = tags.find(tag => tag.name === 'Files')!;
+    expect(restoredFileTag).toMatchObject({ color: '#aabbcc', target_type: 'file' });
+    expect(await target.repositories.tags.listRelations(restoredFileTag.id)).toMatchObject([{ target_id: nested.id }]);
+    const restoredQuestionTag = tags.find(tag => tag.name === 'Questions')!;
+    const restoredQuestion = (await target.repositories.questions.list()).find(question => question.bank_id === importedBank!.id)!;
+    expect(restoredQuestion.stem).toBe('![image](attachment://' + image.id + ')');
+    expect(importedItems).toContainEqual(expect.objectContaining({ source_question_id: restoredQuestion.id, source_version: source.version }));
+    const questionRelations = await target.repositories.tags.listRelations(restoredQuestionTag.id);
+    expect(questionRelations).toHaveLength(2);
+    expect(questionRelations).toContainEqual(expect.objectContaining({ target_id: restoredQuestion.id }));
+    expect(await new Response(await storage.readStream(image.sha256)).text()).toBe('folder-image');
+  } finally {
+    await target.destroy();
+  }
+});

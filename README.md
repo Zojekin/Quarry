@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="apps/web/public/assets/logo.svg" alt="题匣 Logo" width="128" height="128" />
+<img src="apps/web/src/assets/logo.svg" alt="题匣 Logo" width="128" height="128" />
 
 # 题匣 (Quarry)
 
@@ -51,6 +51,7 @@
 
 ### 5. 坚固的数据安全与 CLI 生态
 * **一票否决严格导入**：导入 Markdown / JSON / `.quarry` 文件时若有一处语法错误整份拒绝并指明行号，绝不污染现有题库。
+* **文件夹归档往返**：资料库可导出和导入文件夹 `.quarry` 归档。导入前校验归档校验和并预览数量，提交后在根目录创建新子树。
 * **带后悔药的备份回滚**：全量导出为包含完整数据库与附件的 `.quarry-backup` 容器；恢复备份前自动在本地保存还原点快照，发生异常自动回滚。
 * **两阶段安全回收站**：资料删除先进入回收站软删除，可随时完整还原，清空回收站才物理清除；学习与错题历史独立保留。
 * **Quarry CLI 与题目转换 Skill**：支持用轻量 Markdown 题目 DSL 编写草稿，通过 `pnpm quarry validate / convert` 校验并生成合规导入文件。
@@ -102,15 +103,15 @@ pnpm build
 ```
 
 ### 3. 启动开发环境
-* **启动 Web 前端独立开发调试**：
+* **Web Dev** 为 Vite 启动真实的本地 Hono + SQLite 后端，数据保存在 `.quarry-dev-data/`，API 从端口 48123 起尝试。
   ```bash
-  pnpm --filter @quarry/web dev
+  pnpm run dev:web
   ```
-* **启动 Electron 桌面应用**（需先构建 Web 或指定 `VITE_DEV_SERVER_URL`）：
+* **Desktop Dev** 启动 Vite 并打开 Electron，支持热更新。可设置 `QUARRY_USER_DATA_DIR` 指定数据目录。
   ```bash
-  pnpm --filter @quarry/web build
-  pnpm --filter @quarry/desktop dev
+  pnpm run dev:desktop
   ```
+* 两个入口的 Vite 均绑定 `127.0.0.1`，从端口 5173 起尝试。终端会显示实际地址。
 
 ### 4. Quarry CLI 题目转换
 ```bash
@@ -134,12 +135,19 @@ pnpm package
 ```
 Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二进制。Node.js 与 Electron 共用同一份原生绑定，无需切换 ABI 或运行 `node-gyp`。
 
+### 6. Electron 端到端与视觉回归
+
+* `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
+* `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用。
+* `pnpm exec playwright test --project=visual` 对比当前平台的截图基线。使用 `pnpm run test:e2e:update-snapshots` 更新基线，或设置 `QUARRY_CAPTURE_REVIEW=1` 生成 `e2e/review-screenshots/` 中的审阅图。
+
 ---
 
 ## 🤝 开发与贡献
 
 * 分支管理、Conventional Commits、CI 门禁与自动发版规范请见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 * AI 辅助开发规范、架构红线与文档同步要求请见 [AGENTS.md](AGENTS.md)。
+* 工作区入口、运行时契约和测试定位见 [代码库地图](memory-bank/codebase-map.md)。
 
 ---
 

@@ -15,6 +15,7 @@
 | **Phase 3–5** | **正式 React 19 前端交付** | 🟢 已完成 | React 19 + Vite 生产应用、多标签工作区、KaTeX 公式分块加载、资料库/编排/练习（45/55 分栏）/考试（防提前泄露）/错题复习组卷/学习看板热力图/设置/回收站，与真实 Hono/SQLite 联调通过 |
 | **Issue #5** | **Quarry CLI 与题目转换 Skill** | 🟢 已完成 | `packages/shared` Portable Schema、`packages/cli`（`spec`/`validate`/`convert`）、`skills/question-converter/SKILL.md` |
 | **工程治理** | **仓库清理、文档收敛与自动化流水线** | 🟢 已完成 | 清理历史原型与重复大文件、归档过时文档、收敛 `AGENTS.md`/`memory-bank`、建立双平台 CI、PR 标题门禁、`release-please` 动态发版与 Windows Release 自动打包 |
+| **Phase A** | **桌面开发与回归验证** | 🟢 已实现 | Web / Desktop Dev 实时启动、离线资源与附件修复、应用内确认与输入弹窗、文件夹归档校验与事务导入、Electron 冒烟与业务流程、三种布局视觉基线 |
 
 ---
 

@@ -21,4 +21,8 @@ attachments/
 .DS_Store
 Thumbs.db
 .oil-ui/
+.quarry-dev-data/
+e2e/review-screenshots/
+playwright-report/
+test-results/
 

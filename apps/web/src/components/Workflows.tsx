@@ -279,16 +279,24 @@ export function ImportDialog({
         {data && (
           <>
             <h3>{data.name}</h3>
-            <p>
-              {data.entity === "bank" ? "题库" : "套题"} ·{" "}
-              {data.questions.length} 道题目 · {data.attachments.length} 个附件
-            </p>
-            <Markdown text={data.description} />
-            {data.questions.map((q) => (
-              <article key={q.id}>
-                <Markdown text={q.content} />
-              </article>
-            ))}
+            {data.entity === "folder" ? (
+              <p>
+                {data.summary.folders} 个文件夹 · {data.summary.banks} 个题库 ·{" "}
+                {data.summary.papers} 份套题 · {data.summary.questions} 道题目 ·{" "}
+                {data.summary.attachments} 个附件
+              </p>
+            ) : (
+              <>
+                <p>
+                  {data.entity === "bank" ? "题库" : "套题"} ·{" "}
+                  {data.questions.length} 道题目 · {data.attachments.length} 个附件
+                </p>
+                <Markdown text={data.description} preview />
+                {data.questions.map((q) => (
+                  <article key={q.id}><Markdown text={q.content} preview /></article>
+                ))}
+              </>
+            )}
           </>
         )}
         <div className="toolbar">

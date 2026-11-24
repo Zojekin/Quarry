@@ -6,12 +6,14 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { client } from "../src/api/client.js";
 import type { Session, Tag } from "../src/api/client.js";
 import { Library } from "../src/pages/Library.js";
 import { Settings } from "../src/pages/Learning.js";
 import { Result, Study } from "../src/pages/Study.js";
+import { PromptDialog } from "../src/components/ui.js";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -74,6 +76,32 @@ it("serializes color saves and acknowledges only the final persisted color", asy
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
   expect(save.mock.calls.map((c) => c[1])).toEqual(["#111111", "#222222"]);
   await screen.findByText("已保存");
+});
+it("runs a backup restore only after confirmation and allows retrying the same file", async () => {
+  vi.spyOn(client.tags, "list").mockResolvedValue([]);
+  const restore = vi.spyOn(client.backup, "backupRestore").mockResolvedValue({ recovery_point_id: "recovery" });
+  const { container } = render(<Settings />);
+  const file = new File(["archive"], "quarry.quarry-backup");
+  const input = container.querySelector('input[type="file"]')!;
+  fireEvent.change(input, { target: { files: [file] } });
+  const dialog = screen.getByRole("dialog", { name: /完整恢复/ });
+  fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  expect(restore).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(within(screen.getByRole("dialog", { name: /完整恢复/ })).getByRole("button", { name: "确认" }));
+  expect(restore).toHaveBeenCalledWith(file);
+  await screen.findByText("恢复完成，请刷新页面");
+});
+it("accepts a nonempty review paper name through the prompt dialog", () => {
+  const save = vi.fn();
+  render(<PromptDialog title="保存复习套题" label="复习套题名称" initialValue="错题复习" onAccept={save} onClose={() => {}} />);
+  const dialog = within(screen.getByRole("dialog", { name: "保存复习套题" }));
+  fireEvent.change(dialog.getByLabelText("复习套题名称"), { target: { value: "   " } });
+  const button = dialog.getByRole("button", { name: "保存" }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  fireEvent.change(dialog.getByLabelText("复习套题名称"), { target: { value: "  地理复习  " } });
+  fireEvent.click(button);
+  expect(save).toHaveBeenCalledWith("地理复习");
 });
 const session: Session = {
   id: "s",

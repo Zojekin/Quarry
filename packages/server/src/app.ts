@@ -79,7 +79,7 @@ export function createQuarryServer(options: QuarryServerOptions) {
     error: new AppError(ErrorCode.NotFound, 'Not found').toJSON(),
   }, 404));
 
-  return app.route('/api', createHealthRoutes(options.db))
+  return app.route('/api', createHealthRoutes(repositories))
     .route('/api/attachments', createAttachmentRoutes())
     .route('/api/folders', createFolderRoutes())
     .route('/api/banks', createBankRoutes())

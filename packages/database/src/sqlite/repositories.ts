@@ -261,6 +261,9 @@ export class SqliteAttachmentRepository implements IAttachmentRepository {
 export function createSqliteRepositories(db: Kysely<QuarryDatabase>): Repositories {
   const deletionBatchId = randomUUID();
   return {
+    async checkConnection() {
+      await db.selectNoFrom(eb => eb.val(1).as('health')).executeTakeFirstOrThrow();
+    },
     trash: new SqliteTrashRepository(db),
     folders: new SqliteFolderRepository(db, deletionBatchId),
     questionBanks: new SqliteQuestionBankRepository(db, deletionBatchId),

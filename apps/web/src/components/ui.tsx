@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { BackendError } from "../api/client.js";
 export function errorMessage(error: unknown) {
@@ -33,6 +33,79 @@ export function Button({
       {children}
     </button>
   );
+}
+
+function ActionDialog({ title, onClose, onSubmit, children, action, disabled = false }: {
+  title: string;
+  onClose: () => void;
+  onSubmit: () => void;
+  children?: ReactNode;
+  action: string;
+  disabled?: boolean;
+}) {
+  const heading = useId();
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const node = dialog.current!;
+    const previous = document.activeElement;
+    if (typeof node.showModal === "function") node.showModal();
+    else node.setAttribute("open", "");
+    return () => {
+      if (typeof node.close === "function") node.close();
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, []);
+  return (
+    <dialog ref={dialog} className="modal" role="dialog" aria-modal="true" aria-labelledby={heading}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}>
+      <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+        <h2 className="modal-heading" id={heading}>{title}</h2>
+        {children && <div className="modal-body">{children}</div>}
+        <div className="modal-actions">
+          <button className="button" type="button" onClick={onClose}>取消</button>
+          <button className="button primary" type="submit" disabled={disabled}>{action}</button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+export function ConfirmDialog({ title, onClose, onAccept }: {
+  title: string;
+  onClose: () => void;
+  onAccept: () => void;
+}) {
+  return <ActionDialog title={title} action="确认" onClose={onClose} onSubmit={onAccept} />;
+}
+
+export function PromptDialog({ title, label, initialValue, onClose, onAccept }: {
+  title: string;
+  label: string;
+  initialValue: string;
+  onClose: () => void;
+  onAccept: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const name = value.trim();
+  return (
+    <ActionDialog title={title} action="保存" onClose={onClose} disabled={!name}
+      onSubmit={() => { if (name) onAccept(name); }}>
+      <label className="field">
+        {label}
+        <input autoFocus required value={value} onChange={(event) => setValue(event.target.value)} />
+      </label>
+    </ActionDialog>
+  );
+}
+
+export function useConfirmation() {
+  const [pending, setPending] = useState<{ title: string; action: () => void }>();
+  const close = () => setPending(undefined);
+  return {
+    ask: (title: string, action: () => void) => setPending({ title, action }),
+    dialog: pending && <ConfirmDialog title={pending.title} onClose={close}
+      onAccept={() => { close(); pending.action(); }} />,
+  };
 }
 export function useLoad<T>(loader: () => Promise<T>, dependencies: unknown[]) {
   const [data, setData] = useState<T>();

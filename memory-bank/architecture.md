@@ -114,13 +114,14 @@
 
 **已知后端边界**：
 - 尚未实现崩溃/休眠心跳协议或脱离客户端的独立服务端考试超时强交卷（当前依赖客户端运行期定时与重启恢复超时提交）。
-- `GET /api/export/folder/:id` 已支持文件夹子树 `.quarry` 导出，现有导入器暂仅支持单题库/单套题 Portable 文档导入，尚未开放文件夹归档整包导入。
+- `GET /api/export/folder/:id` 导出 `quarry-folder` ZIP。导入端校验清单中的文件与 SHA-256、子树引用及附件内容，预览返回文件夹、题库、套题、题目与唯一附件数量。提交通过同一仓储事务创建新子树，重新映射资料、题目 ID 和子树内套题来源，按标签命名空间与附件哈希去重。
 
 ---
 
 ## 6. 正式网页前端架构 (`apps/web`)
 
 - **构建与注入**：`tsc -p tsconfig.json && vite build` 输出至 `apps/web/dist/`（`base: './'` 兼容桌面端 `loadFile` 离线加载）。`vite.config.ts` 在构建期将根目录 `product-info.json` 与根 `package.json` 的 `version` 注入 `__PRODUCT__`，不为此创建额外后端 API。
+- **资源与附件**：logo 与衬线字体经 Vite 打包，题干存储 `attachment://<id>`，渲染时由 `BackendClient` 解析至当前 API。旧的 `/api/attachments/<id>` 和随机端口 loopback 地址继续可读。
 - **BackendClient 地址解析顺序**：
   1. 宿主注入的 `window.__QUARRY_API_URL__`
   2. 构建/环境变量 `VITE_API_URL`
@@ -151,3 +152,10 @@
   - `quarry validate <file>`：校验 `.md` 或 `.json` 草稿并输出错误行号/字段或统计摘要；
   - `quarry convert <file> -o <output> [--format json|md]`：输出可直接导入题匣的标准化 JSON 或 `# Quarry` Markdown 文件。
 - `skills/question-converter/SKILL.md` 为 AI Agent 提供将各类原始文本/文档规范转换为题匣可导入题库的操作指南。
+
+## 9. 实时开发与桌面测试
+
+- `pnpm run dev:web` 在同一 Node 进程运行开发 API 和 Vite，通过 `VITE_API_URL` 连接，使用工作树内 `.quarry-dev-data/`。
+- `pnpm run dev:desktop` 等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
+- `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
+- 视觉项目从真实 API 播种，验证展开、收起与窄屏三种布局。详细入口见 [代码库地图](codebase-map.md)。

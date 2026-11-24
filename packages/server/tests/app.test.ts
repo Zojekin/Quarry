@@ -3,6 +3,7 @@ import { hc } from 'hono/client';
 import { createSqliteDatabase } from '@quarry/database';
 import type { SqliteDatabase } from '@quarry/database';
 import { AppError, ErrorCode } from '@quarry/shared';
+import serverPackage from '../package.json' with { type: 'json' };
 import { createQuarryServer } from '../src/index.js';
 import type { AppType } from '../src/index.js';
 
@@ -21,7 +22,7 @@ describe('Quarry server', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toEqual({ success: true, data: {
-      status: 'ok', version: '0.1.0', timestamp: expect.any(Number), database: 'connected',
+      status: 'ok', version: serverPackage.version, timestamp: expect.any(Number), database: 'connected',
     } });
     expect(body.data.timestamp).toBeGreaterThanOrEqual(before);
     expect(body.data.timestamp).toBeLessThanOrEqual(Date.now());

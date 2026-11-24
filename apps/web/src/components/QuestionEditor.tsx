@@ -160,7 +160,7 @@ export function QuestionEditor({
                   .then((a) =>
                     setContent(
                       (value) =>
-                        value + `\n![图片](${client.attachments.url(a.id)})\n`,
+                        value + `\n![图片](attachment://${a.id})\n`,
                     ),
                   )
                   .catch((e) => setError(e.message));

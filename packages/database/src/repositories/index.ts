@@ -40,6 +40,7 @@ export interface ITrashRepository {
   purge(table: TrashTable, id: string): Promise<void>;
 }
 export interface Repositories {
+  checkConnection(): Promise<void>;
   trash: ITrashRepository;
   folders: IFolderRepository;
   questionBanks: IQuestionBankRepository;

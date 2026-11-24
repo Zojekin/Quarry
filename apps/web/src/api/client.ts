@@ -141,13 +141,17 @@ export interface FollowDiff {
   source_invalid: boolean;
   changes: Record<string, { before: unknown; after: unknown }>;
 }
-export interface ImportPreview {
+export type ImportPreview = {
   name: string;
   entity: "bank" | "paper";
   description: string;
   questions: QuestionView[];
   attachments: { id: string }[];
-}
+} | {
+  name: string;
+  entity: "folder";
+  summary: { folders: number; banks: number; papers: number; questions: number; attachments: number };
+};
 export class BackendError extends Error {
   constructor(
     message: string,
@@ -337,7 +341,9 @@ export class BackendClient {
     importPreview: (file: File) =>
       this.request<ImportPreview>("import/preview", "POST", this.file(file)),
     importCommit: (file: File) =>
-      this.request<unknown>("import/commit", "POST", this.file(file)),
+      this.request<{ id: string; entity: ImportPreview["entity"]; imported_count: number }>(
+        "import/commit", "POST", this.file(file),
+      ),
     backupCreate: () =>
       this.request<Blob>("backup/create", "POST", undefined, undefined, true),
     backupRestore: (file: File) =>

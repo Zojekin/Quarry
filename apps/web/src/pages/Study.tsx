@@ -8,6 +8,7 @@ import {
   Notice,
   types,
   useLoad,
+  useConfirmation,
   useViewState,
 } from "../components/ui.js";
 import { Markdown } from "../components/Markdown.js";
@@ -133,6 +134,7 @@ export function Study({
   navigate: (r: Route) => void;
   onRail: (rail: React.ReactNode) => void;
 }) {
+  const confirmation = useConfirmation();
   const { data, error } = useLoad(() => client.sessions.get(id), [id]);
   const [session, setSession] = useState<Session>();
   const [drafts, setDrafts] = useViewState<Record<string, StudyAnswer>>(
@@ -305,14 +307,10 @@ export function Study({
               primary={session.mode === "exam"}
               disabled={busy}
               onClick={() => {
-                if (
-                  confirm(
-                    session.mode === "exam"
-                      ? "确认交卷？"
-                      : "结束本次练习？未提交的题目不计入作答量。",
-                  )
-                )
-                  void act(finish);
+                confirmation.ask(
+                  session.mode === "exam" ? "确认交卷？" : "结束本次练习？未提交的题目不计入作答量。",
+                  () => void act(finish),
+                );
               }}
             >
               {session.mode === "exam" ? "交卷" : "结束练习"}
@@ -339,6 +337,7 @@ export function Study({
   }, [session, index, drafts, now, busy, redo]);
   return (
     <>
+      {confirmation.dialog}
       <Notice error={error || message} loading={!session} />
       {message && (
         <Button

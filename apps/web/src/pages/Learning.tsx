@@ -3,13 +3,16 @@ import { client } from "../api/client.js";
 import type { Mistake, Query, Tag } from "../api/client.js";
 import type { Route } from "../state.js";
 import { formatTime } from "../state.js";
+import logoUrl from "../assets/logo.svg";
 import {
   Button,
   Facet,
   Notice,
+  PromptDialog,
   types,
   useLoad,
   useViewState,
+  useConfirmation,
 } from "../components/ui.js";
 import { Markdown } from "../components/Markdown.js";
 import { Answer, emptyAnswer } from "./Study.js";
@@ -194,6 +197,8 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
                     data[1].find((p) => p.id === s.paper_id)?.name ?? "历史套题"
                   ).includes(search),
               )
+              .sort((a, b) => b.start_time.localeCompare(a.start_time) ||
+                a.mode.localeCompare(b.mode) || a.id.localeCompare(b.id))
               .map((s) => (
                 <tr key={s.id}>
                   <td>
@@ -262,6 +267,7 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
   );
 }
 export function Mistakes({ navigate }: { navigate: (r: Route) => void }) {
+  const [namingPaper, setNamingPaper] = useState(false);
   const [query, setQuery] = useViewState<Query>("query", {
     mastery_status: "reviewing",
   });
@@ -472,21 +478,23 @@ export function Mistakes({ navigate }: { navigate: (r: Route) => void }) {
           已选择 {selected.length} 题
           <Button
             primary
-            onClick={() => {
-              const name = prompt("复习套题名称", "错题复习");
-              if (name)
-                void act(async () => {
-                  const paper = await client.mistakes.createPaper(
-                    selected,
-                    name,
-                  );
-                  navigate({ page: "paper", id: paper.id });
-                });
-            }}
+            onClick={() => setNamingPaper(true)}
           >
             保存复习套题
           </Button>
         </div>
+      )}
+      {namingPaper && (
+        <PromptDialog title="保存复习套题" label="复习套题名称" initialValue="错题复习"
+          onClose={() => setNamingPaper(false)}
+          onAccept={(name) => {
+            setNamingPaper(false);
+            void act(async () => {
+              const paper = await client.mistakes.createPaper(selected, name);
+              navigate({ page: "paper", id: paper.id });
+            });
+          }}
+        />
       )}
     </>
   );
@@ -542,6 +550,7 @@ function safeLink(value: string) {
   }
 }
 export function Settings() {
+  const confirmation = useConfirmation();
   const { data, error } = useLoad(() => client.tags.list(), []);
   const [message, setMessage] = useState("");
   return (
@@ -564,7 +573,7 @@ export function Settings() {
       </section>
       <section className="settings-section">
         <h2>关于</h2>
-        <img className="about-logo" src="/assets/logo.svg" alt="题匣标志" />
+        <img className="about-logo" src={logoUrl} alt="题匣标志" />
         <h3>
           {__PRODUCT__.name} {__PRODUCT__.englishName}
         </h3>
@@ -598,26 +607,25 @@ export function Settings() {
               type="file"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (
-                  file &&
-                  confirm(
-                    "完整恢复将整体替换当前数据，后端会保留恢复点。继续？",
-                  )
-                )
-                  void client.backup
-                    .backupRestore(file)
+                e.target.value = "";
+                if (file) confirmation.ask(
+                  "完整恢复将整体替换当前数据，后端会保留恢复点。继续？",
+                  () => void client.backup.backupRestore(file)
                     .then(() => setMessage("恢复完成，请刷新页面"))
-                    .catch((e) => setMessage(e.message));
+                    .catch((e) => setMessage(e.message)),
+                );
               }}
             />
           </label>
         </div>
         <p role="status">{message}</p>
       </section>
+      {confirmation.dialog}
     </>
   );
 }
 export function Trash() {
+  const confirmation = useConfirmation();
   const { data, error, reload } = useLoad(() => client.trash.list(), []);
   const [message, setMessage] = useState("");
   async function action(task: () => Promise<unknown>) {
@@ -645,8 +653,8 @@ export function Trash() {
             </Button>
             <Button
               onClick={() => {
-                if (confirm("永久删除？此操作不可撤销。"))
-                  void action(() => client.trash.purge(item.entity, item.id));
+                confirmation.ask("永久删除？此操作不可撤销。",
+                  () => void action(() => client.trash.purge(item.entity, item.id)));
               }}
             >
               永久删除
@@ -655,6 +663,7 @@ export function Trash() {
         ))}
         {data?.length === 0 && <p>回收站为空</p>}
       </div>
+      {confirmation.dialog}
     </>
   );
 }

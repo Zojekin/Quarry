@@ -2,7 +2,7 @@
 
 @font-face {
   font-family: QuarrySerif;
-  src: url("/assets/serif.woff2") format("woff2");
+  src: url("./assets/serif.woff2") format("woff2");
   font-weight: 200 900;
   font-display: swap;
 }

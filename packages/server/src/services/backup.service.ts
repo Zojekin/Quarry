@@ -12,6 +12,7 @@ import type { QuestionView } from './question.service.js';
 import { QuestionService } from './question.service.js';
 import { PaperService } from './paper.service.js';
 import { found, invalid } from './common.js';
+import { readFolderArchive } from './folder-archive.js';
 
 type Files = Record<string, Uint8Array>;
 function hash(bytes: Uint8Array) { return createHash('sha256').update(bytes).digest('hex'); }
@@ -52,6 +53,67 @@ function unpack(bytes: Uint8Array): Files {
     reject([{ line: 1, message: 'Unsafe archive path' }]);
   return files;
 }
+
+function verifyArchiveAttachments(document: ContentDocument, files: Files) {
+  for (const attachment of document.attachments) {
+    const data = files['attachments/' + attachment.sha256];
+    if (!data || hash(data) !== attachment.sha256 || data.length !== attachment.file_size)
+      reject([{ line: 1, path: 'attachments', message: 'Missing or corrupt attachment: ' + attachment.id }]);
+  }
+}
+
+async function restoreTags(repositories: Repositories, tags: ContentDocument['tags']) {
+  const ids = new Map<string, string>();
+  const existing = await repositories.tags.list();
+  for (const tag of tags) {
+    let target = existing.find(entry => entry.name === tag.name && entry.target_type === tag.target_type);
+    if (!target) {
+      target = await repositories.tags.create({ ...tag, id: randomUUID() });
+      existing.push(target);
+    }
+    ids.set(tag.id, target.id);
+  }
+  return ids;
+}
+
+async function restoreDocument(repositories: Repositories, document: ContentDocument,
+  folderId: string | null, attachmentIds: Map<string, string>) {
+  const tagIds = await restoreTags(repositories, document.tags);
+  const id = randomUUID();
+  const owner = { id, folder_id: folderId, name: document.name, description: document.description };
+  if (document.entity === 'bank') await repositories.questionBanks.create(owner);
+  else await repositories.papers.create({ ...owner, time_limit_seconds: null });
+  const questionIds = new Map(document.questions.map(question => [question.id, randomUUID()]));
+  const itemIds = new Map<string, string>();
+  const pending = [...document.questions];
+  const service = new QuestionService(repositories);
+  while (pending.length) {
+    const index = pending.findIndex(question => !question.material_parent_id ||
+      !pending.some(parent => parent.id === question.material_parent_id));
+    const question = pending.splice(index, 1)[0]!;
+    const content = JSON.parse(JSON.stringify(question).replace(/attachment:\/\/([a-f0-9-]{36})/gi,
+      (url, attachmentId: string) => 'attachment://' + (attachmentIds.get(attachmentId) ?? attachmentId))) as typeof question;
+    await service.save({ ...content, id: questionIds.get(question.id), owner_type: document.entity === 'bank' ? 'question_bank' : 'paper',
+      owner_id: id, tag_ids: question.tag_ids.map(tag => tagIds.get(tag)),
+      material_parent_id: question.material_parent_id ? questionIds.get(question.material_parent_id) : null });
+  }
+  if (document.entity === 'paper') {
+    const paper = new PaperService(repositories);
+    if (document.paper) {
+      const sectionIds = new Map(document.paper.sections.map(section => [section.id, randomUUID()]));
+      for (const section of document.paper.sections)
+        for (const item of section.items) itemIds.set(item.id, randomUUID());
+      await paper.save({ ...document.paper,
+        merged_shuffle_sections: document.paper.merged_shuffle_sections.map(group => group.map(id => sectionIds.get(id))),
+        sections: document.paper.sections.map(section => ({ ...section, id: sectionIds.get(section.id),
+          fixed_groups: section.fixed_groups.map(group => group.map(id => itemIds.get(id))),
+          items: section.items.map(item => ({ id: itemIds.get(item.id), question_id: questionIds.get(item.question_id) })) })),
+      }, id);
+    } else for (const question of document.questions) await paper.addItem(id, { question_id: questionIds.get(question.id) });
+  }
+  return { id, questionIds, itemIds };
+}
+
 export class BackupService {
   constructor(readonly repositories: Repositories, private readonly transaction: ITransactionRunner['withTransaction'],
     private readonly snapshots: ISnapshotRepository, private readonly storage?: IAttachmentStorage,
@@ -93,72 +155,98 @@ export class BackupService {
   }
   async commit(content: string, format: string, files: Files = {}) {
     const document = this.preview(content, format);
-    const createdFiles: string[] = [];
-    try {
-      for (const attachment of document.attachments) {
-        const bytes = files[`attachments/${attachment.sha256}`];
-        const existing = await this.repositories.attachments.findById(attachment.id);
-        if (existing && existing.sha256 !== attachment.sha256) reject([{ line: 1, message: 'Attachment identity conflict' }]);
-        if (!bytes && !await this.storage?.exists(attachment.sha256)) reject([{ line: 1, message: 'Missing attachment data' }]);
-        if (bytes && (hash(bytes) !== attachment.sha256 || bytes.length !== attachment.file_size))
-          reject([{ line: 1, message: 'Attachment checksum mismatch' }]);
-      }
-      return await this.transaction(async repositories => {
-        const tagIds = new Map<string, string>();
-        for (const tag of document.tags) {
-          const existing = (await repositories.tags.list()).find(entry => entry.name === tag.name && entry.target_type === tag.target_type);
-          const id = existing?.id ?? randomUUID(); tagIds.set(tag.id, id);
-          if (!existing) await repositories.tags.create({ ...tag, id });
-        }
-        const id = randomUUID();
-        if (document.entity === 'bank') await repositories.questionBanks.create({ id, folder_id: null, name: document.name, description: document.description });
-        if (document.entity === 'paper') await repositories.papers.create({ id, folder_id: null, name: document.name,
-          description: document.description, time_limit_seconds: null });
-        const questionIds = new Map(document.questions.map(question => [question.id, randomUUID()]));
-        const pending = [...document.questions];
-        const service = new QuestionService(repositories);
-        while (pending.length) {
-          const index = pending.findIndex(question => !question.material_parent_id || !pending.some(parent => parent.id === question.material_parent_id));
-          const question = pending.splice(index, 1)[0]!;
-          await service.save({ ...question, id: questionIds.get(question.id), owner_type: document.entity === 'bank' ? 'question_bank' : 'paper',
-            owner_id: id, tag_ids: question.tag_ids.map(tag => tagIds.get(tag)),
-            material_parent_id: question.material_parent_id ? questionIds.get(question.material_parent_id) : null });
-        }
-        if (document.entity === 'paper') {
-          const paper = new PaperService(repositories);
-          if (document.paper) {
-            const sectionIds = new Map(document.paper.sections.map(section => [section.id, randomUUID()]));
-            const itemIds = new Map(document.paper.sections.flatMap(section => section.items).map(item => [item.id, randomUUID()]));
-            await paper.save({ ...document.paper,
-              merged_shuffle_sections: document.paper.merged_shuffle_sections.map(group => group.map(id => sectionIds.get(id))),
-              sections: document.paper.sections.map(section => ({ ...section, id: sectionIds.get(section.id),
-                fixed_groups: section.fixed_groups.map(group => group.map(id => itemIds.get(id))),
-                items: section.items.map(item => ({ id: itemIds.get(item.id), question_id: questionIds.get(item.question_id) })) })),
-            }, id);
-          } else for (const question of document.questions) await paper.addItem(id, { question_id: questionIds.get(question.id) });
-        }
-        for (const attachment of document.attachments) {
-          if (!await repositories.attachments.findById(attachment.id)) await repositories.attachments.create(attachment);
-          if (!await this.storage?.exists(attachment.sha256)) {
+    return this.commitImport([document], files, async (repositories, attachmentIds) => ({
+      id: (await restoreDocument(repositories, document, null, attachmentIds)).id,
+      entity: document.entity, imported_count: document.questions.length,
+    }));
+  }
+  private commitImport<T>(documents: ContentDocument[], files: Files,
+    write: (repositories: Repositories, attachmentIds: Map<string, string>) => Promise<T>) {
+    return this.transaction(async repositories => {
+      const uploaded = new Set<string>();
+      const ids = new Map<string, string>();
+      try {
+        for (const attachment of documents.flatMap(document => document.attachments)) {
+          if (ids.has(attachment.id)) continue;
+          const { sha256 } = attachment;
+          const bytes = files['attachments/' + sha256];
+          const exists = await this.storage?.exists(sha256);
+          if (!bytes && !exists) reject([{ line: 1, message: 'Missing attachment data' }]);
+          if (bytes && (hash(bytes) !== sha256 || bytes.length !== attachment.file_size))
+            reject([{ line: 1, message: 'Attachment checksum mismatch' }]);
+          const existing = await repositories.attachments.findBySha256(sha256);
+          const collision = !existing && await repositories.attachments.findById(attachment.id);
+          const id = existing?.id ?? (collision ? randomUUID() : attachment.id);
+          ids.set(attachment.id, id);
+          if (!existing) await repositories.attachments.create({ ...attachment, id });
+          if (!exists) {
             if (!this.storage) invalid('Attachment storage is not configured');
-            createdFiles.push(attachment.sha256);
-            await this.storage.upload(attachment.sha256, files[`attachments/${attachment.sha256}`]!);
+            uploaded.add(sha256);
+            await this.storage.upload(sha256, bytes!);
           }
         }
-        return { id, entity: document.entity, imported_count: document.questions.length };
-      });
-    } catch (error) { for (const entry of createdFiles) await this.storage?.delete(entry); throw error; }
+        return await write(repositories, ids);
+      } catch (error) {
+        await Promise.allSettled([...uploaded].map(sha256 => this.storage?.delete(sha256)));
+        throw error;
+      }
+    });
   }
   async importArchive(bytes: Uint8Array, commit: boolean) {
     const files = unpack(bytes);
     if (!files['content.json']) reject([{ line: 1, message: 'Missing content.json' }]);
+    if (files['manifest.json']) {
+      let archive: ReturnType<typeof readFolderArchive>;
+      try {
+        archive = readFolderArchive(files, hash, data => {
+          const document = this.preview(strFromU8(data), 'json');
+          verifyArchiveAttachments(document, files);
+          return document;
+        });
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        return reject([{ line: 1, message: 'Invalid folder archive: ' + String(error) }]);
+      }
+      if (!commit) return archive.preview;
+      return this.commitImport(archive.contents.map(entry => entry.document), files, async (repositories, attachmentIds) => {
+        const targets = new Map<string, string>();
+        for (const folder of archive.folders) {
+          const id = randomUUID();
+          await repositories.folders.create({ id, name: folder.name,
+            parent_id: folder.parent_id ? targets.get(folder.parent_id)! : null });
+          targets.set(folder.id, id);
+        }
+        const bankQuestions = new Map<string, string>();
+        const paperItems = new Map<string, Map<string, string>>();
+        for (const { owner, document } of archive.contents) {
+          const restored = await restoreDocument(repositories, document, targets.get(owner.folder_id)!, attachmentIds);
+          targets.set(owner.id, restored.id);
+          if (document.entity === 'bank')
+            for (const [original, id] of restored.questionIds) bankQuestions.set(original, id);
+          else paperItems.set(owner.id, restored.itemIds);
+        }
+        for (const link of archive.sourceLinks) {
+          await repositories.papers.updateItem(paperItems.get(link.paper_id)!.get(link.item_id)!, {
+            source_question_id: bankQuestions.get(link.source_question_id)!, source_version: link.source_version,
+          });
+        }
+        for (const paper of archive.papers) {
+          if (paper.follow_source) await repositories.papers.update(targets.get(paper.id)!, { follow_source: 1 });
+        }
+        const tagIds = await restoreTags(repositories, archive.tags);
+        for (const relation of archive.relations) {
+          const tag_id = tagIds.get(relation.tag_id)!;
+          const target_id = targets.get(relation.target_id)!;
+          if (!(await repositories.tags.listRelations(tag_id)).some(entry => entry.target_id === target_id))
+            await repositories.tags.addRelation({ id: randomUUID(), tag_id, target_id, target_type: 'file' });
+        }
+        return { id: targets.get(archive.folders[0]!.id)!, entity: 'folder' as const,
+          imported_count: archive.preview.summary.questions };
+      });
+    }
     const content = strFromU8(files['content.json']);
     const document = this.preview(content, 'json');
-    for (const attachment of document.attachments) {
-      const bytes = files[`attachments/${attachment.sha256}`];
-      if (!bytes || hash(bytes) !== attachment.sha256 || bytes.length !== attachment.file_size)
-        reject([{ line: 1, path: 'attachments', message: `Missing or corrupt attachment: ${attachment.id}` }]);
-    }
+    verifyArchiveAttachments(document, files);
     return commit ? this.commit(content, 'json', files) : document;
   }
   async export(entity: string, id: string, format: string) {
@@ -179,12 +267,17 @@ export class BackupService {
       }
     }
     const tagIds = new Set(questions.flatMap(question => question.tag_ids));
-    const serialized = JSON.stringify(questions);
+    const storedAttachments = await this.repositories.attachments.list();
+    const storedIds = new Set(storedAttachments.map(attachment => attachment.id));
+    const serialized = JSON.stringify(questions).replace(
+      /(?<![\w/:.])(?:http:\/\/127\.0\.0\.1:\d+)?\/api\/attachments\/([a-f0-9-]{36})/gi,
+      (url, id: string) => storedIds.has(id) ? 'attachment://' + id : url,
+    );
     const attachmentIds = new Set([...serialized.matchAll(/attachment:\/\/([a-f0-9-]{36})/gi)].map(match => match[1]));
     const document: ContentDocument = { version: 1, entity: isBank ? 'bank' : 'paper', name: owner.name,
-      description: owner.description, questions,
+      description: owner.description, questions: JSON.parse(serialized) as QuestionView[],
       tags: (await this.repositories.tags.list()).filter(tag => tagIds.has(tag.id)).map(({ id, name, target_type, color }) => ({ id, name, target_type, color })),
-      attachments: (await this.repositories.attachments.list()).filter(attachment => attachmentIds.has(attachment.id)) };
+      attachments: storedAttachments.filter(attachment => attachmentIds.has(attachment.id)) };
     if (!isBank) {
       const paper = await new PaperService(this.repositories).get(id);
       document.paper = { full_score: paper.full_score, score_mode: paper.score_mode as ScoreMode,
@@ -213,6 +306,18 @@ export class BackupService {
     const folders = all.filter(f => ids.has(f.id)).map(f => ({ ...f, parent_id: f.id === id ? null : f.parent_id }));
     const banks = (await this.repositories.questionBanks.list()).filter(b => b.folder_id && ids.has(b.folder_id));
     const papers = (await this.repositories.papers.list()).filter(p => p.folder_id && ids.has(p.folder_id));
+    const bankIds = new Set(banks.map(bank => bank.id));
+    const sourceIds = new Set((await this.repositories.questions.list())
+      .filter(question => question.bank_id && bankIds.has(question.bank_id)).map(question => question.id));
+    const sourceLinks = [];
+    for (const paper of papers) {
+      for (const item of await this.repositories.papers.listItems(paper.id)) {
+        if (!item.source_invalid && item.source_question_id && item.source_version && sourceIds.has(item.source_question_id)) {
+          sourceLinks.push({ paper_id: paper.id, item_id: item.id, source_question_id: item.source_question_id,
+            source_version: item.source_version });
+        }
+      }
+    }
     const files: Files = {};
     for (const [entity, owners] of [['bank', banks], ['paper', papers]] as const) for (const owner of owners) {
       const result = await this.export(entity, owner.id, 'quarry');
@@ -226,7 +331,8 @@ export class BackupService {
       const selected = (await this.repositories.tags.listRelations(tag.id)).filter(r => targets.has(r.target_id));
       if (selected.length) { tags.push(tag); relations.push(...selected); }
     }
-    files['content.json'] = strToU8(JSON.stringify({ version: 1, entity: 'folder', root_id: id, folders, banks, papers, tags, tag_relations: relations }));
+    files['content.json'] = strToU8(JSON.stringify({ version: 1, entity: 'folder', root_id: id, folders, banks, papers,
+      tags, tag_relations: relations, source_links: sourceLinks }));
     files['manifest.json'] = strToU8(JSON.stringify({ format: 'quarry-folder', version: 1,
       checksums: Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, hash(bytes)])) }));
     return { bytes: zipSync(files), extension: 'quarry', mime: 'application/zip' };

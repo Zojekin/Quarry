@@ -8,6 +8,7 @@ import {
   Notice,
   types,
   useLoad,
+  useConfirmation,
   useViewState,
 } from "../components/ui.js";
 import { QuestionEditor, TagPills } from "../components/QuestionEditor.js";
@@ -40,6 +41,7 @@ export function Library({
   search: string;
   setSearch: (s: string) => void;
 }) {
+  const confirmation = useConfirmation();
   const { data, error, reload } = useLoad(
     () =>
       Promise.all([
@@ -155,6 +157,7 @@ export function Library({
             accept=".json,.md,.quarry"
             onChange={(e) => {
               const file = e.target.files?.[0];
+              e.target.value = "";
               if (file) setImportFile(file);
             }}
           />
@@ -210,14 +213,10 @@ export function Library({
             </Button>
             <Button
               onClick={() => {
-                if (
-                  confirm(
-                    row.kind === "folders"
-                      ? "删除文件夹及其所有内容到回收站？"
-                      : "移到回收站？",
-                  )
-                )
-                  void action(() => client[row.kind].delete(row.id));
+                confirmation.ask(
+                  row.kind === "folders" ? "删除文件夹及其所有内容到回收站？" : "移到回收站？",
+                  () => void action(() => client[row.kind].delete(row.id)),
+                );
               }}
             >
               删除
@@ -235,6 +234,7 @@ export function Library({
           onSaved={reload}
         />
       )}
+      {confirmation.dialog}
     </>
   );
 }
@@ -247,6 +247,7 @@ export function Detail({
   paper: boolean;
   navigate: (r: Route) => void;
 }) {
+  const confirmation = useConfirmation();
   const { data, error, reload } = useLoad(async () => {
     const doc = paper
       ? await client.papers.get(id)
@@ -478,8 +479,8 @@ export function Detail({
                         <Button onClick={() => setEditor(q)}>编辑</Button>
                         <Button
                           onClick={() => {
-                            if (confirm("删除题目？"))
-                              void act(() => client.questions.delete(q.id));
+                            confirmation.ask("删除题目？",
+                              () => void act(() => client.questions.delete(q.id)));
                           }}
                         >
                           删除
@@ -505,6 +506,7 @@ export function Detail({
           )}
         </>
       )}
+      {confirmation.dialog}
     </>
   );
 }
