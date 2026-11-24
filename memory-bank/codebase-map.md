@@ -25,6 +25,7 @@
 - `apps/desktop/scripts/bundle.mjs` 打包为 ESM `dist/runtime/main.js` 和 CJS `dist/runtime/preload.cjs`。
 - `apps/desktop/scripts/before-pack.cjs` 在 electron-builder 打包时执行同一打包脚本。
 - `apps/desktop/package.json` 声明解包与分发产物、Web extraResources 及 SQLite 原生绑定的 ASAR 解包规则。
+- `apps/desktop/resources/installer.nsh` 定义 Windows 安装向导的快捷方式选项，`apps/desktop/tests/installer.test.ts` 验证 NSIS 配置、默认勾选和卸载约定。
 - `apps/desktop/scripts/dev.mjs` 等待 Vite 后打包主进程，启动 Electron 并处理退出。
 - `scripts/dev-web.mjs` 通过 `bundle-backend.mjs` 复用桌面后端组合，数据落在 `.quarry-dev-data/`。
 - `apps/web/scripts/dev-server.mjs` 为两个入口启动 loopback Vite，从 5173 起尝试可用端口。

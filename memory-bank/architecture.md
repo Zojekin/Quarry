@@ -140,7 +140,7 @@
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
   - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
-  1. NSIS 向导安装包：`Quarry-Setup-<version>-x64.exe`（支持自定义路径、`deleteAppDataOnUninstall: false` 保护本地题库）
+  1. NSIS 向导安装包 `Quarry-Setup-<version>-x64.exe` 支持自定义安装路径。简体中文向导通过 `apps/desktop/resources/installer.nsh` 在路径页后独立选择桌面与开始菜单快捷方式。两项默认勾选，首次 `/S` 静默安装沿用默认值，自动更新保留已有快捷方式状态。创建与卸载清理由 electron-builder 的快捷方式逻辑负责，`deleteAppDataOnUninstall: false` 保留本地题库。
   2. 绿色压缩包：`Quarry-<version>-win-x64.zip`
 
 ---
