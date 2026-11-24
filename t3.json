@@ -1,0 +1,41 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "scripts": [
+    {
+      "id": "setup-worktree",
+      "name": "Setup Worktree",
+      "command": "pnpm install --frozen-lockfile",
+      "icon": "configure",
+      "runOnWorktreeCreate": true,
+      "async": false
+    },
+    {
+      "id": "verify",
+      "name": "Verify All",
+      "command": "pnpm run lint && pnpm run test && pnpm run build",
+      "icon": "test",
+      "runOnWorktreeCreate": false,
+      "async": false
+    },
+    {
+      "id": "web-dev",
+      "name": "Web Dev",
+      "command": "pnpm --filter @quarry/web dev",
+      "icon": "play",
+      "runOnWorktreeCreate": false,
+      "async": true,
+      "autoOpenPreview": true,
+      "previewUrl": "http://127.0.0.1:5173",
+      "stopOnSettle": true
+    },
+    {
+      "id": "desktop-dev",
+      "name": "Desktop Dev",
+      "command": "pnpm --filter @quarry/desktop dev",
+      "icon": "play",
+      "runOnWorktreeCreate": false,
+      "async": true,
+      "stopOnSettle": true
+    }
+  ]
+}

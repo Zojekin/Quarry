@@ -56,6 +56,7 @@
     "beforePack": "./scripts/before-pack.cjs",
     "win": {
       "icon": "resources/icon.ico",
+      "artifactName": "Quarry-${version}-win-${arch}.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -78,6 +79,7 @@
       ]
     },
     "nsis": {
+      "artifactName": "Quarry-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
@@ -92,6 +94,9 @@
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
       "language": "2052"
+    },
+    "portable": {
+      "artifactName": "Quarry-Portable-${version}-${arch}.${ext}"
     },
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"

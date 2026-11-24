@@ -1,112 +1,82 @@
-# 题匣 (Quarry) 协作与规范 PR 模式指南 (Contributing Guide)
+# 题匣 (Quarry) 协作、PR 与发版规范
 
-本文档定义了题匣项目标准、严谨的分支管理与 Pull Request (PR) 协作流程。所有代码贡献、日常功能迭代均需遵循此规范。
-
----
-
-## 1. 核心工作流：GitHub Flow
-
-本项目采用以 **`main` 为唯一稳定主干** 的 GitHub Flow 模式：
-1. **主分支 `main` 受保护**：严禁直接向 `main` 分支执行 `git push`。所有修改必须通过 PR 合并。
-2. **所有改动均在特性分支上进行**：按功能或缺陷从最新的 `main` 切出独立分支。
-3. **自动化门禁 (CI) 护航**：每次 PR 触发 GitHub Actions 自动进行全量 `lint`、`test` 和 `build`，确保主干不被破坏。
+本文档定义题匣项目的 Git 分支模型、Conventional Commits 规范、T3 Code Worktree 协作流程、CI 门禁与自动发版机制。所有功能开发、缺陷修复与文档更新均需遵循此规范。
 
 ---
 
-## 2. 分支命名规范
+## 1. 核心工作流：GitHub Flow + Worktree 隔离
 
-分支名称建议使用小写字母、连字符与斜杠，格式为 `<类别>/<简要描述>`：
-
-| 分支类别 | 适用场景 | 示例 |
-| :--- | :--- | :--- |
-| `feat/*` | 新功能开发 | `feat/exam-countdown`, `feat/tag-color-autosave` |
-| `fix/*` | 缺陷或 Bug 修复 | `fix/latex-katex-render`, `fix/db-wal-lock` |
-| `refactor/*`| 代码重构（不改动外部功能） | `refactor/backend-client`, `refactor/visual-tokens` |
-| `docs/*` | 文档编写或更新 | `docs/api-specs`, `docs/contributing` |
-| `perf/*` | 性能优化 | `perf/sqlite-query-index` |
-| `chore/*` | 构建配置、依赖升级、辅助工具变动 | `chore/update-pnpm`, `chore/ci-workflow` |
+本项目以 **`main` 为唯一受保护主干**：
+1. **禁止直推 `main`**：仓库已开启分支保护 Ruleset，所有改动必须通过特性分支发起 Pull Request 并以 **Squash Merge** 合入 `main`（合并后远端分支自动清理）。
+2. **独立任务用独立 Worktree**：在 T3 Code 中为每个独立任务创建 Worktree 线程（或分支），避免多个并行任务互相覆盖。新建 Worktree 会自动执行 `t3.json` 中的初始化脚本（`pnpm install --frozen-lockfile`）。
 
 ---
 
-## 3. Commit 提交信息规范 (Conventional Commits)
+## 2. 分支命名与 Conventional Commits 规范
 
-提交信息格式建议统一遵循：
+### 分支命名
+格式为 `<type>/<short-desc>`，使用小写字母与连字符：
+- `feat/*`：新功能（如 `feat/exam-countdown`）
+- `fix/*`：缺陷修复（如 `fix/sqlite-abi-guard`）
+- `refactor/*`：内部重构（不改变对外行为）
+- `docs/*`：文档更新
+- `perf/*`：性能优化
+- `test/*`：测试补充
+- `ci/*`：CI/CD 与发版流程配置
+- `chore/*`：构建配置、依赖升级或工程清理
+
+### Commit 与 PR 标题规范
+CI 的 `PR Title (Conventional Commits)` 检查会强制校验 PR 标题格式：
 ```text
 <type>(<scope>): <subject>
 ```
-* **type**：对应上面的分支类别（`feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `chore` 等）。
-* **scope**（可选）：影响的具体包名或模块，例如 `web`, `desktop`, `core`, `database`, `server`, `shared`。
-* **subject**：简要说明改动内容（中文或英文），保持动宾结构，例如：
-  * `feat(web): 添加答题卡折叠展开动画`
-  * `fix(database): 修复题库删除时级联软删除失效的问题`
-  * `docs: 完善项目 PR 协作规范指南`
+* **type**：`feat`、`fix`、`docs`、`refactor`、`perf`、`test`、`ci`、`chore` 等。
+* **scope**（可选）：`web`、`desktop`、`core`、`database`、`server`、`shared`、`cli` 等。
+* **破坏性变更**：在冒号前加 `!`（如 `feat(shared)!: ...`）或正文含 `BREAKING CHANGE:`，发版时将触发主版本号升级。
+
+> **关键提醒**：仓库采用 **Squash Merge 且以 PR 标题作为 `main` 上的提交标题**。PR 标题决定 `release-please` 如何计算版本号与生成 `CHANGELOG.md`。
 
 ---
 
-## 4. 日常开发标准操作步骤
+## 3. 标准开发与 PR 闭环流程
 
-### 第一步：同步主分支并切出新分支
-在开始任何改动前，先拉取远程最新的 `main`：
-```bash
-git checkout main
-git pull origin main
-git checkout -b feat/your-feature-name
-```
-
-### 第二步：本地开发与遵循项目规约
-编写代码前请严格遵循项目的架构规范：
-1. 阅读 `memory-bank/@architecture.md` 与 `memory-bank/@design-document.md`。
-2. 保持模块功能解耦，减少交叉引用，避免循环依赖。
-3. 若本轮修改属于重大功能或里程碑，务必同步更新 `memory-bank/@architecture.md` 与 `memory-bank/@progress.md`。
-
-### 第三步：本地质量检查
-在提交前，请在本地运行验证脚本：
-```bash
-# 执行代码质量与类型检查
-npx pnpm run lint
-
-# 执行全量单元测试与集成测试
-npx pnpm run test
-
-# 执行全项目构建
-npx pnpm run build
-```
-
-### 第四步：提交代码并推送到 GitHub
-```bash
-git add .
-git commit -m "feat(module): 描述本次改动"
-git push -u origin feat/your-feature-name
-```
-
-### 第五步：在 GitHub 发起 PR
-1. 打开 GitHub 仓库页面，点击 **"Compare & pull request"**。
-2. 页面会自动带入项目预设的 PR 模板（`.github/pull_request_template.md`）。
-3. 按照模板勾选变更类型、关联 Issue，并逐项确认【质量合规检查清单】。
-4. 点击 **"Create pull request"**。
-
-### 第六步：等待 CI 通过与审查合并
-1. GitHub Actions 会自动运行 CI，检查代码的测试与构建是否全绿（通过）。
-2. 自查无误后，点击 **"Merge pull request"**（推荐选择 **Squash and merge**，保持 `main` 提交历史清爽一条线）。
-
-### 第七步：本地清理并准备下一轮开发
-```bash
-git checkout main
-git pull origin main
-git branch -d feat/your-feature-name  # 删除本地已合并的分支
-```
+1. **读规范与拉分支**：
+   - 开始编码前阅读 `AGENTS.md`、`memory-bank/architecture.md` 与 `memory-bank/design-document.md`（**严禁**以 `docs/archive/` 作为现行依据）。
+   - 从最新 `origin/main` 切出独立 Worktree / 分支。
+2. **编码与 PR 内文档联动**：
+   - 若改动涉及**新增/变更功能、命令或脚本变化、目录/架构调整、数据契约变动**，必须在**同一个 PR** 内同步更新：
+     - `README.md`
+     - `memory-bank/architecture.md`
+     - `memory-bank/progress.md`
+3. **本地全量校验**：
+   ```bash
+   pnpm run lint   # 或本地使用 npx pnpm run lint
+   pnpm run test
+   pnpm run build
+   ```
+4. **提交、提 PR 与 T3 Code 值守**：
+   - 推送分支并提交 PR（自动带入 `.github/pull_request_template.md` 核对清单）。
+   - 在 T3 Code 中使用 `link_pull_request` 关联 PR，按需生成 `PR Guide` 或启动独立 Review 子 Agent 预审，并开启 `watch_pull_request` 值守。
+   - 等待 GitHub Actions 双平台门禁（`pr-title` + `ubuntu-latest` + `windows-latest` 全量 `lint / test / build`）全绿。
+5. **合并与自动 Settle**：
+   - 人工确认无误后点击 **Squash and merge**。
+   - T3 Code 自动将线程标记为 Settled 并触发 `stopOnSettle` 停止后台预览服务。
 
 ---
 
-## 5. 建议配置：GitHub 网页端分支保护 (Branch Protection)
+## 4. 动态攒改动与一键自动发版 (`release-please`)
 
-为防止意外直接向 `main` 推送，强烈建议在 GitHub 仓库中开启分支保护规则：
-
-1. 进入 GitHub 仓库 -> 点击顶部 **Settings** 标签页。
-2. 在左侧菜单点击 **Branches** -> 点击 **Add branch protection rule**。
-3. **Branch name pattern** 填写：`main`。
-4. 勾选以下核心规则：
-   * **Require a pull request before merging**（合并前必须通过 PR）
-   * **Require status checks to pass before merging**（合并前必须通过状态检查）：并在下方搜索框中添加 `verify`（即 GitHub Actions 的 CI 任务）。
-   * **Do not allow bypassing the above settings**（包含管理员在内，均不能绕过该规则）。
-5. 点击底部 **Save changes** 保存。
+本项目使用 **`release-please` Manifest 模式**管理发版：
+1. **日常累积变更（不立即发版）**：
+   - 每次有新的 `feat:` / `fix:` PR 合入 `main` 时，`.github/workflows/release-please.yml` 自动计算下一个版本号，创建或滚动更新一个动态 **Release PR**（同步更新根 `package.json`、全部 7 个子包 `package.json`、`.release-please-manifest.json` 及 `CHANGELOG.md`）。
+   - **版本命名约定**：Git Tag 与发布版本号**不带 `v` 前缀**（例如 `0.2.0`，由 `release-please-config.json` 中 `"include-v-in-tag": false` 控制）。
+   - 如需手动指定目标版本号，可在提交信息正文附加 `Release-As: X.Y.Z`。
+2. **手动定格正式 Release**：
+   - 当积累的功能与修复达到发版时机时，审查并点击合并该 **Release PR**。
+   - 合并瞬间自动完成：
+     1. 打出 `X.Y.Z` Git Tag 并创建 GitHub Release；
+     2. 自动触发 `build-windows` 任务在 `windows-latest` 上执行 `pnpm run package`；
+     3. 生成 Windows x64 三件套及逐文件 `.sha256` 校验文件并上传至该 Release：
+        - `Quarry-Setup-<version>-x64.exe` + `.sha256`
+        - `Quarry-Portable-<version>-x64.exe` + `.sha256`
+        - `Quarry-<version>-win-x64.zip` + `.sha256`

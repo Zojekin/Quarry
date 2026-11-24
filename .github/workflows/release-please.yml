@@ -1,0 +1,89 @@
+name: Release Please & Windows Packaging
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build-windows:
+    name: Build & Upload Windows Release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows packages
+        run: pnpm run package
+
+      - name: Generate per-file SHA256 sidecars & upload assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = "apps/desktop/release"
+          $expected = @(
+            "Quarry-Setup-$env:RELEASE_VERSION-x64.exe",
+            "Quarry-Portable-$env:RELEASE_VERSION-x64.exe",
+            "Quarry-$env:RELEASE_VERSION-win-x64.zip"
+          )
+          $assets = @()
+          foreach ($name in $expected) {
+            $filePath = Join-Path $releaseDir $name
+            if (-not (Test-Path $filePath)) {
+              throw "Expected release artifact not found: $filePath"
+            }
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $filePath).Hash.ToLowerInvariant()
+            $sidecarPath = "$filePath.sha256"
+            [System.IO.File]::WriteAllText($sidecarPath, "$hash  $name`n", (New-Object System.Text.UTF8Encoding($false)))
+            $assets += $filePath
+            $assets += $sidecarPath
+          }
+          gh release upload $env:RELEASE_TAG @assets --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release upload failed with exit code $LASTEXITCODE"
+          }
