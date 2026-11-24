@@ -6,24 +6,20 @@
   "main": "dist/runtime/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "pretest": "node scripts/restore-sqlite.cjs",
     "test": "vitest run",
-    "predev": "node scripts/restore-sqlite.cjs",
     "dev": "node scripts/bundle.mjs && electron .",
     "lint": "tsc -p tsconfig.json --noEmit",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
+    "dist": "electron-builder --publish never",
     "prepack": "pnpm --filter @quarry/web build && pnpm build",
-    "postpack": "node scripts/restore-sqlite.cjs",
-    "predist": "pnpm --filter @quarry/web build && pnpm build",
-    "postdist": "node scripts/restore-sqlite.cjs"
+    "predist": "pnpm --filter @quarry/web build && pnpm build"
   },
   "dependencies": {
     "@quarry/shared": "workspace:*",
     "@quarry/server": "workspace:*",
     "@quarry/database": "workspace:*",
     "@hono/node-server": "^1.19.0",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.2.0",
     "kysely": "^0.28.19"
   },
   "devDependencies": {
