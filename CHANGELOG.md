@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Zojekin/Quarry/compare/0.2.0...0.2.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **desktop:** 升级 better-sqlite3 至 N-API v13 修复启动错配、还原图标原色并精简发版流水线 ([#11](https://github.com/Zojekin/Quarry/issues/11)) ([ec3ce87](https://github.com/Zojekin/Quarry/commit/ec3ce87e83f51890c75ebe6e6cb7791b621f5c82))
+
 ## [0.2.0](https://github.com/Zojekin/Quarry/compare/0.1.0...0.2.0) (2026-11-24)
 
 
