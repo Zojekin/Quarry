@@ -9,6 +9,7 @@ interface ElectronFixture {
   userDataDir: string;
   restart(): Promise<Page>;
   download(path: string, trigger: () => Promise<void>): Promise<void>;
+  observeTitleBarOverlay(): Promise<() => Promise<{ color: string; symbolColor: string; height: number } | null>>;
   windowChrome(): Promise<{
     hasAppMenu: boolean;
     menuBarVisible: boolean;
@@ -144,6 +145,18 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
           await trigger();
           await expect.poll(() => current.evaluate(() => Reflect.get(globalThis, '__quarryDownload')),
             { message: 'Electron download completion', timeout: 10_000 }).toBe('completed');
+        },
+        async observeTitleBarOverlay() {
+          const current = app!;
+          await current.evaluate(({ BrowserWindow }) => {
+            const window = BrowserWindow.getAllWindows()[0]!;
+            const setTitleBarOverlay = window.setTitleBarOverlay.bind(window);
+            Reflect.set(window, 'setTitleBarOverlay', (options: Parameters<typeof setTitleBarOverlay>[0]) => {
+              setTitleBarOverlay(options);
+              Reflect.set(globalThis, '__quarryTitleBarOverlay', options);
+            });
+          });
+          return () => current.evaluate(() => Reflect.get(globalThis, '__quarryTitleBarOverlay') ?? null);
         },
         async windowChrome() {
           const current = app!;

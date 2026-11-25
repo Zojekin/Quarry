@@ -15,7 +15,7 @@ export function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "inline-flex h-8.5 min-w-[104px] items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-card px-3 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors outline-none hover:bg-muted/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate",
+        "inline-flex h-8.5 min-w-[104px] items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-card px-3 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.04),inset_0_1px_0_var(--control-highlight)] transition-colors outline-none hover:bg-muted/60 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate",
         className,
       )}
       {...props}
@@ -41,7 +41,7 @@ export function SelectContent({
         position={position}
         sideOffset={4}
         className={cn(
-          "quarry-panel-animate z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(23,27,25,0.14),0_2px_8px_-2px_rgba(23,27,25,0.06)]",
+          "quarry-panel-animate z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(var(--shadow-ink),0.14),0_2px_8px_-2px_rgba(var(--shadow-ink),0.06)]",
           className,
         )}
         {...props}

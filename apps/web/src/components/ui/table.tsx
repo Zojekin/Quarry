@@ -5,7 +5,7 @@ export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(23,27,25,0.04)]"
+      className="relative w-full overflow-x-auto rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(var(--shadow-ink),0.04)]"
     >
       <table
         data-slot="table"
@@ -20,7 +20,7 @@ export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("bg-[#f7f7f3] [&_tr]:border-b [&_tr]:border-border", className)}
+      className={cn("bg-(--table-head) [&_tr]:border-b [&_tr]:border-border", className)}
       {...props}
     />
   );
@@ -41,7 +41,7 @@ export function TableRow({ className, ...props }: ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "group border-b border-border transition-colors duration-100 hover:bg-[#f7f7f2] data-[selected=true]:bg-accent/70",
+        "group border-b border-border transition-colors duration-100 hover:bg-(--table-hover) data-[selected=true]:bg-accent/70",
         className,
       )}
       {...props}

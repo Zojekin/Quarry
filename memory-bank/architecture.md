@@ -129,8 +129,9 @@
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史，整合于 `42px` 一体化标题栏并支持 `Ctrl+K` 快速命令跳转；一级栏目为首页（学习概览）、题库与套题、错题本、练习记录，另含回收站与系统设置。
 - **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。
-- **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 定义 Tailwind CSS v4 令牌与主题变量，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
-- **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载标签管理、显示与操作、运行诊断和 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
+- **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
+- **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
+- **主题启动与持久化**：`lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`，解析预设、模式与四项可选覆盖色并生成语义令牌。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---
@@ -138,7 +139,7 @@
 ## 7. Electron 桌面宿主与 Windows 打包 (`apps/desktop`)
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
-- **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 仅校验并暴露只读字符串 `window.__QUARRY_API_URL__`，不暴露任何 IPC 或文件系统桥接。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，以及单向的 `window.__QUARRY_DESKTOP__.setTitleBarOverlay({ color, symbolColor })`。Windows 主进程只接受目标窗口主帧传入的两项 `#RRGGBB` 颜色，并以固定 42px 更新原生按钮区。Web 端通过可选宿主接口同步窗口外观，业务通信继续经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
 - **运行时打包与 N-API 原生绑定**：
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
   - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。

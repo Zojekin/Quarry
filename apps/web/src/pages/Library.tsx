@@ -716,7 +716,7 @@ export function Library({
         <div
           role="region"
           aria-label="批量操作"
-          className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-black/15 bg-[#1b221e] px-4 py-2.5 text-[13px] text-white shadow-[0_14px_34px_-8px_rgba(23,27,25,0.4)]"
+          className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-control-edge/15 bg-(--inverse-surface) px-4 py-2.5 text-[13px] text-inverse-ink shadow-[0_14px_34px_-8px_rgba(var(--shadow-ink),0.4)]"
         >
           <span className="font-medium tabular-nums">
             已选 {validSelected.length} 项
@@ -724,7 +724,7 @@ export function Library({
           <Button
             size="sm"
             variant="secondary"
-            className="h-7.5 bg-white/12 text-white hover:bg-white/20"
+            className="h-7.5 bg-inverse-ink/12 text-inverse-ink hover:bg-inverse-ink/20"
             onClick={batchExport}
           >
             <Download className="size-3.5" />
@@ -748,7 +748,7 @@ export function Library({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7.5 text-white/75 hover:bg-white/10 hover:text-white"
+            className="h-7.5 text-inverse-ink/75 hover:bg-inverse-ink/10 hover:text-inverse-ink"
             onClick={() => setSelectedIds([])}
           >
             取消选择
@@ -1123,7 +1123,7 @@ export function Detail({
                   <Card
                     key={itemId}
                     as="article"
-                    className="group transition-colors hover:border-black/15"
+                    className="group transition-colors hover:border-control-edge/15"
                   >
                     <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1 space-y-2">

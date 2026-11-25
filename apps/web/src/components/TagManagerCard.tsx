@@ -103,8 +103,8 @@ function TagRow({
             disabled={colorDisabled}
             onClick={() => saveColor(hex)}
             className={cn(
-              "size-5 rounded-full border border-black/15 transition-transform enabled:hover:scale-110 disabled:opacity-50",
-              color?.toLowerCase() === hex.toLowerCase() && "ring-2 ring-primary ring-offset-1",
+              "size-5 rounded-full border border-control-edge/15 transition-transform enabled:hover:scale-110 disabled:opacity-50",
+              color?.toLowerCase() === hex.toLowerCase() && "ring-2 ring-primary ring-offset-1 ring-offset-card",
             )}
             style={{ backgroundColor: hex }}
           />

@@ -33,6 +33,8 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-control-edge: var(--control-edge);
+  --color-inverse-ink: var(--inverse-ink);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
@@ -43,53 +45,36 @@
 }
 
 :root {
-  --background: #fafaf7;
-  --foreground: #171b19;
-  --card: #ffffff;
-  --card-foreground: #171b19;
-  --popover: #ffffff;
-  --popover-foreground: #171b19;
-  --primary: #2d5c48;
-  --primary-foreground: #ffffff;
-  --primary-hover: #224737;
-  --secondary: #f2f2ec;
-  --secondary-foreground: #272d29;
-  --muted: #f2f2ec;
-  --muted-foreground: #666e68;
-  --accent: #e8f0ea;
-  --accent-foreground: #204635;
-  --destructive: #b23a31;
-  --destructive-foreground: #ffffff;
-  --border: rgba(23, 27, 25, 0.09);
-  --input: rgba(23, 27, 25, 0.14);
-  --ring: #2d5c48;
-  --sidebar: #f3f3ee;
-  --sidebar-foreground: #2f3632;
-  --sidebar-accent: #e8f0ea;
-  --sidebar-accent-foreground: #204635;
-  --sidebar-border: rgba(23, 27, 25, 0.08);
   --radius: 0.5rem;
-
-  /* Quarry Domain Semantic Tokens */
-  --selection-bg: #f6efd9;
-  --selection-border: #d7c797;
-  --selection-ink: #5a4b28;
-  --success-bg: #e7f4ec;
-  --success-border: #b4dcc3;
-  --success-fg: #1f663e;
-  --error-bg: #fbeceb;
-  --error-border: #eabcb8;
-  --error-fg: #b23a31;
-  --info-bg: #ebf2f9;
-  --info-fg: #2b5c86;
-  --warning-bg: #fbf2df;
-  --warning-fg: #8c5c16;
-  --heat-0: #ecece6;
-  --heat-1: #cce0cd;
-  --heat-2: #9bc1a1;
-  --heat-3: #629672;
-  --heat-4: #2d5c48;
   --question-size: 19px;
+  --shadow-ink: 23, 27, 25;
+  --control-edge: #000000;
+  --control-highlight: rgba(255, 255, 255, 0.8);
+  --primary-highlight: rgba(255, 255, 255, 0.18);
+  --destructive-highlight: rgba(255, 255, 255, 0.16);
+  --sidebar-hover: rgba(0, 0, 0, 0.045);
+  --tab-hover: rgba(0, 0, 0, 0.04);
+  --switch-track: rgba(0, 0, 0, 0.15);
+  --switch-thumb: #ffffff;
+  --switch-checked-thumb: var(--primary-foreground);
+  --scrim: rgba(23, 27, 25, 0.35);
+  --inverse-surface: #1b221e;
+  --inverse-ink: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme-mode="dark"] {
+  --shadow-ink: 0, 0, 0;
+  --control-edge: var(--foreground);
+  --control-highlight: rgba(255, 255, 255, 0.065);
+  --sidebar-hover: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --tab-hover: var(--sidebar-hover);
+  --switch-track: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --switch-thumb: var(--foreground);
+  --scrim: rgba(0, 0, 0, 0.64);
+  --inverse-surface: var(--muted);
+  --inverse-ink: var(--foreground);
+  color-scheme: dark;
 }
 
 @layer base {

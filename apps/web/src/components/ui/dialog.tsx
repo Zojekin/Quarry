@@ -16,7 +16,7 @@ export function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "quarry-dialog-overlay fixed inset-0 z-50 bg-[#171b19]/35 backdrop-blur-[1.5px]",
+        "quarry-dialog-overlay fixed inset-0 z-50 bg-(--scrim) backdrop-blur-[1.5px]",
         className,
       )}
       {...props}
@@ -35,7 +35,7 @@ export function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "quarry-panel-animate fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[0_22px_50px_-12px_rgba(23,27,25,0.22)] outline-none",
+          "quarry-panel-animate fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[0_22px_50px_-12px_rgba(var(--shadow-ink),0.22)] outline-none",
           className,
         )}
         {...props}

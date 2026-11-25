@@ -14,7 +14,7 @@ export default function MarkdownContent({ text, preview = false }: { text: strin
           return defaultUrlTransform(url);
         }}
         remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { errorColor: "var(--error-fg)" }]]}
       >
         {text}
       </ReactMarkdown>

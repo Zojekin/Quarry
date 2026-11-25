@@ -21,7 +21,7 @@
 
 - `apps/desktop/src/main.ts` 启动本地后端，创建窗口，选择 Vite URL 或本地 `index.html`。
 - `apps/desktop/src/backend-manager.ts` 初始化 SQLite、迁移、附件目录与恢复点。桌面 API 绑定 `127.0.0.1` 随机端口。
-- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`。
+- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`，并提供 `window.__QUARRY_DESKTOP__.setTitleBarOverlay`。主进程与 preload 复用 `titlebar-overlay.ts` 校验颜色，主进程仅为 Windows 目标窗口更新按钮区。
 - `apps/desktop/scripts/bundle.mjs` 打包为 ESM `dist/runtime/main.js` 和 CJS `dist/runtime/preload.cjs`。
 - `apps/desktop/scripts/before-pack.cjs` 在 electron-builder 打包时执行同一打包脚本。
 - `apps/desktop/package.json` 声明解包与分发产物、Web extraResources 及 SQLite 原生绑定的 ASAR 解包规则。
@@ -33,6 +33,7 @@
 
 ## 渲染器
 
+- `apps/web/vite.config.ts` 在 `index.html` 内联 `lib/themes.ts` 的启动入口，在 `main.tsx` 挂载 React 前应用主题。后续由 `lib/theme-context.tsx` 处理模式、颜色和本地存储变化。
 - `apps/web/src/main.tsx` 挂载 React，加载 `index.css`（Tailwind CSS v4、`@theme inline` 令牌与标题栏/热力图样式）和 `production.css`（Markdown/KaTeX 与文件输入按钮适配）。
 - `apps/web/src/App.tsx` 负责一体化 `42px` 标题栏工作区标签、`224px/58px` 可折叠侧栏、全局 `Ctrl+K` 快速命令面板、前进后退与视图滚动恢复。
 - `apps/web/src/components/ui/` 存放 `shadcn/ui` 与 Radix 基础原语（`button`、`card`、`badge`、`table`、`input`、`select`、`dialog`、`popover`、`dropdown-menu`、`tabs`、`checkbox`、`switch`、`progress`、`tooltip`、`command`）；`apps/web/src/lib/utils.ts` 提供 `cn`。
@@ -44,7 +45,8 @@
 - `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
 - `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
 - `pages/Study.tsx` 实现练习左右分栏（常规字重题干、无方框 `A/B/C/D` 选项、无底座三操作按钮与数字键/回车快捷键）、考试整卷作答、防并发 409 草稿队列、暂停遮罩与焦点返回以及成绩报告。
-- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `TagManagerCard`、`PreferencesSettingsCard`、`DiagnosticsCard` 和 `CliGuideCard`，以及备份恢复区。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
+- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `TagManagerCard`、`PreferencesSettingsCard`、`DiagnosticsCard`、备份恢复区和 `CliGuideCard`。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
+- `components/ThemeSettingsCard.tsx` 在设置页提供预设预览、自定义颜色与对比度调整。`components/ThemeModeToggle.tsx` 提供标题栏快捷切换。
 - `components/Markdown.tsx` 懒加载 `MarkdownContent.tsx`，离线渲染 Markdown 与 KaTeX。
 - `assets/logo.svg` / `assets/serif.woff2` 由 Vite 解析和打包，字体授权保留在 `public/assets/LICENSE.txt`。
 

@@ -38,3 +38,33 @@ test('boots with a live backend, unified frameless chrome, workspace tabs and pa
   await expect(logo).toBeVisible();
   await assertPageHealthy(page);
 });
+
+test('restores dark mode before the app mounts and syncs the Windows caption colors', async ({ quarry }) => {
+  const { page } = quarry;
+  const root = page.locator('html');
+  await expect(root).toHaveAttribute('data-theme-mode', 'light');
+  const readOverlay = process.platform === 'win32' ? await quarry.observeTitleBarOverlay() : undefined;
+  await page.getByRole('button', { name: '外观模式：日间，切换至夜间' }).click();
+  await expect(root).toHaveAttribute('data-theme-mode', 'dark');
+  await expect(root).toHaveCSS('color-scheme', 'dark');
+  if (readOverlay) {
+    await expect.poll(readOverlay).toEqual({ color: '#1b2620', symbolColor: '#e8f1ea', height: 42 });
+  }
+
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const mode = document.documentElement?.dataset.themeMode;
+      if (!mode) return;
+      Reflect.set(window, '__quarryFirstTheme', { mode, appRootExists: !!document.getElementById('root') });
+      observer.disconnect();
+    });
+    observer.observe(document, { attributes: true, attributeFilter: ['data-theme-mode'], subtree: true });
+  });
+  await page.reload();
+  await expect(root).toHaveAttribute('data-theme-mode', 'dark');
+  expect(await page.evaluate(() => Reflect.get(window, '__quarryFirstTheme'))).toEqual({
+    mode: 'dark', appRootExists: false,
+  });
+  await expect(page.getByRole('heading', { name: '学习概览' })).toBeVisible();
+  await assertPageHealthy(page);
+});

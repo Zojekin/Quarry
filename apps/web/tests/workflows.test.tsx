@@ -18,6 +18,8 @@ import { Mistakes, Records, Settings } from "../src/pages/Learning.js";
 import { Result, Study } from "../src/pages/Study.js";
 import { PromptDialog } from "../src/components/ui.js";
 import { updatePreferences } from "../src/lib/preferences.js";
+import { ThemeProvider } from "../src/lib/theme-context.js";
+
 beforeEach(() => {
   vi.stubGlobal("localStorage", jsdom.window.localStorage);
 });
@@ -82,7 +84,7 @@ it("serializes color saves and acknowledges only the final persisted color", asy
         }),
     )
     .mockResolvedValue({ ...tag, color: "#222222" });
-  render(<Settings />);
+  render(<ThemeProvider><Settings /></ThemeProvider>);
   const qTab = screen.getByRole("tab", { name: "题目标签" });
   fireEvent.mouseDown(qTab, { button: 0 });
   fireEvent.click(qTab);
@@ -99,7 +101,7 @@ it("runs a backup restore only after confirmation and allows retrying the same f
   vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([]);
   vi.spyOn(client, "health").mockResolvedValue({ status: "ok", database: "connected", version: "0.3.0", timestamp: 0 });
   const restore = vi.spyOn(client.backup, "backupRestore").mockResolvedValue({ recovery_point_id: "recovery" });
-  const { container } = render(<Settings />);
+  const { container } = render(<ThemeProvider><Settings /></ThemeProvider>);
   const file = new File(["archive"], "quarry.quarry-backup");
   const input = container.querySelector('input[type="file"]')!;
   fireEvent.change(input, { target: { files: [file] } });
