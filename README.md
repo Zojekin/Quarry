@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="apps/web/src/assets/logo.svg" alt="题匣 Logo" width="128" height="128" />
+<img src="apps/web/src/assets/logo.svg" alt="题匣 Logo，暖米白竹纹的绿色六棱柱" width="128" height="128" />
 
 # 题匣 (Quarry)
 
