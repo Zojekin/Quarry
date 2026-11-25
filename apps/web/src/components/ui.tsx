@@ -1,17 +1,28 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { BookOpen, ChevronDown, Search, X } from "lucide-react";
 import { Icon, type IconName } from "./Icons.js";
 import { BackendError } from "../api/client.js";
+import { cn } from "../lib/utils.js";
+import { Button } from "./ui/button.js";
+import { Badge } from "./ui/badge.js";
+import { Checkbox } from "./ui/checkbox.js";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog.js";
+import { Input } from "./ui/input.js";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
+
+export { Button };
+
 export function errorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof BackendError && Array.isArray(error.details))
+  if (error instanceof BackendError && Array.isArray(error.details)) {
     return [
       message,
       ...error.details.map(
@@ -19,31 +30,8 @@ export function errorMessage(error: unknown) {
           `${item.line ? `第 ${item.line} 行 ` : ""}${item.path ?? ""} ${item.message ?? ""}`,
       ),
     ].join("\n");
+  }
   return message;
-}
-export function Button({
-  children,
-  onClick,
-  disabled = false,
-  primary = false,
-  className = "",
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={`button ${primary ? "primary" : ""} ${className}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
 }
 
 export function IconButton({
@@ -51,25 +39,28 @@ export function IconButton({
   label,
   onClick,
   disabled,
+  variant = "ghost",
   className = "",
 }: {
   icon: IconName;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  variant?: "ghost" | "outline" | "destructiveGhost";
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={`button icon-only ${className}`}
+    <Button
+      variant={variant}
+      size="icon"
+      className={className}
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onClick}
     >
       <Icon name={icon} />
-    </button>
+    </Button>
   );
 }
 
@@ -88,38 +79,57 @@ export function Modal({
   className?: string;
   onSubmit?: () => void;
 }) {
-  const heading = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const node = dialog.current!;
-    const previous = document.activeElement;
-    if (typeof node.showModal === "function") node.showModal();
-    else node.setAttribute("open", "");
-    return () => {
-      if (typeof node.close === "function") node.close();
-      if (previous instanceof HTMLElement) previous.focus();
-    };
-  }, []);
+  const activeElement = document.activeElement;
+  const menuTriggerId = activeElement
+    ?.closest('[role="menu"]')
+    ?.getAttribute("aria-labelledby");
+  const previousFocus = useRef(
+    menuTriggerId ? document.getElementById(menuTriggerId) : activeElement,
+  );
+  const contentRef = useRef<HTMLDivElement>(null);
+
   const body = (
     <>
-      <div className="modal-head modal-heading">
-        <h2 id={heading}>{title}</h2>
-        <IconButton icon="close" label="关闭" onClick={onClose} />
-      </div>
-      {children && <div className="modal-body">{children}</div>}
-      <div className="modal-actions">{actions}</div>
+      <DialogHeader>
+        <DialogTitle className="font-serif text-[20px] font-semibold tracking-[-0.01em] text-foreground">
+          {title}
+        </DialogTitle>
+        <DialogClose asChild>
+          <Button size="icon" variant="ghost" aria-label="关闭">
+            <X className="size-4" />
+          </Button>
+        </DialogClose>
+      </DialogHeader>
+      {children && <div className="space-y-4 text-[13.5px]">{children}</div>}
+      <DialogFooter>{actions}</DialogFooter>
     </>
   );
+
   return (
-    <div className="modal-backdrop">
-      <dialog
-        ref={dialog}
-        className={`modal ${className}`}
-        aria-modal="true"
-        aria-labelledby={heading}
-        onCancel={(event) => {
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        ref={contentRef}
+        className={className}
+        aria-describedby={undefined}
+        onInteractOutside={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          const input = contentRef.current?.querySelector<HTMLElement>(
+            "[data-autofocus], input, textarea",
+          );
+          if (!input) return;
           event.preventDefault();
-          onClose();
+          input.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (previousFocus.current instanceof HTMLElement) {
+            previousFocus.current.focus();
+          }
         }}
       >
         {onSubmit ? (
@@ -134,8 +144,8 @@ export function Modal({
         ) : (
           body
         )}
-      </dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -146,6 +156,7 @@ function ActionDialog({
   children,
   action,
   disabled = false,
+  destructive = false,
 }: {
   title: string;
   onClose: () => void;
@@ -153,6 +164,7 @@ function ActionDialog({
   children?: ReactNode;
   action: string;
   disabled?: boolean;
+  destructive?: boolean;
 }) {
   return (
     <Modal
@@ -161,10 +173,16 @@ function ActionDialog({
       onSubmit={onSubmit}
       actions={
         <>
-          <Button onClick={onClose}>取消</Button>
-          <button className="button primary" type="submit" disabled={disabled}>
+          <Button variant="outline" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            variant={destructive ? "destructive" : "default"}
+            type="submit"
+            disabled={disabled}
+          >
             {action}
-          </button>
+          </Button>
         </>
       }
     >
@@ -182,10 +200,12 @@ export function ConfirmDialog({
   onClose: () => void;
   onAccept: () => void;
 }) {
+  const destructive = /删除|清除|恢复/.test(title);
   return (
     <ActionDialog
       title={title}
       action="确认"
+      destructive={destructive}
       onClose={onClose}
       onSubmit={onAccept}
     />
@@ -217,10 +237,10 @@ export function PromptDialog({
         if (name) onAccept(name);
       }}
     >
-      <label className="field">
-        {label}
-        <input
-          autoFocus
+      <label className="block space-y-1.5 text-[13px] font-medium text-foreground">
+        <span>{label}</span>
+        <Input
+          data-autofocus
           required
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -250,6 +270,7 @@ export function useConfirmation() {
     ),
   };
 }
+
 export function useLoad<T>(loader: () => Promise<T>, dependencies: unknown[]) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState("");
@@ -271,6 +292,7 @@ export function useLoad<T>(loader: () => Promise<T>, dependencies: unknown[]) {
   }, [...dependencies, revision]);
   return { data, error, reload: () => refresh((n) => n + 1) };
 }
+
 export function Notice({
   error,
   loading,
@@ -278,12 +300,26 @@ export function Notice({
   error: string;
   loading: boolean;
 }) {
-  return error ? (
-    <p role="alert">{error}</p>
-  ) : loading ? (
-    <p role="status">正在加载…</p>
-  ) : null;
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3.5 py-2.5 text-[13px] text-[var(--error-fg)] whitespace-pre-wrap"
+      >
+        {error}
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <p role="status" className="text-[13px] text-muted-foreground">
+        正在加载…
+      </p>
+    );
+  }
+  return null;
 }
+
 export function Facet({
   label,
   options,
@@ -295,60 +331,74 @@ export function Facet({
   value: string[] | undefined;
   onChange: (value: string[] | undefined) => void;
 }) {
-  const summary =
-    value === undefined
-      ? label
-      : value.length
-        ? options
-            .filter((option) => value.includes(option.id))
-            .map((option) => option.name)
-            .join("、")
-        : "未选择";
+  const [open, setOpen] = useState(false);
+  const filtered = value !== undefined;
+  const summary = !filtered
+    ? label
+    : value.length
+      ? options
+          .filter((option) => value.includes(option.id))
+          .map((option) => option.name)
+          .join("、")
+      : "未选择";
+
   return (
-    <details
-      className={`quarry-select filter-card ${value === undefined ? "" : "is-filtered"}`}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-        }
-      }}
-    >
-      <summary className="select-trigger" aria-label={label} title={summary}>
-        <span className="filter-value">
-          <span data-select-value>{summary}</span>
-        </span>
-        <Icon name="chevron" />
-      </summary>
-      <div className="select-popover facet-options">
-        <label>
-          <input
-            type="checkbox"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={label}
+          title={summary}
+          className={cn(
+            "max-w-[200px] justify-between gap-2 font-medium",
+            filtered && "border-primary/35 bg-accent/70 text-accent-foreground",
+          )}
+        >
+          <span data-select-value className="truncate">
+            {summary}
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 opacity-65" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" aria-label={label} className="w-56 p-1.5">
+        <label className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 text-[13px] font-medium hover:bg-accent/70">
+          <Checkbox
+            aria-label="全选"
             checked={value === undefined}
-            onChange={(e) => onChange(e.target.checked ? undefined : [])}
+            onCheckedChange={(checked) => onChange(checked ? undefined : [])}
           />
-          全选
+          <span>全选</span>
         </label>
-        {options.map((o) => (
-          <label key={o.id}>
-            <input
-              type="checkbox"
-              checked={value === undefined || value.includes(o.id)}
-              onChange={(e) => {
-                const current = value ?? options.map((o) => o.id);
-                const next = e.target.checked
-                  ? [...current, o.id]
-                  : current.filter((id) => id !== o.id);
-                onChange(next.length === options.length ? undefined : next);
-              }}
-            />
-            {o.name}
-          </label>
-        ))}
-      </div>
-    </details>
+        <div className="mt-1 max-h-60 space-y-0.5 overflow-y-auto">
+          {options.map((option) => {
+            const isChecked = value === undefined || value.includes(option.id);
+            return (
+              <label
+                key={option.id}
+                className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 text-[13px] hover:bg-accent/70"
+              >
+                <Checkbox
+                  aria-label={option.name}
+                  checked={isChecked}
+                  onCheckedChange={(checked) => {
+                    const current = value ?? options.map((entry) => entry.id);
+                    const next = checked
+                      ? Array.from(new Set([...current, option.id]))
+                      : current.filter((id) => id !== option.id);
+                    onChange(next.length === options.length ? undefined : next);
+                  }}
+                />
+                <span className="truncate">{option.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
+
 const tagPalette = ["#E4EADE", "#EEE7DA", "#EBE6EE"];
 
 export function tagBackground(color: string | null, name: string) {
@@ -389,38 +439,33 @@ export function tagColorStyle(
   } as CSSProperties;
 }
 
-const statusIcons = {
-  completed: "check",
-  paused: "pause",
-  in_progress: "play",
+const statusMeta = {
+  completed: { variant: "success", icon: "check" },
+  paused: { variant: "warning", icon: "pause" },
+  in_progress: { variant: "info", icon: "play" },
+  enabled: { variant: "success", icon: undefined },
+  disabled: { variant: "destructive", icon: undefined },
+  reviewing: { variant: "info", icon: undefined },
+  mastered: { variant: "success", icon: undefined },
 } as const;
+
 export function StatusPill({
   state,
   children,
 }: {
-  state:
-    | keyof typeof statusIcons
-    | "enabled"
-    | "disabled"
-    | "reviewing"
-    | "mastered";
+  state: keyof typeof statusMeta;
   children: ReactNode;
 }) {
-  const icon =
-    state in statusIcons
-      ? statusIcons[state as keyof typeof statusIcons]
-      : undefined;
+  const meta = statusMeta[state];
   return (
-    <span className={`pill status-pill status-${state}`}>
-      {icon ? (
-        <span className="status-mark">
-          <Icon name={icon} />
-        </span>
+    <Badge variant={meta.variant} className="gap-1.5">
+      {meta.icon ? (
+        <Icon name={meta.icon} className="size-3" />
       ) : (
-        <span className="status-dot" aria-hidden="true" />
+        <span className="size-1.5 rounded-full bg-current opacity-80" aria-hidden="true" />
       )}
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -429,23 +474,29 @@ export function SearchField({
   placeholder = label,
   value,
   onChange,
+  className,
 }: {
   label: string;
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) {
   return (
-    <label className="search">
-      <Icon name="search" />
-      <input
+    <div className={cn("relative flex items-center", className)}>
+      <Search
+        className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input
         type="search"
         aria-label={label}
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        className="h-8 w-52 pl-8 text-[13px]"
       />
-    </label>
+    </div>
   );
 }
 
@@ -455,20 +506,29 @@ export function Breadcrumb({
   items: { label: string; onClick?: () => void }[];
 }) {
   return (
-    <nav className="breadcrumb" aria-label="当前位置">
+    <nav
+      className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground"
+      aria-label="当前位置"
+    >
       {items.map(({ label, onClick }, index) => (
-        <span key={index}>
+        <span key={index} className="inline-flex items-center gap-1.5">
           {index > 0 && (
-            <span className="breadcrumb-separator" aria-hidden="true">
+            <span className="text-muted-foreground/50" aria-hidden="true">
               /
             </span>
           )}
           {onClick ? (
-            <button type="button" onClick={onClick}>
+            <button
+              type="button"
+              onClick={onClick}
+              className="rounded px-1 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
+            >
               {label}
             </button>
           ) : (
-            <span aria-current="page">{label}</span>
+            <span aria-current="page" className="font-medium text-foreground">
+              {label}
+            </span>
           )}
         </span>
       ))}
@@ -484,12 +544,12 @@ export function EmptyState({
   detail?: string;
 }) {
   return (
-    <div className="empty">
-      <span className="empty-mark">
-        <Icon name="library" />
-      </span>
-      <h2>{title}</h2>
-      {detail && <p>{detail}</p>}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/60 px-6 py-12 text-center">
+      <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-accent text-primary">
+        <BookOpen className="size-5" aria-hidden="true" />
+      </div>
+      <h2 className="m-0 font-serif text-[18px] font-semibold text-foreground">{title}</h2>
+      {detail && <p className="mt-1.5 max-w-md text-[13px] text-muted-foreground">{detail}</p>}
     </div>
   );
 }
@@ -510,10 +570,7 @@ export function NavigationControls({
   canForward,
 }: NavigationProps) {
   return (
-    <div
-      className="nav-controls page-navigation-controls"
-      aria-label="页面导航"
-    >
+    <div className="flex items-center gap-0.5" aria-label="页面导航">
       <IconButton
         icon="back"
         label="返回上一页"
@@ -531,6 +588,43 @@ export function NavigationControls({
   );
 }
 
+export function Segmented({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly (readonly [string, string])[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex h-8.5 items-center gap-0.5 rounded-lg border border-border bg-muted p-0.5 text-muted-foreground"
+    >
+      {options.map(([key, name]) => (
+        <button
+          type="button"
+          key={key}
+          aria-pressed={key === value}
+          onClick={() => onChange(key)}
+          className={cn(
+            "inline-flex h-7 items-center justify-center rounded-md px-3 text-[12.5px] font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/35",
+            key === value
+              ? "bg-card text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.06)]"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export const types = [
   ["single_choice", "单选题"],
   ["multiple_choice", "多选题"],
@@ -541,6 +635,7 @@ export const types = [
 ].map(([id, name]) => ({ id: id!, name: name! }));
 
 export const ViewContext = createContext("default");
+
 export function useViewState<T>(key: string, initial: T | (() => T)) {
   const scope = useContext(ViewContext);
   const storageKey = "quarry-view/" + scope + "/" + key;

@@ -1,785 +1,1588 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { client } from "../api/client.js";
-import type { Session, QuestionView, StudyAnswer } from "../api/client.js";
-import { formatTime } from "../state.js";
-import type { Route } from "../state.js";
-import {
-  Button,
-  EmptyState,
-  Notice,
-  types,
-  useLoad,
-  useConfirmation,
-  useViewState,
-} from "../components/ui.js";
+import type {
+  Paper,
+  QuestionView,
+  RecordView,
+  Session,
+  StudyAnswer,
+  SubmitQuestionResult,
+} from "../api/client.js";
+import { formatTime, type Route } from "../state.js";
 import { Icon } from "../components/Icons.js";
 import { Markdown } from "../components/Markdown.js";
+import {
+  Button,
+  errorMessage,
+  Modal,
+  NavigationControls,
+  Notice,
+  Segmented,
+  StatusPill,
+  types,
+  useConfirmation,
+  useLoad,
+} from "../components/ui.js";
+import type { NavigationProps } from "../components/ui.js";
+import { Badge } from "../components/ui/badge.js";
+import { Card } from "../components/ui/card.js";
+import { Input, Textarea } from "../components/ui/input.js";
+import { cn } from "../lib/utils.js";
+
 export function emptyAnswer(q: QuestionView): StudyAnswer {
-  return q.options
-    ? { kind: "choice", option_ids: [] }
-    : q.blanks
-      ? { kind: "blanks", values: q.blanks.map(() => "") }
-      : { kind: "text", value: "" };
+  if (
+    q.type === "single_choice" ||
+    q.type === "multiple_choice" ||
+    q.type === "indefinite_choice"
+  ) {
+    return { kind: "choice", option_ids: [] };
+  }
+  if (q.type === "strict_fill_in_blank") {
+    return { kind: "blanks", values: Array(q.blanks?.length ?? 1).fill("") };
+  }
+  return { kind: "text", value: "" };
 }
-export function hasAnswer(answer: StudyAnswer | undefined) {
+
+export function hasAnswer(answer?: StudyAnswer) {
   if (!answer) return false;
   if (answer.kind === "choice") return answer.option_ids.length > 0;
-  if (answer.kind === "blanks")
-    return answer.values.some((value) => value.length > 0);
-  return answer.value.length > 0;
+  if (answer.kind === "blanks") return answer.values.some((v) => v.trim());
+  return !!answer.value.trim();
+}
+
+function referenceText(q: QuestionView): string | undefined {
+  return (
+    q.reference_answer ??
+    q.options
+      ?.filter((o) => o.is_correct)
+      .map((o) => o.content)
+      .join("；") ??
+    q.blanks?.map((b) => b.valid_answers?.join(" / ")).join("；")
+  );
+}
+
+function hydrateQuestionFeedback(
+  q: QuestionView,
+  result: SubmitQuestionResult,
+): QuestionView {
+  let next: QuestionView = q;
+  if (
+    q.options &&
+    Array.isArray(result.correct_answer) &&
+    (result.correct_answer.length === 0 ||
+      typeof result.correct_answer[0] === "string")
+  ) {
+    const correctIds = new Set(result.correct_answer as string[]);
+    next = {
+      ...next,
+      options: q.options.map((opt) => ({
+        ...opt,
+        is_correct: correctIds.has(opt.id),
+      })),
+    };
+  } else if (
+    q.blanks &&
+    Array.isArray(result.correct_answer) &&
+    (result.correct_answer.length === 0 ||
+      Array.isArray(result.correct_answer[0]))
+  ) {
+    const validSets = result.correct_answer as string[][];
+    next = {
+      ...next,
+      blanks: q.blanks.map((blank, i) => ({
+        ...blank,
+        valid_answers: validSets[i] ?? blank.valid_answers ?? [],
+      })),
+    };
+  } else if (typeof result.correct_answer === "string") {
+    next = { ...next, reference_answer: result.correct_answer };
+  }
+  if (result.analysis !== undefined) {
+    next = { ...next, explanation: result.analysis };
+  }
+  return next;
 }
 
 export function Answer({
   q,
   answer,
   locked,
-  onChange,
   reveal = false,
+  onChange,
 }: {
   q: QuestionView;
   answer: StudyAnswer;
   locked: boolean;
-  onChange: (a: StudyAnswer) => void;
   reveal?: boolean;
+  onChange: (value: StudyAnswer) => void;
 }) {
-  return (
-    <>
-      {q.options && answer.kind === "choice" ? (
-        <div className="answer-options">
-          {q.options.map((o, i) => {
-            const chosen = answer.option_ids.includes(o.id);
+  const options = q.options ?? [];
+
+  if (options.length > 0) {
+    const multiple = q.type !== "single_choice";
+    const selected = answer.kind === "choice" ? answer.option_ids : [];
+
+    function pick(id: string) {
+      if (locked) return;
+      if (!multiple) {
+        onChange({ kind: "choice", option_ids: [id] });
+      } else {
+        onChange({
+          kind: "choice",
+          option_ids: selected.includes(id)
+            ? selected.filter((v) => v !== id)
+            : [...selected, id],
+        });
+      }
+    }
+
+    return (
+      <div className="space-y-3">
+        <div
+          className="space-y-2.5"
+          role={multiple ? "group" : "radiogroup"}
+          aria-label="题目选项"
+        >
+          {options.map((option, idx) => {
+            const chosen = selected.includes(option.id);
+            const right = reveal && chosen && !!option.is_correct;
+            const missed = reveal && !chosen && !!option.is_correct;
+            const wrong = reveal && chosen && option.is_correct === false;
+
             return (
               <button
+                key={option.id}
                 type="button"
-                aria-pressed={chosen}
-                key={o.id}
+                role={multiple ? "checkbox" : "radio"}
+                aria-checked={chosen}
                 disabled={locked}
-                className={`answer-option ${chosen ? "chosen" : ""} ${reveal && o.is_correct ? "answer-correct" : reveal && chosen ? "answer-incorrect" : ""}`}
-                onClick={() =>
-                  onChange({
-                    kind: "choice",
-                    option_ids:
-                      q.type === "single_choice"
-                        ? [o.id]
-                        : chosen
-                          ? answer.option_ids.filter((id) => id !== o.id)
-                          : [...answer.option_ids, o.id],
-                  })
-                }
+                onClick={() => pick(option.id)}
+                className={cn(
+                  "flex w-full items-start gap-3.5 rounded-lg border px-4 py-3 text-left text-[15px] leading-relaxed transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
+                  !locked &&
+                    !chosen &&
+                    "border-border bg-card hover:border-black/15 hover:bg-muted/45",
+                  !reveal &&
+                    chosen &&
+                    "chosen border-[var(--selection-border)] bg-[var(--selection-bg)] text-[var(--selection-ink)] shadow-[0_1px_2px_rgba(90,75,40,0.08)]",
+                  right &&
+                    "answer-correct border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]",
+                  missed &&
+                    "border-dashed border-[var(--success-border)] bg-[var(--success-bg)]/55 text-[var(--success-fg)]",
+                  wrong &&
+                    "border-[var(--error-border)] bg-[var(--error-bg)] text-[var(--error-fg)]",
+                )}
               >
-                <span className="option-letter">
-                  {String.fromCharCode(65 + i)}
+                {/* Plain bold option letter — intentionally NO box around A/B/C/D */}
+                <span
+                  className={cn(
+                    "min-w-5 shrink-0 pt-0.5 text-[15px] font-bold tabular-nums",
+                    chosen && !reveal
+                      ? "text-[var(--selection-ink)]"
+                      : right || missed
+                        ? "text-[var(--success-fg)]"
+                        : wrong
+                          ? "text-[var(--error-fg)]"
+                          : "text-foreground/75",
+                  )}
+                >
+                  {String.fromCharCode(65 + idx)}
                 </span>
-                <span className="option-text">
-                  <Markdown text={o.content} />
-                </span>
-                {reveal && (o.is_correct || chosen) && (
+
+                <div className="min-w-0 flex-1 text-foreground">
+                  <Markdown text={option.content} />
+                </div>
+
+                {(right || missed || wrong) && (
                   <span
-                    className="option-feedback"
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 pt-0.5 text-[12px] font-semibold"
                     role="img"
-                    aria-label={
-                      o.is_correct ? (chosen ? "正确" : "漏选") : "选错"
-                    }
+                    aria-label={right ? "正确" : missed ? "漏选" : "选错"}
                   >
-                    <Icon name={o.is_correct ? "check" : "close"} />
+                    <Icon name={wrong ? "cross" : "check"} className="size-3.5" />
+                    <span>{right ? "正确" : missed ? "漏选" : "选错"}</span>
                   </span>
                 )}
               </button>
             );
           })}
         </div>
-      ) : answer.kind === "blanks" ? (
-        <div className="answer-inputs">
-          {answer.values.map((v, i) => (
-            <input
-              key={i}
-              aria-label={`第 ${i + 1} 空`}
+
+        {reveal && q.explanation && (
+          <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground/85">解析：</span>
+            <Markdown text={q.explanation} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (q.type === "strict_fill_in_blank") {
+    const blanks =
+      q.blanks && q.blanks.length > 0 ? q.blanks : [{ id: "0", valid_answers: [] }];
+    const current = answer.kind === "blanks" ? answer.values : [];
+
+    return (
+      <div className="space-y-3">
+        {blanks.map((_, i) => (
+          <label key={i} className="block space-y-1.5 text-[13px] font-medium">
+            <span className="text-muted-foreground">第 {i + 1} 空</span>
+            <Input
               disabled={locked}
-              value={v}
-              onChange={(e) =>
-                onChange({
-                  kind: "blanks",
-                  values: answer.values.map((old, n) =>
-                    n === i ? e.target.value : old,
-                  ),
-                })
-              }
+              value={current[i] ?? ""}
+              onChange={(event) => {
+                const next = [...current];
+                next[i] = event.target.value;
+                onChange({ kind: "blanks", values: next });
+              }}
+              placeholder={`输入第 ${i + 1} 空答案…`}
             />
-          ))}
-        </div>
-      ) : answer.kind === "text" ? (
-        <div className="answer-inputs">
-          <textarea
-            aria-label="作答"
+          </label>
+        ))}
+        {reveal && q.explanation && (
+          <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground/85">解析：</span>
+            <Markdown text={q.explanation} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isFreeBlank = q.type === "free_fill_in_blank";
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1.5 text-[13px] font-medium">
+        <span className="text-muted-foreground">
+          {isFreeBlank ? "填空作答" : "作答内容"}
+        </span>
+        {isFreeBlank ? (
+          <Input
             disabled={locked}
-            value={answer.value}
-            onChange={(e) => onChange({ kind: "text", value: e.target.value })}
+            value={answer.kind === "text" ? answer.value : ""}
+            onChange={(event) =>
+              onChange({ kind: "text", value: event.target.value })
+            }
+            placeholder="输入你的作答…"
           />
-        </div>
-      ) : null}
-      {reveal && (
-        <div className="solution-panels">
-          {!q.options && (
-            <section className="analysis solution-panel reference-panel">
-              <h3>参考答案</h3>
-              <Markdown
-                text={
-                  q.reference_answer ??
-                  q.blanks
-                    ?.map((b) => b.valid_answers?.join(" / "))
-                    .join("；") ??
-                  ""
-                }
-              />
-            </section>
-          )}
-          <section className="analysis solution-panel explanation-panel">
-            <h3>解析</h3>
-            <Markdown text={q.explanation ?? ""} />
-          </section>
+        ) : (
+          <Textarea
+            disabled={locked}
+            rows={6}
+            value={answer.kind === "text" ? answer.value : ""}
+            onChange={(event) =>
+              onChange({ kind: "text", value: event.target.value })
+            }
+            placeholder="输入你的作答…"
+          />
+        )}
+      </label>
+      {reveal && q.explanation && (
+        <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground/85">解析：</span>
+          <Markdown text={q.explanation} />
         </div>
       )}
-    </>
+    </div>
   );
 }
+
+function PauseScreen({
+  mode,
+  error,
+  busy,
+  onResume,
+  onExit,
+}: {
+  mode: "practice" | "exam";
+  error: string;
+  busy: boolean;
+  onResume: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <div
+      className="flex min-h-[65vh] flex-col items-center justify-center rounded-xl border border-border bg-card/80 p-10 text-center"
+      aria-label="答题暂停遮罩"
+    >
+      <Modal
+        title="答题已暂停"
+        onClose={onResume}
+        actions={
+          <>
+            <Button variant="outline" onClick={onExit}>
+              返回练习记录
+            </Button>
+            <Button variant="default" disabled={busy} onClick={onResume}>
+              继续答题
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="m-0 text-[13.5px] leading-relaxed text-muted-foreground">
+            {mode === "exam"
+              ? "已隐藏题目内容，考试截止时间按开考时间固定计算。按 Esc 或点击「继续答题」回到作答位置。"
+              : "计时已暂停，题目内容已安全隐藏。按 Esc 或点击「继续答题」回到作答位置。"}
+          </p>
+          <Notice error={error} loading={busy} />
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+type CheckedState = {
+  score: number | null;
+  recordId: string;
+  correct: boolean | null;
+  answer: StudyAnswer;
+};
+
 export function Study({
   id,
   navigate,
   onRail,
+  onSubmitted,
+  onTitle,
 }: {
   id: string;
-  navigate: (r: Route) => void;
-  onRail: (rail: React.ReactNode) => void;
+  navigate: (route: Route) => void;
+  onRail: (rail: ReactNode) => void;
+  onSubmitted?: () => void;
+  onTitle?: (title: string) => void;
 }) {
-  const confirmation = useConfirmation();
-  const { data, error } = useLoad(() => client.sessions.get(id), [id]);
-  const [session, setSession] = useState<Session>();
-  const [drafts, setDrafts] = useViewState<Record<string, StudyAnswer>>(
-    "attempt-drafts",
-    {},
+  const { data, error, reload } = useLoad(
+    () =>
+      Promise.all([
+        client.sessions.get(id),
+        client.papers.list().catch(() => [] as Paper[]),
+      ]),
+    [id],
   );
+  const [session, setSession] = useState<Session>();
+  const [paperMeta, setPaperMeta] = useState<Paper>();
   const [index, setIndex] = useState(0);
-  const [redo, setRedo] = useViewState<string[]>("redo", []);
-  const [message, setMessage] = useState("");
+  const indexRef = useRef(0);
+  indexRef.current = index;
+  const [drafts, setDrafts] = useState<Record<string, StudyAnswer>>({});
+  const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
+  const [checked, setChecked] = useState<Record<string, CheckedState>>({});
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  const queue = useRef(Promise.resolve());
-  const submitRef = useRef(false);
-  const latestSession = useRef(session);
-  latestSession.current = session;
+  const busyRef = useRef(false);
+  const [message, setMessage] = useState("");
+  const [draftError, setDraftError] = useState("");
+  const confirm = useConfirmation();
+  const pauseButtonRef = useRef<HTMLButtonElement>(null);
+  const resumeFocusPending = useRef(false);
+  const saveChain = useRef(Promise.resolve());
+  const draftFailedRef = useRef<Error | null>(null);
+  const failedDraftsRef = useRef<Map<string, StudyAnswer>>(new Map());
+  const failedIndexRef = useRef<number | null>(null);
+  const autoSubmitted = useRef(false);
+  const pauseSentForRef = useRef<string | null>(null);
+  const leavingRef = useRef(false);
+  const sessionRef = useRef(session);
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+
+  function commitSession(next: Session) {
+    sessionRef.current = next;
+    setSession(next);
+  }
+
+  const onTitleRef = useRef(onTitle);
+  onTitleRef.current = onTitle;
+
   useEffect(() => {
-    const leave = () => {
-      if (latestSession.current?.status === "in_progress")
-        void client
-          .transport(client.url(`sessions/${id}/pause`), {
-            method: "POST",
-            keepalive: true,
-          })
-          .catch(() => {});
-    };
-    window.addEventListener("pagehide", leave);
-    return () => {
-      window.removeEventListener("pagehide", leave);
-      void queue.current.catch(() => {}).then(leave);
-    };
-  }, [id]);
-  useEffect(() => {
-    if (data?.status === "completed") {
-      navigate({ page: "result", id });
+    if (!data) return;
+    const [loadedSession, papers] = data;
+    const foundPaper = papers.find((p) => p.id === loadedSession.paper_id);
+    commitSession(loadedSession);
+    setPaperMeta(foundPaper);
+    autoSubmitted.current = false;
+    leavingRef.current = false;
+    pauseSentForRef.current =
+      loadedSession.status === "in_progress" ? null : loadedSession.id;
+    draftFailedRef.current = null;
+    failedDraftsRef.current.clear();
+    failedIndexRef.current = null;
+    setDraftError("");
+    if (loadedSession.status === "completed") {
+      navigate({ page: "result", id: loadedSession.id });
       return;
     }
-    if (data) {
-      setSession(data);
-      setDrafts((local) => ({
-        ...data.draft_answers,
-        ...Object.fromEntries(
-          redo.filter((id) => local[id]).map((id) => [id, local[id]!]),
-        ),
-      }));
-      setIndex(data.current_index);
-    }
-  }, [data]);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  function enqueue(task: () => Promise<unknown>) {
-    queue.current = queue.current.then(task).then(
-      () => {},
-      (e) => {
-        setMessage((e as Error).message);
-        throw e;
-      },
+
+    const title = loadedSession.paper_name ?? foundPaper?.name ?? "作答";
+    onTitleRef.current?.(
+      `${title} · ${loadedSession.mode === "exam" ? "考试" : "练习"}`,
     );
-    queue.current.catch(() => {});
+
+    const items = loadedSession.items;
+    const latestRecordByQ = new Map<string, RecordView>();
+    const initAttempts: Record<string, number> = {};
+    for (const r of loadedSession.records) {
+      initAttempts[r.question_id] = Math.max(
+        initAttempts[r.question_id] ?? 0,
+        r.attempt_index,
+      );
+      const prev = latestRecordByQ.get(r.question_id);
+      if (!prev || r.attempt_index >= prev.attempt_index) {
+        latestRecordByQ.set(r.question_id, r);
+      }
+    }
+
+    const initialIndex = Math.max(
+      0,
+      Math.min(loadedSession.current_index, Math.max(0, items.length - 1)),
+    );
+    setIndex(initialIndex);
+
+    const initDrafts: Record<string, StudyAnswer> = {};
+    for (const item of items) {
+      initDrafts[item.question.id] =
+        loadedSession.draft_answers[item.question.id] ??
+        latestRecordByQ.get(item.question.id)?.answer ??
+        emptyAnswer(item.question);
+    }
+    setDrafts(initDrafts);
+
+    const initChecked: Record<string, CheckedState> = {};
+    for (const [qid, r] of latestRecordByQ.entries()) {
+      const item = items.find((it) => it.question.id === qid);
+      const maxScore = item?.question.max_score;
+      const graded = maxScore !== undefined && r.score !== null;
+      initChecked[qid] = {
+        score: graded ? r.score : null,
+        recordId: r.id,
+        correct: graded ? (r.score ?? 0) >= maxScore : null,
+        answer: r.answer,
+      };
+    }
+    setAttemptCounts(initAttempts);
+    setChecked(initChecked);
+    setNowMs(Date.now());
+  }, [data]);
+
+  const timeLimit = session?.time_limit_seconds ?? null;
+  const deadlineMs =
+    session && session.mode === "exam" && timeLimit
+      ? Date.parse(session.start_time) + timeLimit * 1000
+      : null;
+
+  useEffect(() => {
+    if (!session || session.status === "completed") return;
+    if (session.status !== "in_progress" && deadlineMs === null) return;
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [session?.id, session?.status, deadlineMs]);
+
+  useEffect(() => {
+    if (session?.status === "in_progress" && resumeFocusPending.current) {
+      resumeFocusPending.current = false;
+      requestAnimationFrame(() => pauseButtonRef.current?.focus());
+    }
+  }, [session?.status]);
+
+  useEffect(() => {
+    if (
+      !session ||
+      session.mode !== "exam" ||
+      session.status === "completed" ||
+      deadlineMs === null ||
+      autoSubmitted.current
+    ) {
+      return;
+    }
+    const checkDeadline = () => {
+      if (autoSubmitted.current || busyRef.current) return;
+      if (Date.now() >= deadlineMs) {
+        void submitExam(true);
+      }
+    };
+    checkDeadline();
+    if (!autoSubmitted.current) {
+      const waitMs = Math.max(0, deadlineMs - Date.now());
+      const handle = window.setTimeout(checkDeadline, waitMs);
+      return () => window.clearTimeout(handle);
+    }
+  }, [nowMs, busy, session?.id, session?.mode, session?.status, deadlineMs]);
+
+  useEffect(() => {
+    const pauseOnLeave = () => {
+      const active = sessionRef.current;
+      if (
+        !active ||
+        active.status !== "in_progress" ||
+        pauseSentForRef.current === active.id
+      ) {
+        return;
+      }
+      leavingRef.current = true;
+      pauseSentForRef.current = active.id;
+      void saveChain.current
+        .catch(() => {})
+        .then(() => {
+          if (sessionRef.current?.id === active.id) {
+            sessionRef.current = { ...active, status: "paused" };
+          }
+          return client.sessions.pause(active.id).catch(() => {});
+        });
+    };
+    window.addEventListener("pagehide", pauseOnLeave);
+    return () => {
+      window.removeEventListener("pagehide", pauseOnLeave);
+      pauseOnLeave();
+    };
+  }, []);
+
+  function queueDraft(
+    nextIndex: number,
+    questionId?: string,
+    userAnswer?: StudyAnswer,
+  ) {
+    if (
+      !sessionRef.current ||
+      sessionRef.current.status !== "in_progress" ||
+      leavingRef.current
+    )
+      return;
+    const sessionId = sessionRef.current.id;
+    saveChain.current = saveChain.current.then(async () => {
+      if (
+        !sessionRef.current ||
+        sessionRef.current.id !== sessionId ||
+        sessionRef.current.status === "completed"
+      )
+        return;
+      try {
+        await client.sessions.saveDraft(sessionId, {
+          current_index: nextIndex,
+          ...(questionId && userAnswer
+            ? { question_id: questionId, user_answer: userAnswer }
+            : {}),
+        });
+        if (questionId && userAnswer) {
+          if (draftsRef.current[questionId] === userAnswer) {
+            failedDraftsRef.current.delete(questionId);
+          }
+        } else {
+          failedIndexRef.current = null;
+        }
+        if (
+          failedDraftsRef.current.size === 0 &&
+          failedIndexRef.current === null
+        ) {
+          draftFailedRef.current = null;
+          setDraftError("");
+        }
+      } catch (err) {
+        if (questionId && userAnswer) {
+          failedDraftsRef.current.set(questionId, userAnswer);
+        } else {
+          failedIndexRef.current = nextIndex;
+        }
+        const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+        draftFailedRef.current = errObj;
+        setDraftError(errorMessage(err));
+      }
+    });
   }
-  async function act(task: () => Promise<void>) {
-    if (busy) return;
+
+  async function retryDraft() {
+    if (!sessionRef.current || sessionRef.current.status !== "in_progress")
+      return;
+    const sessionId = sessionRef.current.id;
+    saveChain.current = saveChain.current.then(async () => {
+      if (
+        !sessionRef.current ||
+        sessionRef.current.id !== sessionId ||
+        sessionRef.current.status === "completed"
+      )
+        return;
+      try {
+        const pendingEntries = Array.from(failedDraftsRef.current.entries());
+        for (const [qid, ans] of pendingEntries) {
+          const latestAns = draftsRef.current[qid] ?? ans;
+          await client.sessions.saveDraft(sessionId, {
+            current_index: indexRef.current,
+            question_id: qid,
+            user_answer: latestAns,
+          });
+          if (
+            draftsRef.current[qid] === latestAns ||
+            draftsRef.current[qid] === ans
+          ) {
+            failedDraftsRef.current.delete(qid);
+          }
+        }
+        if (failedIndexRef.current !== null || pendingEntries.length === 0) {
+          await client.sessions.saveDraft(sessionId, {
+            current_index: indexRef.current,
+          });
+          failedIndexRef.current = null;
+        }
+        if (
+          failedDraftsRef.current.size === 0 &&
+          failedIndexRef.current === null
+        ) {
+          draftFailedRef.current = null;
+          setDraftError("");
+        }
+      } catch (err) {
+        const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+        draftFailedRef.current = errObj;
+        setDraftError(errorMessage(err));
+      }
+    });
+    await saveChain.current;
+  }
+
+  function updateAnswer(question: QuestionView, nextAnswer: StudyAnswer) {
+    if (
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
+    setDrafts((prev) => ({ ...prev, [question.id]: nextAnswer }));
+    if (
+      !(
+        sessionRef.current?.mode === "practice" &&
+        (attemptCounts[question.id] ?? 0) > 0
+      )
+    ) {
+      queueDraft(index, question.id, nextAnswer);
+    }
+  }
+
+  function go(nextIndex: number) {
+    if (
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
+    setIndex(nextIndex);
+    queueDraft(nextIndex);
+  }
+
+  const currentItem = session?.items[index];
+  const currentQuestion = currentItem?.question;
+  const currentCheck = currentQuestion ? checked[currentQuestion.id] : undefined;
+
+  async function checkCurrent() {
+    if (
+      !session ||
+      sessionRef.current?.status !== "in_progress" ||
+      !currentQuestion ||
+      busyRef.current
+    )
+      return;
+    busyRef.current = true;
     setBusy(true);
     setMessage("");
+    const qid = currentQuestion.id;
+    const answer = drafts[qid] ?? emptyAnswer(currentQuestion);
+    const attempt = (attemptCounts[qid] ?? 0) + 1;
+    const applySubmission = (record: RecordView) => {
+      const maxScore = currentQuestion.max_score;
+      const graded = maxScore !== undefined && record.score !== null;
+      setAttemptCounts((prev) => ({
+        ...prev,
+        [qid]: Math.max(prev[qid] ?? 0, record.attempt_index),
+      }));
+      failedDraftsRef.current.delete(qid);
+      if (
+        failedDraftsRef.current.size === 0 &&
+        failedIndexRef.current === null
+      ) {
+        draftFailedRef.current = null;
+        setDraftError("");
+      }
+      setChecked((prev) => ({
+        ...prev,
+        [qid]: {
+          score: graded ? record.score : null,
+          recordId: record.id,
+          correct: graded ? (record.score ?? 0) >= maxScore : null,
+          answer: record.answer ?? answer,
+        },
+      }));
+    };
     try {
-      await queue.current;
-      await task();
+      await saveChain.current;
+      const result = await client.sessions.submitQuestion(session.id, {
+        question_id: qid,
+        answer,
+        attempt_index: attempt,
+      });
+      const hydratedQuestion = hydrateQuestionFeedback(currentQuestion, result);
+      applySubmission(result);
+      const latest = sessionRef.current ?? session;
+      const refreshed = await client.sessions.get(session.id).catch(() => null);
+      if (refreshed) {
+        commitSession({
+          ...latest,
+          items: refreshed.items,
+          records: refreshed.records,
+        });
+      } else {
+        commitSession({
+          ...latest,
+          items: latest.items.map((it) =>
+            it.question.id === qid
+              ? { ...it, question: hydratedQuestion }
+              : it,
+          ),
+          records: [...latest.records, result],
+        });
+      }
+      onSubmitted?.();
     } catch (e) {
-      setMessage((e as Error).message);
-      queue.current = Promise.resolve();
+      const recovered = await client.sessions.get(session.id).catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: session.id });
+        return;
+      }
+      const savedRecord = recovered?.records
+        .filter((r) => r.question_id === qid)
+        .sort((a, b) => b.attempt_index - a.attempt_index)[0];
+      if (recovered && savedRecord && savedRecord.attempt_index >= attempt) {
+        commitSession(recovered);
+        applySubmission(savedRecord);
+        onSubmitted?.();
+      } else {
+        setMessage(errorMessage(e));
+      }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
-  const deadline =
-    session && session.time_limit_seconds
-      ? Date.parse(session.start_time) + session.time_limit_seconds * 1000
-      : undefined;
-  async function finish() {
-    if (!session || submitRef.current) return;
-    submitRef.current = true;
+
+  function redoCurrent() {
+    if (
+      !currentQuestion ||
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
+    setChecked((prev) => {
+      const next = { ...prev };
+      delete next[currentQuestion.id];
+      return next;
+    });
+    const reset = emptyAnswer(currentQuestion);
+    updateAnswer(currentQuestion, reset);
+  }
+
+  async function addMistake(recordId: string) {
+    if (
+      !session ||
+      sessionRef.current?.status !== "in_progress" ||
+      busyRef.current
+    )
+      return;
+    busyRef.current = true;
+    setBusy(true);
     try {
-      if (session.mode === "exam") {
-        if (session.status === "paused") await client.sessions.resume(id);
-        await client.sessions.submitExam(
-          id,
-          session.items.map((i) => ({
-            question_id: i.question.id,
-            answer: drafts[i.question.id] ?? emptyAnswer(i.question),
-          })),
-        );
-      } else await client.sessions.finishPractice(id);
-      latestSession.current = { ...session, status: "completed" };
-      navigate({ page: "result", id });
-    } catch (error) {
-      // Recover a committed submission when its HTTP response was lost.
-      const recovered = await client.sessions.get(id);
-      if (recovered.status !== "completed") throw error;
-      latestSession.current = recovered;
-      navigate({ page: "result", id });
+      await client.mistakes.manual(session.id, recordId);
+      setMessage("已主动收入错题本。");
+      onSubmitted?.();
+    } catch (e) {
+      setMessage(errorMessage(e));
     } finally {
-      submitRef.current = false;
+      busyRef.current = false;
+      setBusy(false);
     }
   }
+
+  async function finishPractice() {
+    if (
+      !session ||
+      sessionRef.current?.status === "completed" ||
+      busyRef.current
+    )
+      return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await saveChain.current;
+      if (draftFailedRef.current) throw draftFailedRef.current;
+      sessionRef.current = { ...session, status: "completed" };
+      await client.sessions.finishPractice(session.id);
+      onSubmitted?.();
+      navigate({ page: "result", id: session.id });
+    } catch (e) {
+      const recovered = await client.sessions.get(session.id).catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: session.id });
+        return;
+      }
+      sessionRef.current = session;
+      setMessage(errorMessage(e));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function submitExam(isAuto = false) {
+    let currentSession = sessionRef.current ?? session;
+    if (
+      !currentSession ||
+      currentSession.status === "completed" ||
+      busyRef.current
+    )
+      return;
+    if (isAuto) autoSubmitted.current = true;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await saveChain.current;
+      if (currentSession.status === "paused") {
+        currentSession = await client.sessions.resume(currentSession.id);
+        pauseSentForRef.current = null;
+        commitSession(currentSession);
+      }
+      sessionRef.current = { ...currentSession, status: "completed" };
+      const currentDrafts = draftsRef.current;
+      const answers = currentSession.items.map((item) => ({
+        question_id: item.question.id,
+        answer: currentDrafts[item.question.id] ?? emptyAnswer(item.question),
+      }));
+      await client.sessions.submitExam(currentSession.id, answers);
+      onSubmitted?.();
+      navigate({ page: "result", id: currentSession.id });
+    } catch (e) {
+      const recovered = await client.sessions
+        .get(currentSession.id)
+        .catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: currentSession.id });
+        return;
+      }
+      sessionRef.current = currentSession;
+      if (!isAuto) autoSubmitted.current = false;
+      setMessage(errorMessage(e));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function pauseSession() {
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
+    try {
+      await saveChain.current;
+      if (draftFailedRef.current) throw draftFailedRef.current;
+      pauseSentForRef.current = session.id;
+      sessionRef.current = { ...session, status: "paused" };
+      const updated = await client.sessions.pause(session.id);
+      commitSession(updated);
+    } catch (e) {
+      pauseSentForRef.current = null;
+      sessionRef.current = session;
+      setMessage(errorMessage(e));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function exitStudy() {
+    const active = sessionRef.current ?? session;
+    if (active && active.status === "in_progress") {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        let prevChain: Promise<void>;
+        do {
+          prevChain = saveChain.current;
+          await prevChain;
+        } while (saveChain.current !== prevChain);
+        if (
+          failedDraftsRef.current.size > 0 ||
+          failedIndexRef.current !== null
+        ) {
+          await retryDraft();
+        }
+        if (draftFailedRef.current) {
+          const reason = draftFailedRef.current.message;
+          setMessage(reason);
+          confirm.ask(
+            `存在未保存的草稿（${reason}），确认放弃未保存更改并退出吗？`,
+            () =>
+              void (async () => {
+                if (busyRef.current) return;
+                busyRef.current = true;
+                setBusy(true);
+                leavingRef.current = true;
+                pauseSentForRef.current = active.id;
+                try {
+                  const paused = await client.sessions.pause(active.id);
+                  commitSession(paused);
+                } catch {
+                  pauseSentForRef.current = null;
+                } finally {
+                  busyRef.current = false;
+                  setBusy(false);
+                }
+                navigate({ page: "records" });
+              })(),
+          );
+          return;
+        }
+        pauseSentForRef.current = active.id;
+        const paused = await client.sessions.pause(active.id);
+        leavingRef.current = true;
+        commitSession(paused);
+      } catch (e) {
+        pauseSentForRef.current = null;
+        leavingRef.current = false;
+        const reason = errorMessage(e);
+        setMessage(reason);
+        confirm.ask(`暂停会话失败（${reason}），仍要退出答题吗？`, () => {
+          leavingRef.current = true;
+          navigate({ page: "records" });
+        });
+        return;
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
+    navigate({ page: "records" });
+  }
+
+  async function resumeSession() {
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
+    resumeFocusPending.current = true;
+    try {
+      const updated = await client.sessions.resume(session.id);
+      pauseSentForRef.current = null;
+      commitSession(updated);
+    } catch (e) {
+      resumeFocusPending.current = false;
+      setMessage(errorMessage(e));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (
-      session?.mode === "exam" &&
-      session.status !== "completed" &&
-      deadline &&
-      now >= deadline &&
-      !submitRef.current
+      !session ||
+      session.mode !== "practice" ||
+      session.status !== "in_progress" ||
+      !currentQuestion
     )
-      void act(finish);
-  }, [now, deadline, session?.status]);
-  function change(q: QuestionView, a: StudyAnswer) {
-    setDrafts((current) => ({ ...current, [q.id]: a }));
-    if (!redo.includes(q.id))
-      enqueue(() =>
-        client.sessions.saveDraft(id, {
-          question_id: q.id,
-          user_answer: a,
-          current_index: index,
-        }),
-      );
-  }
-  function move(next: number) {
-    if (!session) return;
-    enqueue(() => client.sessions.saveDraft(id, { current_index: next }));
-    setIndex(next);
-    if (session.mode === "practice") {
-      window.scrollTo(0, 0);
-    } else
-      document
-        .getElementById(`question-${next}`)
-        ?.scrollIntoView({ behavior: "smooth" });
-  }
-  const elapsed = session
-    ? session.status === "completed"
-      ? session.effective_duration_seconds
-      : Math.max(
-          0,
-          ((session.status === "paused" && session.paused_at
-            ? Date.parse(session.paused_at)
-            : now) -
-            Date.parse(session.start_time)) /
-            1000 -
-            session.paused_duration_seconds,
+      return;
+    const locked = !!checked[currentQuestion.id];
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (busyRef.current || document.querySelector('[role="dialog"]')) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "input, textarea, select, [contenteditable='true']",
         )
-    : 0;
+      ) {
+        return;
+      }
+      if (
+        !locked &&
+        currentQuestion.options &&
+        currentQuestion.options.length > 0 &&
+        /^[1-9]$/.test(event.key)
+      ) {
+        const idx = Number(event.key) - 1;
+        const opt = currentQuestion.options[idx];
+        if (!opt) return;
+        event.preventDefault();
+        const cur = drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion);
+        if (currentQuestion.type === "single_choice") {
+          updateAnswer(currentQuestion, { kind: "choice", option_ids: [opt.id] });
+        } else {
+          const list = cur.kind === "choice" ? cur.option_ids : [];
+          updateAnswer(currentQuestion, {
+            kind: "choice",
+            option_ids: list.includes(opt.id)
+              ? list.filter((x) => x !== opt.id)
+              : [...list, opt.id],
+          });
+        }
+      } else if (event.key === "Enter" && !locked) {
+        if (
+          target?.closest(
+            "button, a, summary, [role='button'], [role='radio'], [role='checkbox'], [role='tab'], [role='menuitem']",
+          )
+        ) {
+          return;
+        }
+        event.preventDefault();
+        void checkCurrent();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [session, currentQuestion, checked, drafts, index]);
+
+  /* Inject Study Rail into App Sidebar (no divider lines!) */
   useEffect(() => {
+    if (!session || session.status === "completed") {
+      onRail(null);
+      return;
+    }
+    const answeredCount = session.items.filter((item) => {
+      if (session.mode === "practice") return !!checked[item.question.id];
+      return hasAnswer(drafts[item.question.id]);
+    }).length;
+    const anchorMs =
+      session.status === "paused" && session.paused_at
+        ? Date.parse(session.paused_at)
+        : nowMs;
+    const elapsedSeconds = Math.max(
+      0,
+      Math.floor((anchorMs - Date.parse(session.start_time)) / 1000) -
+        (session.paused_duration_seconds ?? 0),
+    );
+    const displayedSeconds =
+      deadlineMs !== null
+        ? Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000))
+        : elapsedSeconds;
+    const paperTitle = session.paper_name ?? paperMeta?.name ?? "试卷作答";
+
     onRail(
-      session ? (
-        <div className="study-side">
-          <Button
-            className="quiet small study-exit"
-            onClick={() => navigate({ page: "records" })}
-          >
-            <Icon name="back" />
-            退出答题
-          </Button>
-          <h2 className="study-name">{session.paper_name ?? "套题"}</h2>
-          <p className="study-mode">
-            {session.mode === "exam" ? "考试模式" : "练习模式"}
-          </p>
-          <div className="study-session-controls">
-            <span className="small muted">
-              {session.mode === "exam" && deadline ? "剩余时间" : "已用时"}
-            </span>
-            <span className="study-timer" data-dynamic-date="duration">
-              {formatTime(
-                session.mode === "exam" && deadline
-                  ? (deadline - now) / 1000
-                  : elapsed,
-              )}
-            </span>
-            <div className="actions">
-              <Button
-                className="compact"
-                disabled={busy}
-                onClick={() =>
-                  void act(async () =>
-                    setSession(await client.sessions.pause(id)),
-                  )
-                }
-              >
-                暂停
-              </Button>
-              <Button
-                className="compact"
-                primary={session.mode === "exam"}
-                disabled={busy}
-                onClick={() => {
-                  confirmation.ask(
-                    session.mode === "exam"
-                      ? "确认交卷？"
-                      : "结束本次练习？未提交的题目不计入作答量。",
-                    () => void act(finish),
-                  );
-                }}
-              >
-                {session.mode === "exam" ? "交卷" : "结束练习"}
-              </Button>
-            </div>
-          </div>
-          <p className="small muted nav-status-label">题目导航</p>
-          <div className="nav-state-legend">
-            <span>
-              <i className="current" />
-              当前
-            </span>
-            <span>
-              <i className="filled" />
-              {session.mode === "exam" ? "已填" : "已答"}
-            </span>
-            <span>
-              <i />
-              {session.mode === "exam" ? "未填" : "未答"}
+      <div className="space-y-5 px-0.5 text-[13px]">
+        <div className="space-y-2 rounded-lg bg-card/85 p-3 shadow-[0_1px_2px_rgba(23,27,25,0.04)]">
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant={session.mode === "exam" ? "warning" : "info"}>
+              {session.mode === "exam" ? "考试模式" : "练习模式"}
+            </Badge>
+            <span
+              className="font-mono text-[13px] font-semibold text-foreground tabular-nums"
+              data-dynamic-date="duration"
+            >
+              {formatTime(displayedSeconds)}
             </span>
           </div>
-          <div className="question-nav">
+          <div className="truncate font-serif text-[14.5px] font-semibold text-foreground">
+            {paperTitle}
+          </div>
+          <div className="text-[12px] text-muted-foreground tabular-nums">
+            已答 {answeredCount} / {session.items.length} 题
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="px-1 text-[11.5px] font-semibold text-muted-foreground">
+            题目导航
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
             {session.items.map((item, i) => {
-              const question = item.question;
-              const filled =
-                session.mode === "exam"
-                  ? hasAnswer(drafts[question.id])
-                  : !redo.includes(question.id) &&
-                    session.records.some(
-                      (record) => record.question_id === question.id,
-                    );
+              const check = checked[item.question.id];
+              const isCurrent = session.mode === "practice" && i === index;
+              const done =
+                session.mode === "practice"
+                  ? !!check
+                  : hasAnswer(drafts[item.question.id]);
               return (
                 <button
-                  type="button"
                   key={item.id}
-                  className={`${i === index ? "current" : ""} ${filled ? "filled" : ""}`}
-                  aria-current={i === index ? "step" : undefined}
-                  aria-label={`第${i + 1}题 ${filled ? "已答" : "未答"}`}
-                  onClick={() => move(i)}
+                  type="button"
+                  aria-label={`第 ${i + 1} 题`}
+                  onClick={() => {
+                    if (session.mode === "practice") {
+                      go(i);
+                    } else {
+                      document
+                        .getElementById(`exam-q-${i}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  }}
+                  className={cn(
+                    "flex h-8 items-center justify-center rounded-md border text-[12px] font-medium tabular-nums transition-all",
+                    isCurrent
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : check
+                        ? check.correct === null
+                          ? "border-border bg-accent text-accent-foreground"
+                          : check.correct
+                            ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                            : "border-[var(--error-border)] bg-[var(--error-bg)] text-[var(--error-fg)]"
+                        : done
+                          ? "border-[var(--selection-border)] bg-[var(--selection-bg)] text-[var(--selection-ink)]"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                  )}
                 >
-                  {String(i + 1).padStart(2, "0")}
+                  {i + 1}
                 </button>
               );
             })}
           </div>
         </div>
-      ) : null,
-    );
-    return () => onRail(null);
-  }, [session, index, drafts, now, busy, redo]);
-  return (
-    <>
-      {confirmation.dialog}
-      <Notice error={error || message} loading={!session} />
-      {message && (
-        <Button
-          onClick={() => {
-            queue.current = Promise.resolve();
-            void act(async () => {
-              if (!session) return;
-              for (const [question_id, user_answer] of Object.entries(drafts)) {
-                if (
-                  session.mode === "practice" &&
-                  session.records.some((r) => r.question_id === question_id)
-                )
-                  continue;
-                await client.sessions.saveDraft(id, {
-                  question_id,
-                  user_answer,
-                  current_index: index,
-                });
-              }
-              setMessage("草稿已保存");
-            });
-          }}
-        >
-          重试保存草稿
-        </Button>
-      )}
-      {session && session.status !== "paused" && (
-        <div className="study-content">
-          {session.mode === "exam" && (
-            <p className="muted small space-bottom-6">
-              交卷前可以修改答案，提交后查看答案与解析。
-            </p>
-          )}
-          <div className={session.mode === "exam" ? "exam-list" : undefined}>
-            {session.items
-              .filter((_, i) => session.mode === "exam" || i === index)
-              .map((item) => {
-                const q = item.question;
-                const record = session.records
-                  .filter((r) => r.question_id === q.id)
-                  .sort((a, b) => b.attempt_index - a.attempt_index)[0];
-                const locked = !!record && !redo.includes(q.id);
-                return (
-                  <article
-                    id={`question-${session.items.indexOf(item)}`}
-                    className={`card question-card study-question-card ${session.mode === "exam" ? "exam-question-card" : ""}`}
-                    key={q.id}
-                  >
-                    <header className="study-info">
-                      <span>
-                        第 {session.items.indexOf(item) + 1} /{" "}
-                        {session.items.length} 题
-                      </span>
-                      <span className="question-meta">
-                        <span>
-                          {types.find((type) => type.id === q.type)?.name} ·{" "}
-                          {q.max_score ? `${q.max_score}分` : "不自动判分"}
-                        </span>
-                        {locked && (
-                          <span
-                            className={`result-status ${record.is_correct === 0 ? "incorrect" : ""}`}
-                          >
-                            {record.score === null
-                              ? "已查看"
-                              : `${record.score} / ${q.max_score} 分`}
-                          </span>
-                        )}
-                      </span>
-                    </header>
-                    <div className="question-stem">
-                      {q.material && <Markdown text={q.material} />}
-                      <div className="question-text">
-                        <Markdown text={q.content} />
-                      </div>
-                    </div>
-                    <div className="question-response">
-                      {!q.options && (
-                        <div className="response-label">填写答案</div>
-                      )}
-                      <Answer
-                        q={q}
-                        answer={
-                          locked
-                            ? record.answer
-                            : (drafts[q.id] ?? emptyAnswer(q))
-                        }
-                        locked={locked || busy}
-                        reveal={locked}
-                        onChange={(a) => change(q, a)}
-                      />
-                      {session.mode === "practice" && (
-                        <div className="study-actions">
-                          <Button
-                            disabled={busy}
-                            onClick={() => {
-                              if (locked) {
-                                setRedo([...redo, q.id]);
-                                setDrafts({
-                                  ...drafts,
-                                  [q.id]: emptyAnswer(q),
-                                });
-                              } else
-                                void act(async () => {
-                                  try {
-                                    await client.sessions.submitQuestion(id, {
-                                      question_id: q.id,
-                                      answer: drafts[q.id] ?? emptyAnswer(q),
-                                      attempt_index:
-                                        (record?.attempt_index ?? 0) + 1,
-                                    });
-                                  } catch (error) {
-                                    const recovered =
-                                      await client.sessions.get(id);
-                                    if (
-                                      !recovered.records.some(
-                                        (r) =>
-                                          r.question_id === q.id &&
-                                          r.attempt_index ===
-                                            (record?.attempt_index ?? 0) + 1,
-                                      )
-                                    )
-                                      throw error;
-                                  }
-                                  setSession(await client.sessions.get(id));
-                                  setRedo(redo.filter((v) => v !== q.id));
-                                });
-                            }}
-                          >
-                            {locked ? "重新作答" : "查看答案"}
-                          </Button>
-                          <div className="actions study-navigation">
-                            <Button
-                              disabled={index === 0 || busy}
-                              onClick={() => move(index - 1)}
-                            >
-                              上一题
-                            </Button>
-                            <Button
-                              primary
-                              disabled={
-                                index === session.items.length - 1 || busy
-                              }
-                              onClick={() => move(index + 1)}
-                            >
-                              下一题
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      {locked &&
-                        ["subjective", "free_fill_in_blank"].includes(
-                          q.type,
-                        ) && (
-                          <Button
-                            onClick={() =>
-                              void act(async () => {
-                                await client.mistakes.manual(id, record.id);
-                                setMessage("已加入错题本");
-                              })
-                            }
-                          >
-                            加入错题本
-                          </Button>
-                        )}
-                    </div>
-                  </article>
-                );
-              })}
-          </div>
-        </div>
-      )}
-      {session?.status === "paused" && (
-        <PauseScreen
-          resume={() =>
-            void act(async () => setSession(await client.sessions.resume(id)))
-          }
-          exit={() => navigate({ page: "records" })}
-          busy={busy}
-        />
-      )}
-    </>
-  );
-}
 
-function PauseScreen({
-  resume,
-  exit,
-  busy,
-}: {
-  resume: () => void;
-  exit: () => void;
-  busy: boolean;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current!;
-    if (typeof element.showModal === "function") element.showModal();
-    else element.setAttribute("open", "");
-    return () => {
-      if (typeof element.close === "function") element.close();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={dialog}
-      className="pause-screen"
-      aria-modal="true"
-      aria-label="答题已暂停"
-      onCancel={(event) => event.preventDefault()}
-    >
-      <div>
-        <div className="pause-mark">
-          <Icon name="pause" />
-        </div>
-        <div className="serif">休息一下，再继续。</div>
-        <p>计时已暂停，答题内容已遮挡。</p>
-        <Button primary disabled={busy} onClick={resume}>
-          继续答题
-        </Button>
-        <div className="space-top-4">
-          <Button className="quiet" onClick={exit}>
-            返回学习记录
+        <div className="flex flex-col gap-2 pt-2">
+          <Button
+            ref={pauseButtonRef}
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={busy || session.status !== "in_progress"}
+            onClick={() => void pauseSession()}
+          >
+            暂停
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() =>
+              confirm.ask(
+                session.mode === "exam"
+                  ? "确认交卷？"
+                  : "确认结束本次练习吗？",
+                () =>
+                  void (session.mode === "exam"
+                    ? submitExam()
+                    : finishPractice()),
+              )
+            }
+          >
+            {session.mode === "exam" ? "交卷" : "结束练习"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() => void exitStudy()}
+          >
+            退出答题
           </Button>
         </div>
+      </div>,
+    );
+    return () => onRail(null);
+  }, [session, paperMeta, drafts, checked, index, nowMs, busy, deadlineMs]);
+
+  if (error || !session || session.status === "completed") {
+    return (
+      <div className="space-y-4">
+        <Notice
+          error={error}
+          loading={!error && (!session || session.status === "completed")}
+        />
+        {error && (
+          <Button variant="outline" onClick={reload}>
+            重试加载
+          </Button>
+        )}
       </div>
-    </dialog>
+    );
+  }
+
+  if (session.status === "paused") {
+    return (
+      <PauseScreen
+        mode={session.mode}
+        error={message}
+        busy={busy}
+        onResume={() => void resumeSession()}
+        onExit={() => navigate({ page: "records" })}
+      />
+    );
+  }
+
+  const canManualMistake =
+    currentQuestion &&
+    ["subjective", "free_fill_in_blank"].includes(currentQuestion.type);
+
+  const reference = currentQuestion ? referenceText(currentQuestion) : undefined;
+
+  return (
+    <div className="space-y-6">
+      <Notice error={message} loading={false} />
+      {draftError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3.5 py-2.5 text-[13px] text-[var(--error-fg)]"
+        >
+          <span>草稿保存失败：{draftError}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void retryDraft()}
+          >
+            重试保存草稿
+          </Button>
+        </div>
+      )}
+
+      {session.mode === "practice" && currentQuestion ? (
+        /* Practice Mode: Reimagined Left-Right Split */
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          {/* Left Column: Calm Metadata + Shared Material + Regular-Weight Serif Stem */}
+          <div className="min-w-0 space-y-5">
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+              <Badge variant="outline">
+                第 {index + 1} / {session.items.length} 题
+              </Badge>
+              <span>
+                {types.find((t) => t.id === currentQuestion.type)?.name ??
+                  currentQuestion.type}
+              </span>
+              <span className="tabular-nums">
+                ·{" "}
+                {currentQuestion.max_score !== undefined
+                  ? `${currentQuestion.max_score} 分`
+                  : "不计分"}
+              </span>
+            </div>
+
+            {currentQuestion.material && (
+              <div className="rounded-xl bg-muted/65 px-4 py-3.5 text-[14.5px] leading-[1.75] text-foreground/90">
+                <Markdown text={currentQuestion.material} />
+              </div>
+            )}
+
+            <div className="question-stem font-serif text-[19px] leading-[1.82] font-normal text-foreground">
+              <Markdown text={currentQuestion.content} />
+            </div>
+          </div>
+
+          {/* Right Column: Options + Feedback + 3 Bare Buttons (No Dock Card) */}
+          <div className="min-w-0 space-y-5">
+            <Answer
+              q={currentQuestion}
+              answer={
+                currentCheck
+                  ? currentCheck.answer
+                  : (drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion))
+              }
+              locked={!!currentCheck || busy}
+              reveal={!!currentCheck}
+              onChange={(val) => updateAnswer(currentQuestion, val)}
+            />
+
+            {currentCheck && (
+              <div className="space-y-2 rounded-xl bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <StatusPill
+                    state={
+                      currentCheck.correct === null
+                        ? "in_progress"
+                        : currentCheck.correct
+                          ? "completed"
+                          : "disabled"
+                    }
+                  >
+                    {currentCheck.correct === null
+                      ? "非自动判分 · 已开放参考答案"
+                      : currentCheck.correct
+                        ? `回答正确 · +${currentCheck.score ?? 0} 分`
+                        : `本题得分 ${currentCheck.score ?? 0} / ${currentQuestion.max_score} 分`}
+                  </StatusPill>
+                  {canManualMistake && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void addMistake(currentCheck.recordId)}
+                    >
+                      加入错题本
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <span className="font-semibold text-primary">参考答案：</span>
+                  {reference ? (
+                    <div className="text-foreground/90">
+                      <Markdown text={reference} />
+                    </div>
+                  ) : (
+                    <span className="text-foreground/90">暂无参考答案</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 3 bare action buttons directly underneath — NO outer wrapping card */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <Button
+                variant="outline"
+                disabled={busy || index === 0}
+                onClick={() => go(index - 1)}
+              >
+                上一题
+              </Button>
+              {currentCheck ? (
+                <Button variant="default" disabled={busy} onClick={redoCurrent}>
+                  重新作答
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  disabled={busy}
+                  onClick={() => void checkCurrent()}
+                >
+                  查看答案
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                disabled={busy || index >= session.items.length - 1}
+                onClick={() => go(index + 1)}
+              >
+                下一题
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Exam Mode: Full Paper Scroll */
+        <div className="space-y-5">
+          {session.items.map((item, i) => {
+            const q = item.question;
+            return (
+              <Card key={item.id} id={`exam-q-${i}`} as="section" className="p-6">
+                <div className="mb-3 flex items-center gap-2 text-[12.5px] text-muted-foreground">
+                  <Badge variant="outline" className="tabular-nums">
+                    第 {i + 1} 题
+                  </Badge>
+                  <span>
+                    {types.find((t) => t.id === q.type)?.name ?? q.type} ·{" "}
+                    {q.max_score !== undefined ? `${q.max_score} 分` : "不计分"}
+                  </span>
+                </div>
+                {q.material && (
+                  <div className="mb-4 rounded-lg bg-muted/65 px-4 py-3 text-[14px] leading-relaxed">
+                    <Markdown text={q.material} />
+                  </div>
+                )}
+                <div className="question-stem mb-4 font-serif text-[18px] leading-[1.78] font-normal text-foreground">
+                  <Markdown text={q.content} />
+                </div>
+                <Answer
+                  q={q}
+                  answer={drafts[q.id] ?? emptyAnswer(q)}
+                  locked={busy}
+                  reveal={false}
+                  onChange={(val) => updateAnswer(q, val)}
+                />
+              </Card>
+            );
+          })}
+        </div>
+      )}
+      {confirm.dialog}
+    </div>
   );
 }
 
 export function Result({
   id,
-  navigate = () => {},
+  navigation,
+  onBack,
 }: {
   id: string;
-  navigate?: (r: Route) => void;
+  navigation?: NavigationProps;
+  onBack?: () => void;
 }) {
   const { data, error } = useLoad(() => client.sessions.get(id), [id]);
-  const [filter, setFilter] = useViewState("result-filter", "all");
-  if (data && data.status !== "completed") {
-    return (
-      <section className="empty">
-        <h1>答题尚未结束</h1>
-        <Button onClick={() => navigate({ page: "study", id })}>
-          继续答题
-        </Button>
-      </section>
-    );
-  }
-  const entries =
-    data?.items.map(({ id, question }, index) => ({
-      id,
-      question,
-      index,
-      record: data.records
-        .filter((entry) => entry.question_id === question.id)
-        .sort((a, b) => b.attempt_index - a.attempt_index)[0],
-    })) ?? [];
-  const rows = entries.filter(
-    ({ record }) =>
-      filter === "all" ||
-      (filter === "unanswered" ? !record : !record || record.is_correct === 0),
+  const [filter, setFilter] = useState<"all" | "missed" | "unanswered">("all");
+
+  const records = useMemo(() => {
+    const map = new Map<string, RecordView>();
+    for (const r of data?.records ?? []) {
+      const prev = map.get(r.question_id);
+      if (!prev || r.attempt_index >= prev.attempt_index) {
+        map.set(r.question_id, r);
+      }
+    }
+    return map;
+  }, [data?.records]);
+
+  const items = data?.items ?? [];
+  const obtained = items.reduce(
+    (sum, item) => sum + (records.get(item.question.id)?.score ?? 0),
+    0,
   );
+  const totalScore = items.reduce(
+    (sum, item) => sum + (item.question.max_score ?? 0),
+    0,
+  );
+
+  const rows = items
+    .map((item, idx) => ({ item, number: idx + 1 }))
+    .filter(({ item }) => {
+      const r = records.get(item.question.id);
+      const maxScore = item.question.max_score;
+      if (filter === "missed") {
+        return !r || (maxScore !== undefined && (r.score ?? 0) < maxScore);
+      }
+      if (filter === "unanswered") return !r;
+      return true;
+    });
+
   return (
-    <>
-      <div className="page-heading">
-        <h1>答题结果</h1>
-        <Button onClick={() => navigate({ page: "records" })}>
-          返回学习记录
-        </Button>
-      </div>
-      <Notice error={error} loading={!data} />
+    <div className="space-y-6">
+      {(navigation || onBack) && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {navigation ? <NavigationControls {...navigation} /> : <span />}
+          {onBack && (
+            <Button variant="outline" size="sm" onClick={onBack}>
+              返回练习记录
+            </Button>
+          )}
+        </div>
+      )}
+
+      <Notice error={error} loading={!data && !error} />
+
       {data && (
         <>
-          <div className="result-hero">
-            <div>
-              <span className="muted">
-                {data.mode === "exam" ? "考试" : "练习"}已结束
-              </span>
-              <h2 className="space-y-2">{data.paper_name ?? "历史套题"}</h2>
-              <div className="actions muted small">
-                <span>
-                  已完成 {entries.filter(({ record }) => record).length} /{" "}
-                  {entries.length} 题
-                </span>
-                <span>
-                  正确{" "}
-                  {entries.filter(({ record }) => !!record?.is_correct).length}{" "}
-                  题
-                </span>
-                <span>
-                  用时{" "}
+          <Card className="result-hero p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <Badge variant={data.mode === "exam" ? "warning" : "info"}>
+                  {data.mode === "exam" ? "考试成绩报告" : "练习完成报告"}
+                </Badge>
+                <h1 className="m-0 font-serif text-[26px] font-semibold text-foreground">
+                  {data.paper_name ?? "成绩报告"}
+                </h1>
+                <p className="m-0 text-[13px] text-muted-foreground tabular-nums">
+                  总用时{" "}
                   <span data-dynamic-date="duration">
                     {formatTime(data.effective_duration_seconds)}
-                  </span>
-                </span>
-                <span>累计 {data.records.length} 次作答</span>
+                  </span>{" "}
+                  · 共 {items.length} 题
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-[12px] text-muted-foreground">最终得分</div>
+                <div className="score font-serif text-[38px] leading-none font-normal text-primary tabular-nums">
+                  {obtained} / {totalScore} 分
+                </div>
               </div>
             </div>
-            <div className="score">
-              {entries.reduce(
-                (sum, { record }) => sum + (record?.score ?? 0),
-                0,
-              )}
-              <span className="unit">
-                /{" "}
-                {entries.reduce(
-                  (sum, { question }) => sum + (question.max_score ?? 0),
-                  0,
-                )}{" "}
-                分
-              </span>
-            </div>
-          </div>
-          <div className="toolbar">
-            <div
-              className="tabs result-tabs"
-              role="group"
-              aria-label="结果筛选"
-            >
-              {[
+          </Card>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Segmented
+              label="题目筛选"
+              options={[
                 ["all", "全部题目"],
-                ["incorrect", "未满分与未作答"],
+                ["missed", "未满分与未作答"],
                 ["unanswered", "未作答"],
-              ].map(([value, label]) => (
-                <button
-                  type="button"
-                  className={`button tab ${filter === value ? "active" : ""}`}
-                  key={value}
-                  aria-pressed={filter === value}
-                  onClick={() => setFilter(value!)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <Button
-              className="quiet"
-              onClick={() => navigate({ page: "mistakes" })}
-            >
-              打开错题本 <Icon name="forward" />
-            </Button>
-          </div>
-          {rows.map(({ id, question, record, index }) => (
-            <article className="result-row" key={id}>
-              <div className="study-info">
-                <span>
-                  第 {index + 1} 题 ·{" "}
-                  {types.find((type) => type.id === question.type)?.name}
-                </span>
-                <span>
-                  {record ? `得分 ${record.score ?? "不自动判分"}` : "未作答"}
-                </span>
-              </div>
-              <div className="question-text">
-                <Markdown text={question.content} />
-              </div>
-              <details className="space-top-3">
-                <summary>答案与解析</summary>
-                <Answer
-                  q={question}
-                  answer={record?.answer ?? emptyAnswer(question)}
-                  locked
-                  reveal
-                  onChange={() => {}}
-                />
-              </details>
-            </article>
-          ))}
-          {!rows.length && (
-            <EmptyState
-              title="没有符合条件的题目"
-              detail="切换筛选查看其他题目。"
+              ]}
+              value={filter}
+              onChange={(v) => setFilter(v as typeof filter)}
             />
-          )}
+          </div>
+
+          <div className="space-y-4">
+            {rows.map(({ item, number }) => {
+              const q = item.question;
+              const r = records.get(q.id);
+              const maxScore = q.max_score;
+              const graded = maxScore !== undefined && r && r.score !== null;
+              const score = r?.score ?? 0;
+              const full = graded && score >= maxScore;
+              const refText = referenceText(q);
+
+              return (
+                <Card key={item.id} className="p-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+                      <Badge variant="outline" className="tabular-nums">
+                        第 {number} 题
+                      </Badge>
+                      <span>{types.find((t) => t.id === q.type)?.name ?? q.type}</span>
+                    </div>
+                    <StatusPill
+                      state={
+                        !r
+                          ? "disabled"
+                          : !graded
+                            ? "in_progress"
+                            : full
+                              ? "completed"
+                              : "disabled"
+                      }
+                    >
+                      {!r
+                        ? "未作答"
+                        : !graded
+                          ? "非自动判分"
+                          : `得分 ${score} / ${maxScore}`}
+                    </StatusPill>
+                  </div>
+                  <div className="mb-3 font-serif text-[17px] leading-[1.75] font-normal text-foreground">
+                    <Markdown text={q.content} />
+                  </div>
+                  {r && (
+                    <Answer
+                      q={q}
+                      answer={r.answer}
+                      locked
+                      reveal
+                      onChange={() => {}}
+                    />
+                  )}
+                  <details className="mt-3 rounded-lg bg-[#f3f5ef] px-3.5 py-2.5 text-[13px]">
+                    <summary className="font-medium text-primary">
+                      {r ? "参考答案" : "答案与解析"}
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                      <div className="space-y-1">
+                        <span className="font-semibold">参考答案：</span>
+                        {refText ? (
+                          <div className="text-foreground/90">
+                            <Markdown text={refText} />
+                          </div>
+                        ) : (
+                          <span>暂无参考答案</span>
+                        )}
+                      </div>
+                      {!r && q.explanation && (
+                        <div className="text-muted-foreground">
+                          <span className="font-semibold text-foreground/80">
+                            解析：
+                          </span>
+                          <Markdown text={q.explanation} />
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                </Card>
+              );
+            })}
+          </div>
         </>
       )}
-    </>
+    </div>
   );
 }

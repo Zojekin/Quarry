@@ -84,7 +84,7 @@ describe("Workspace and study interactions", () => {
     expect(tagColorStyle(null, "地球科学")).toEqual(tagColorStyle(null, "地球科学"));
     expect(tagColorStyle(null, "地球科学")).toMatchObject({ "--tag-ink": "#253128" });
   });
-  it("keeps a multi-select menu mounted and distinguishes all from none", () => {
+  it("keeps a multi-select menu mounted and distinguishes all from none", async () => {
     function Example() {
       const [value, setValue] = useState<string[]>();
       return (
@@ -100,16 +100,15 @@ describe("Workspace and study interactions", () => {
       );
     }
     render(<Example />);
-    const all = screen.getByLabelText("全选");
+    fireEvent.click(screen.getByRole("button", { name: "题型" }));
+    const all = await screen.findByLabelText("全选");
     fireEvent.click(all);
     expect(screen.getByText("未选择")).toBeTruthy();
-    expect((screen.getByLabelText("甲") as HTMLInputElement).checked).toBe(
-      false,
-    );
+    expect(screen.getByLabelText("甲").getAttribute("aria-checked")).toBe("false");
     fireEvent.click(screen.getByLabelText("甲"));
     fireEvent.click(screen.getByLabelText("乙"));
-    expect(screen.getByText("题型")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "题型" }).textContent).toContain("题型");
     expect(screen.getByLabelText("全选")).toBe(all);
-    expect((all as HTMLInputElement).checked).toBe(true);
+    expect(all.getAttribute("aria-checked")).toBe("true");
   });
 });
