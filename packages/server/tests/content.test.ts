@@ -173,6 +173,78 @@ describe('questions and dual tags', () => {
 });
 
 describe('paper composer and source following', () => {
+  it.each(['parent first', 'child first'])('shares one material parent snapshot when adding %s', async order => {
+    const b = await bank();
+    const parent = await createQuestion(b.id, { content: 'Q1', material: 'Shared passage' });
+    const child = await createQuestion(b.id, { content: 'Q2', material_parent_id: parent.id });
+    const other = await createQuestion(b.id, { content: 'Other' });
+    const [first, second] = order === 'parent first' ? [parent, child] : [child, parent];
+    let paper = await request('/papers', 'POST', { name: 'Material' }, 201);
+    const add = (source_question_id: string) => request(`/papers/${paper.id}/items`, 'POST', { source_question_id }, 201);
+    paper = await add(first.id);
+    const firstCopy = paper.sections[0].items[0].question;
+    const parentCopyId = order === 'parent first' ? firstCopy.id : firstCopy.material_parent_id;
+    await add(other.id);
+    paper = await add(second.id);
+    const items = paper.sections[0].items;
+    expect(items.map(item => item.source_question_id)).toEqual([first.id, second.id, other.id]);
+    expect(items.find(item => item.source_question_id === parent.id).question.id).toBe(parentCopyId);
+    expect(items.find(item => item.source_question_id === child.id).question.material_parent_id).toBe(parentCopyId);
+    expect(await request(`/questions?paper_id=${paper.id}`)).toHaveLength(3);
+  });
+
+  it('reuses a child-first snapshot in one composition while allowing a separate selection of the same source', async () => {
+    const b = await bank();
+    const parent = await createQuestion(b.id, { material: 'Shared passage' });
+    const child = await createQuestion(b.id, { material_parent_id: parent.id });
+    const paper = await request('/papers', 'POST', { name: 'Material', sections: [{
+      title: 'Questions', question_type: 'subjective',
+      items: [child.id, parent.id, parent.id].map(source_question_id => ({ source_question_id })),
+    }] }, 201);
+    const [childItem, parentItem, duplicateItem] = paper.sections[0].items;
+    expect(childItem.question.material_parent_id).toBe(parentItem.question.id);
+    expect(duplicateItem.question.id).not.toBe(parentItem.question.id);
+    expect(await request(`/questions?paper_id=${paper.id}`)).toHaveLength(3);
+  });
+
+  it('rejects reversing or separating a material parent and child in the same section', async () => {
+    const b = await bank();
+    const parent = await createQuestion(b.id, { material: 'Shared passage' });
+    const child = await createQuestion(b.id, { material_parent_id: parent.id });
+    const other = await createQuestion(b.id);
+    const config = { id: randomUUID(), title: 'Questions', question_type: 'subjective' };
+    const paper = await request('/papers', 'POST', { name: 'Material', sections: [{ ...config,
+      items: [parent.id, child.id, other.id].map(source_question_id => ({ source_question_id })),
+    }] }, 201);
+    const [first, second, third] = paper.sections[0].items.map(item => ({ id: item.id }));
+    for (const items of [[second, first, third], [first, third, second]])
+      await request(`/papers/${paper.id}`, 'PUT', { sections: [{ ...config, items }] }, 400);
+    expect((await request(`/papers/${paper.id}`)).sections[0].items.map(item => ({ id: item.id })))
+      .toEqual([first, second, third]);
+  });
+
+  it('composes material questions across question types and retains material when removing the parent item', async () => {
+    const b = await bank();
+    const parent = await createQuestion(b.id, { material: 'Shared passage' }, 'single_choice');
+    const child = await createQuestion(b.id, { material_parent_id: parent.id }, 'strict_fill_in_blank');
+    const paper = await request('/papers', 'POST', { name: 'Mixed types', sections: [
+      { title: 'Choices', question_type: 'single_choice', items: [{ source_question_id: parent.id }] },
+      { title: 'Blanks', question_type: 'strict_fill_in_blank', items: [{ source_question_id: child.id }] },
+    ] }, 201);
+    const first = paper.sections[0].items[0];
+    const second = paper.sections[1].items[0];
+    expect(second.question.material_parent_id).toBe(first.question.id);
+    const sections = paper.sections.map(({ id, title, question_type, items }) =>
+      ({ id, title, question_type, items: items.map(item => ({ id: item.id })) }));
+    await request(`/papers/${paper.id}`, 'PUT', { sections: [...sections].reverse() });
+
+    await request(`/papers/${paper.id}/items/${first.id}`, 'DELETE');
+    expect(await request(`/questions/${first.question.id}`)).toMatchObject({ material: 'Shared passage' });
+    const restored = await request(`/papers/${paper.id}/items`, 'POST', { source_question_id: parent.id }, 201);
+    expect(restored.sections[1].items[0].question.id).toBe(first.question.id);
+    expect(await request(`/questions?paper_id=${paper.id}`)).toHaveLength(2);
+  });
+
   it('keeps material siblings together and preserves their relative order on recomposition', async () => {
     const b = await bank();
     const parent = await createQuestion(b.id, { material: 'Shared passage' });

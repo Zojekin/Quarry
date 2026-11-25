@@ -5,7 +5,7 @@ import type { StudyAnswer } from '@quarry/shared';
 import { scoreQuestion, shuffle, shuffleOptions, shuffleSection, splitDurationAcrossMidnight } from '@quarry/core';
 import { z } from 'zod';
 import { found, invalid, parse } from './common.js';
-import { PaperService } from './paper.service.js';
+import { materialGroups, PaperService } from './paper.service.js';
 import type { QuestionView } from './question.service.js';
 import { MistakeService } from './mistake.service.js';
 
@@ -58,14 +58,10 @@ export class SessionService {
     // Material sibling blocks and fixed groups are unioned into atomic shuffle units.
     const sections = paper.sections.map(section => {
       const groups = section.fixed_groups.map(g => [...g]);
-      const parents = new Map<string, string[]>();
-      for (const item of section.items) if (item.question.material_parent_id) {
-        const group = parents.get(item.question.material_parent_id) ?? [];
-        group.push(item.id); parents.set(item.question.material_parent_id, group);
-      }
-      for (const siblings of parents.values()) {
-        const overlap = groups.filter(g => g.some(id => siblings.includes(id)));
-        const merged = new Set([...siblings, ...overlap.flat()]);
+      for (const members of materialGroups(section.items).values()) {
+        const memberIds = new Set(members.map(item => item.id));
+        const overlap = groups.filter(group => group.some(id => memberIds.has(id)));
+        const merged = new Set([...memberIds, ...overlap.flat()]);
         for (const group of overlap) groups.splice(groups.indexOf(group), 1);
         groups.push(section.items.filter(i => merged.has(i.id)).map(i => i.id));
       }
@@ -89,9 +85,11 @@ export class SessionService {
       });
       let arranged = mergedIds || section.shuffle_questions ? shuffle(units, seed) : units;
       if (paper.shuffle_materials && !mergedIds && !section.shuffle_questions) {
-        const materials = shuffle(units.filter(unit => unit.some(i => i.question.material_parent_id)), seed);
+        const hasMaterial = (unit: Item[]) => unit.some(({ question }) =>
+          question.material_parent_id !== null || question.material !== null);
+        const materials = shuffle(units.filter(hasMaterial), seed);
         let cursor = 0;
-        arranged = units.map(unit => unit.some(i => i.question.material_parent_id) ? materials[cursor++]! : unit);
+        arranged = units.map(unit => hasMaterial(unit) ? materials[cursor++]! : unit);
       }
       return [{ items: arranged.flat() }];
     });
