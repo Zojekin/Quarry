@@ -10,9 +10,9 @@ import {
   within,
 } from "@testing-library/react";
 import { client } from "../src/api/client.js";
-import type { Mistake, Session, Tag } from "../src/api/client.js";
+import type { Mistake, Paper, QuestionView, Session, Tag } from "../src/api/client.js";
 import { App } from "../src/App.js";
-import { Library } from "../src/pages/Library.js";
+import { Detail, Library } from "../src/pages/Library.js";
 import { Mistakes, Records, Settings } from "../src/pages/Learning.js";
 import { Result, Study } from "../src/pages/Study.js";
 import { PromptDialog } from "../src/components/ui.js";
@@ -677,12 +677,30 @@ it("keeps an earlier failed question draft alert visible across index saves and 
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 
-it("drains pending saves and pauses an in-progress session on exit and on unmount", async () => {
+it("drains queued answers before pausing on exit and on unmount", async () => {
   vi.spyOn(client.sessions, "get").mockResolvedValue(session);
   vi.spyOn(client.papers, "list").mockResolvedValue([]);
-  const pause = vi
-    .spyOn(client.sessions, "pause")
-    .mockResolvedValue({ ...session, status: "paused" });
+  let releaseFirst!: () => void;
+  const saveOrder: string[] = [];
+  const saveDraft = vi
+    .spyOn(client.sessions, "saveDraft")
+    .mockImplementationOnce(
+      (_id, payload) =>
+        new Promise<Session>((resolve) => {
+          saveOrder.push(
+            `draft:${JSON.stringify(payload.user_answer)}`,
+          );
+          releaseFirst = () => resolve(session);
+        }),
+    )
+    .mockImplementation(async (_id, payload) => {
+      saveOrder.push(`draft:${JSON.stringify(payload.user_answer)}`);
+      return session;
+    });
+  const pause = vi.spyOn(client.sessions, "pause").mockImplementation(async () => {
+    saveOrder.push("pause");
+    return { ...session, status: "paused" };
+  });
   const navigate = vi.fn();
 
   function Harness() {
@@ -701,9 +719,212 @@ it("drains pending saves and pauses an in-progress session on exit and on unmoun
   expect(navigate).toHaveBeenCalledWith({ page: "records" });
   first.unmount();
   expect(pause).toHaveBeenCalledTimes(1);
+  saveOrder.length = 0;
 
   const second = render(<Study id="s" navigate={navigate} onRail={() => {}} />);
-  await screen.findByText("Pick one");
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("radio", { name: /Beta/ }));
   second.unmount();
+
+  expect(pause).toHaveBeenCalledTimes(1);
+  releaseFirst();
   await waitFor(() => expect(pause).toHaveBeenCalledTimes(2));
+  expect(saveDraft).toHaveBeenCalledTimes(2);
+  expect(saveOrder).toEqual([
+    'draft:{"kind":"choice","option_ids":["a"]}',
+    'draft:{"kind":"choice","option_ids":["b"]}',
+    "pause",
+  ]);
+});
+
+it("requires confirmation on exit when draft retry or pause fails instead of discarding answers", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue(session);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.sessions, "saveDraft").mockRejectedValue(
+    new Error("离线未同步"),
+  );
+  const pause = vi
+    .spyOn(client.sessions, "pause")
+    .mockResolvedValue({ ...session, status: "paused" });
+  const navigate = vi.fn();
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={navigate} onRail={setRail} />
+      </div>
+    );
+  }
+
+  render(<Harness />);
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  await screen.findByRole("alert");
+
+  fireEvent.click(screen.getByRole("button", { name: "退出答题" }));
+  const confirmDialog = await screen.findByRole("dialog");
+  expect(confirmDialog.textContent).toContain("存在未保存的草稿");
+  expect(navigate).not.toHaveBeenCalled();
+  expect(pause).not.toHaveBeenCalled();
+
+  fireEvent.click(within(confirmDialog).getByRole("button", { name: "确认" }));
+  expect(navigate).toHaveBeenCalledWith({ page: "records" });
+});
+
+it("renders practice reference answers via Markdown rather than literal source", async () => {
+  const mdSession: Session = {
+    ...session,
+    items: [
+      {
+        id: "i-md",
+        source_question_id: null,
+        question: {
+          id: "q-md",
+          version: 1,
+          owner_id: "p",
+          owner_type: "paper",
+          type: "subjective",
+          content: "Explain basalt",
+          reference_answer: "**关键术语**",
+          max_score: 5,
+          tag_ids: [],
+        },
+      },
+    ],
+  };
+  vi.spyOn(client.sessions, "get").mockResolvedValue(mdSession);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.sessions, "submitQuestion").mockResolvedValue({
+    id: "r-md",
+    question_id: "q-md",
+    attempt_index: 1,
+    score: null,
+    is_correct: null,
+    answer: { kind: "text", value: "ans" },
+    answered_at: "",
+  });
+
+  render(<Study id="s" navigate={() => {}} onRail={() => {}} />);
+  fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
+  const strong = await screen.findByText("关键术语");
+  expect(strong.tagName).toBe("STRONG");
+});
+
+it("filters bank questions by search, type, and tag and paper questions by search", async () => {
+  const q1: QuestionView = {
+    ...session.items[0]!.question,
+    id: "q1",
+    type: "single_choice",
+    content: "玄武岩成因",
+    tag_ids: ["tag-rock"],
+  };
+  const q2: QuestionView = {
+    ...session.items[0]!.question,
+    id: "q2",
+    type: "subjective",
+    content: "板块构造假说",
+    explanation: "地质动力学解释",
+    tag_ids: [],
+  };
+  const qTags: Tag[] = [
+    { id: "tag-rock", name: "岩石", target_type: "question", color: null },
+  ];
+  vi.spyOn(client.banks, "get").mockResolvedValue({
+    id: "b1",
+    folder_id: null,
+    name: "地理题库",
+    description: "",
+    tag_ids: [],
+    updated_at: "2026-11-25T00:00:00Z",
+  });
+  vi.spyOn(client.questions, "list").mockResolvedValue([q1, q2]);
+  vi.spyOn(client.tags, "list").mockImplementation(async (target) =>
+    target === "question" ? qTags : [],
+  );
+  vi.spyOn(client.folders, "list").mockResolvedValue([]);
+
+  const navProps = {
+    back: () => {},
+    forward: () => {},
+    home: () => {},
+    canBack: false,
+    canForward: false,
+  };
+  const bankRender = render(
+    <Detail
+      kind="bank"
+      id="b1"
+      navigate={() => {}}
+      navigation={navProps}
+      onTitle={() => {}}
+    />,
+  );
+  await screen.findByText("玄武岩成因");
+  expect(screen.getByText("板块构造假说")).toBeTruthy();
+
+  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+    target: { value: "地质动力学" },
+  });
+  expect(screen.queryByText("玄武岩成因")).toBeNull();
+  expect(screen.getByText("板块构造假说")).toBeTruthy();
+
+  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+    target: { value: "" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "题型" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "全选" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "单选题" }));
+  await waitFor(() => expect(screen.queryByText("板块构造假说")).toBeNull());
+  expect(screen.getByText("玄武岩成因")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "题目标签" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "全选" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "岩石" }));
+  expect(screen.getByText("玄武岩成因")).toBeTruthy();
+  bankRender.unmount();
+
+  const paperDoc: Paper = {
+    id: "p1",
+    folder_id: null,
+    parent_id: null,
+    name: "测试套题",
+    description: "",
+    status: "published",
+    mode: "exam",
+    time_limit_seconds: null,
+    total_score: 10,
+    tag_ids: [],
+    updated_at: "2026-11-25T00:00:00Z",
+    sections: [
+      {
+        id: "sec1",
+        title: "第一部分",
+        question_type: "single_choice",
+        shuffle_questions: false,
+        fixed_groups: [],
+        items: [
+          { id: "it1", source_question_id: null, question: q1 },
+          { id: "it2", source_question_id: null, question: q2 },
+        ],
+      },
+    ],
+  };
+  vi.spyOn(client.papers, "get").mockResolvedValue(paperDoc);
+  render(
+    <Detail
+      kind="paper"
+      id="p1"
+      navigate={() => {}}
+      navigation={navProps}
+      onTitle={() => {}}
+    />,
+  );
+  await screen.findByText("玄武岩成因");
+  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+    target: { value: "玄武岩" },
+  });
+  expect(screen.getByText("玄武岩成因")).toBeTruthy();
+  expect(screen.queryByText("板块构造假说")).toBeNull();
 });

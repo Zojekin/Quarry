@@ -806,6 +806,15 @@ export function Detail({
   const [revealPreview, setRevealPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useViewState("detail-search", "");
+  const [typeFilter, setTypeFilter] = useViewState<string[] | undefined>(
+    "detail-type",
+    undefined,
+  );
+  const [tagFilter, setTagFilter] = useViewState<string[] | undefined>(
+    "detail-tag",
+    undefined,
+  );
   const confirm = useConfirmation();
 
   const { data, error, reload } = useLoad(
@@ -838,6 +847,26 @@ export function Detail({
     kind === "bank"
       ? (data?.[1] ?? [])
       : (paper?.sections.flatMap((s) => s.items) ?? []);
+  const questionEntries = questions.map((entry, idx) => ({
+    entry,
+    itemId: entry.id,
+    q: "question" in entry ? entry.question : entry,
+    number: idx + 1,
+  }));
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredQuestions = questionEntries.filter(
+    ({ q }) =>
+      (kind === "paper" ||
+        typeFilter === undefined ||
+        typeFilter.includes(q.type)) &&
+      (kind === "paper" ||
+        tagFilter === undefined ||
+        tagFilter.some((tag) => q.tag_ids.includes(tag))) &&
+      (!normalizedSearch ||
+        `${q.content} ${q.explanation ?? ""} ${q.material ?? ""}`
+          .toLocaleLowerCase()
+          .includes(normalizedSearch)),
+  );
 
   const parentFolder = folders.find((f) => f.id === doc?.folder_id);
   const count = questions.length;
@@ -1040,17 +1069,51 @@ export function Detail({
             </div>
           </div>
 
+          {/* Question Filter Toolbar */}
+          {questions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <SearchField
+                label="搜索题目"
+                value={search}
+                onChange={setSearch}
+                placeholder="搜索题干或解析"
+                className="min-w-[200px] flex-1 sm:max-w-[280px]"
+              />
+              {bank && (
+                <>
+                  <Facet
+                    label="题型"
+                    options={types}
+                    value={typeFilter}
+                    onChange={setTypeFilter}
+                  />
+                  {qTags.length > 0 && (
+                    <Facet
+                      label="题目标签"
+                      options={qTags}
+                      value={tagFilter}
+                      onChange={setTagFilter}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Question List (Immediately visible on first screen) */}
           {questions.length === 0 ? (
             <EmptyState
               title="还没有题目"
               detail="点击右上角「新建题目」录入一道题，或从已有题库中挑选题目。"
             />
+          ) : filteredQuestions.length === 0 ? (
+            <EmptyState
+              title="没有匹配的题目"
+              detail="尝试调整搜索词或筛选条件。"
+            />
           ) : (
             <div className="space-y-3">
-              {questions.map((entry, idx) => {
-                const itemId = entry.id;
-                const q = "question" in entry ? entry.question : entry;
+              {filteredQuestions.map(({ itemId, q, number }) => {
                 const typeName =
                   types.find((t) => t.id === q.type)?.name ?? q.type;
                 return (
@@ -1063,7 +1126,7 @@ export function Detail({
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
                           <span className="font-semibold text-foreground tabular-nums">
-                            第 {idx + 1} 题
+                            第 {number} 题
                           </span>
                           <Badge variant="outline">{typeName}</Badge>
                           <span className="tabular-nums">
@@ -1079,12 +1142,12 @@ export function Detail({
                       <div className="flex shrink-0 items-center gap-1 opacity-80 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <IconButton
                           icon="edit"
-                          label={`编辑第 ${idx + 1} 题`}
+                          label={`编辑第 ${number} 题`}
                           onClick={() => setEditing(q)}
                         />
                         <IconButton
                           icon="trash"
-                          label={`删除第 ${idx + 1} 题`}
+                          label={`删除第 ${number} 题`}
                           variant="destructiveGhost"
                           onClick={() =>
                             confirm.ask("确认删除这道题目吗？", () =>

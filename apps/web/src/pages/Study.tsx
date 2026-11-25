@@ -325,6 +325,7 @@ export function Study({
   const failedIndexRef = useRef<number | null>(null);
   const autoSubmitted = useRef(false);
   const pauseSentForRef = useRef<string | null>(null);
+  const leavingRef = useRef(false);
   const sessionRef = useRef(session);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
@@ -344,6 +345,7 @@ export function Study({
     commitSession(loadedSession);
     setPaperMeta(foundPaper);
     autoSubmitted.current = false;
+    leavingRef.current = false;
     pauseSentForRef.current =
       loadedSession.status === "in_progress" ? null : loadedSession.id;
     draftFailedRef.current = null;
@@ -466,11 +468,16 @@ export function Study({
       ) {
         return;
       }
+      leavingRef.current = true;
       pauseSentForRef.current = active.id;
-      sessionRef.current = { ...active, status: "paused" };
       void saveChain.current
         .catch(() => {})
-        .then(() => client.sessions.pause(active.id).catch(() => {}));
+        .then(() => {
+          if (sessionRef.current?.id === active.id) {
+            sessionRef.current = { ...active, status: "paused" };
+          }
+          return client.sessions.pause(active.id).catch(() => {});
+        });
     };
     window.addEventListener("pagehide", pauseOnLeave);
     return () => {
@@ -484,11 +491,20 @@ export function Study({
     questionId?: string,
     userAnswer?: StudyAnswer,
   ) {
-    if (!sessionRef.current || sessionRef.current.status !== "in_progress")
+    if (
+      !sessionRef.current ||
+      sessionRef.current.status !== "in_progress" ||
+      leavingRef.current
+    )
       return;
     const sessionId = sessionRef.current.id;
     saveChain.current = saveChain.current.then(async () => {
-      if (sessionRef.current?.status !== "in_progress") return;
+      if (
+        !sessionRef.current ||
+        sessionRef.current.id !== sessionId ||
+        sessionRef.current.status === "completed"
+      )
+        return;
       try {
         await client.sessions.saveDraft(sessionId, {
           current_index: nextIndex,
@@ -528,7 +544,12 @@ export function Study({
       return;
     const sessionId = sessionRef.current.id;
     saveChain.current = saveChain.current.then(async () => {
-      if (sessionRef.current?.status !== "in_progress") return;
+      if (
+        !sessionRef.current ||
+        sessionRef.current.id !== sessionId ||
+        sessionRef.current.status === "completed"
+      )
+        return;
       try {
         const pendingEntries = Array.from(failedDraftsRef.current.entries());
         for (const [qid, ans] of pendingEntries) {
@@ -546,9 +567,8 @@ export function Study({
           }
         }
         if (failedIndexRef.current !== null || pendingEntries.length === 0) {
-          const targetIndex = failedIndexRef.current ?? indexRef.current;
           await client.sessions.saveDraft(sessionId, {
-            current_index: targetIndex,
+            current_index: indexRef.current,
           });
           failedIndexRef.current = null;
         }
@@ -604,10 +624,11 @@ export function Study({
         attempt_index: attempt,
       });
       const refreshed = await client.sessions.get(session.id);
-      setSession((prev) =>
-        prev
+      const latest = sessionRef.current;
+      commitSession(
+        latest
           ? {
-              ...prev,
+              ...latest,
               items: refreshed.items,
               records: refreshed.records,
             }
@@ -654,7 +675,8 @@ export function Study({
   }
 
   async function addMistake(recordId: string) {
-    if (!session) return;
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       await client.mistakes.manual(session.id, recordId);
@@ -663,6 +685,7 @@ export function Study({
     } catch (e) {
       setMessage(errorMessage(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -747,11 +770,42 @@ export function Study({
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
+      leavingRef.current = true;
       try {
-        await saveChain.current.catch(() => {});
+        await saveChain.current;
+        if (
+          failedDraftsRef.current.size > 0 ||
+          failedIndexRef.current !== null
+        ) {
+          await retryDraft();
+        }
+        if (draftFailedRef.current) {
+          const reason = draftFailedRef.current.message;
+          setMessage(reason);
+          leavingRef.current = false;
+          confirm.ask(
+            `存在未保存的草稿（${reason}），确认放弃未保存更改并退出吗？`,
+            () => {
+              pauseSentForRef.current = active.id;
+              leavingRef.current = true;
+              navigate({ page: "records" });
+            },
+          );
+          return;
+        }
         pauseSentForRef.current = active.id;
-        sessionRef.current = { ...active, status: "paused" };
-        await client.sessions.pause(active.id).catch(() => {});
+        const paused = await client.sessions.pause(active.id);
+        commitSession(paused);
+      } catch (e) {
+        const reason = errorMessage(e);
+        setMessage(reason);
+        leavingRef.current = false;
+        confirm.ask(`暂停会话失败（${reason}），仍要退出答题吗？`, () => {
+          pauseSentForRef.current = active.id;
+          leavingRef.current = true;
+          navigate({ page: "records" });
+        });
+        return;
       } finally {
         busyRef.current = false;
         setBusy(false);
@@ -956,6 +1010,7 @@ export function Study({
             variant="ghost"
             size="sm"
             className="w-full"
+            disabled={busy}
             onClick={() => void exitStudy()}
           >
             退出答题
@@ -1100,11 +1155,15 @@ export function Study({
                     </Button>
                   )}
                 </div>
-                <div>
+                <div className="space-y-1">
                   <span className="font-semibold text-primary">参考答案：</span>
-                  <span className="text-foreground/90">
-                    {reference || "暂无参考答案"}
-                  </span>
+                  {reference ? (
+                    <div className="text-foreground/90">
+                      <Markdown text={reference} />
+                    </div>
+                  ) : (
+                    <span className="text-foreground/90">暂无参考答案</span>
+                  )}
                 </div>
               </div>
             )}
