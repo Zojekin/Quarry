@@ -8,7 +8,7 @@ import {
 import type { ReactNode } from "react";
 import { newTab, navigateTab, closeTab } from "./state.js";
 import type { Route, WorkspaceTab } from "./state.js";
-import { ViewContext } from "./components/ui.js";
+import { Button, ViewContext } from "./components/ui.js";
 import { Icon, type IconName } from "./components/Icons.js";
 import { client } from "./api/client.js";
 import logoUrl from "./assets/logo.svg";
@@ -174,8 +174,8 @@ export function App() {
     route.page === "bank" || route.page === "paper" ? "library" : route.page;
   function navButton(page: string) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         key={page}
         className={`nav-link ${selectedPage === page ? "selected" : ""}`}
         title={labels[page]}
@@ -186,7 +186,7 @@ export function App() {
         <Icon name={pageIcon(page)} />
         <span>{labels[page]}</span>
         {page === "mistakes" && <small>{reviewCount}</small>}
-      </button>
+      </Button>
     );
   }
   return (
@@ -204,15 +204,16 @@ export function App() {
             <img src={logoUrl} alt="题匣" />
             <b>题匣</b>
           </button>
-          <button
-            type="button"
-            className="button icon-button"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sidebar-collapse"
             aria-label={compact ? "展开侧栏" : "收起侧栏"}
             aria-expanded={!compact}
             onClick={() => setCompact(!compact)}
           >
             <Icon name="panel" />
-          </button>
+          </Button>
         </div>
         {studying ? (
           rail
@@ -228,7 +229,7 @@ export function App() {
         )}
       </aside>
       <main ref={container} className="app-main">
-        <header className="app-top workspace-header">
+        <header className="workspace-header">
           <nav className="workspace-tabs" aria-label="工作区标签页">
             <div
               className="workspace-tab-list"
@@ -279,9 +280,10 @@ export function App() {
                     <span>{labels[tab.route.page]}</span>
                   </button>
                   {tabs.length > 1 && (
-                    <button
-                      type="button"
-                      className="button tab-close"
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tab-close"
                       aria-label={`关闭${labels[tab.route.page]}`}
                       onClick={() => {
                         const next = closeTab(tabs, tab.id);
@@ -295,14 +297,15 @@ export function App() {
                       }}
                     >
                       <Icon name="close" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              className="button new-tab-button"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="new-tab-button"
               aria-label="新建标签页"
               onClick={() => {
                 const tab = newTab();
@@ -313,8 +316,8 @@ export function App() {
                 );
               }}
             >
-              +
-            </button>
+              <Icon name="plus" />
+            </Button>
           </nav>
         </header>
         <ViewContext.Provider

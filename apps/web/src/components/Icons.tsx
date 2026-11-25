@@ -9,6 +9,7 @@ const paths = {
   list: "M5 6h2m4 0h11M5 13h2m4 0h11M5 20h2m4 0h11",
   export: "M13 17V3m-5 5 5-5 5 5M4 15v7h18v-7",
   close: "m7 7 12 12M19 7 7 19",
+  plus: "M6 13h14M13 6v14",
   chevron: "m7 10 6 6 6-6",
   check: "m6 13 4 4L20 7",
   home: "M3 10 12 3l9 7v10H5V10m4 10v-7h6v7",

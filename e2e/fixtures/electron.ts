@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path';
 interface ElectronFixture {
   page: Page;
   userDataDir: string;
+  windowChrome(): Promise<{ hasMenu: boolean; menuVisible: boolean }>;
+  resize(width: number, height: number): Promise<void>;
   restart(): Promise<Page>;
   download(path: string, trigger: () => Promise<void>): Promise<void>;
 }
@@ -119,6 +121,16 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
     try {
       const fixture: ElectronFixture = {
         page: await launch(), userDataDir: data,
+        windowChrome: () => app!.evaluate(({ BrowserWindow, Menu }) => ({
+          hasMenu: Menu.getApplicationMenu() !== null,
+          menuVisible: BrowserWindow.getAllWindows()[0]!.isMenuBarVisible(),
+        })),
+        async resize(width, height) {
+          await app!.evaluate(({ BrowserWindow }, size) => {
+            BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height);
+          }, { width, height });
+          await fixture.page.setViewportSize({ width, height });
+        },
         async restart() {
           await assertPageHealthy(fixture.page);
           await stop();

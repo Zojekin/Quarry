@@ -1,4 +1,13 @@
 import { useState } from "react";
+import { buttonVariants } from "../components/ui/button.js";
+import { Card } from "../components/ui/card.js";
+import { Table } from "../components/ui/table.js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu.js";
 import { client } from "../api/client.js";
 import type { Document, Folder, Paper, QuestionView } from "../api/client.js";
 import type { Route } from "../state.js";
@@ -216,7 +225,7 @@ export function Library({
       <div className="page-heading library-heading">
         <h1>{currentFolder?.name ?? "所有资料"}</h1>
         <div className="actions">
-          <label className="button file-input-button">
+          <label className={buttonVariants({ className: "file-input-button" })}>
             导入文件
             <input
               type="file"
@@ -228,22 +237,22 @@ export function Library({
               }}
             />
           </label>
-          <details className="menu-wrap">
-            <summary className="button primary">＋ 新建</summary>
-            <div
-              className="menu"
-              onClick={(event) => {
-                const menu = event.currentTarget.closest("details");
-                if (menu) menu.open = false;
-              }}
-            >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="default">
+                <Icon name="plus" />
+                新建
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
               {(["folders", "banks", "papers"] as const).map((kind) => (
-                <Button key={kind} onClick={() => create(kind)}>
+                <DropdownMenuItem key={kind} onSelect={() => create(kind)}>
+                  <Icon name={fileKinds[kind].icon} />
                   新建{fileKinds[kind].label}
-                </Button>
+                </DropdownMenuItem>
               ))}
-            </div>
-          </details>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <section className="library-content">
@@ -291,7 +300,7 @@ export function Library({
           ) : grid ? (
             <div className="document-grid">
               {rows.map((row) => (
-                <article className="card document-card" key={row.id}>
+                <Card as="article" className="document-card" key={row.id}>
                   <button
                     type="button"
                     className="document-open"
@@ -309,11 +318,11 @@ export function Library({
                   </button>
                   <TagPills ids={row.tag_ids} tags={data[3]} chips />
                   {rowActions(row)}
-                </article>
+                </Card>
               ))}
             </div>
           ) : (
-            <table className="data-table">
+            <Table>
               <thead>
                 <tr>
                   <th>名称</th>
@@ -353,7 +362,7 @@ export function Library({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           ))}
         {data && <div className="table-footer">{rows.length} 个项目</div>}
       </section>
@@ -577,13 +586,13 @@ export function Detail({
             </dl>
             <div className="study-start-row">
               <div className="actions">
-                <Button primary onClick={() => start("practice")}>
+                <Button variant="default" onClick={() => start("practice")}>
                   开始练习
                 </Button>
                 <Button onClick={() => start("exam")}>开始考试</Button>
                 {data.ongoing && (
                   <Button
-                    className="quiet"
+                    variant="ghost"
                     onClick={() =>
                       navigate({ page: "study", id: data.ongoing!.id })
                     }
@@ -591,12 +600,12 @@ export function Detail({
                     继续未完成答题 <Icon name="forward" />
                   </Button>
                 )}
-                <Button className="quiet" onClick={() => setFollow(true)}>
+                <Button variant="ghost" onClick={() => setFollow(true)}>
                   来源差异 / 开启跟随
                 </Button>
                 {paperDocument.follow_source && (
                   <Button
-                    className="quiet"
+                    variant="ghost"
                     onClick={() =>
                       void act(() =>
                         client.papers.update(id, { follow_source: false }),
@@ -619,24 +628,21 @@ export function Detail({
                   value={search}
                   onChange={setSearch}
                 />
-                <details className="menu-wrap">
-                  <summary
-                    className="button icon-only paper-new-question"
-                    aria-label="添加题目"
-                  >
-                    ＋
-                  </summary>
-                  <div
-                    className="menu"
-                    onClick={(event) => {
-                      const menu = event.currentTarget.closest("details");
-                      if (menu) menu.open = false;
-                    }}
-                  >
-                    <Button onClick={() => setEditor(null)}>新建题目</Button>
-                    <Button onClick={() => setPicker(true)}>从题库选题</Button>
-                  </div>
-                </details>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" aria-label="添加题目">
+                      <Icon name="plus" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setEditor(null)}>
+                      新建题目
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setPicker(true)}>
+                      从题库选题
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             {paperDocument.sections.map((section) => {
@@ -718,7 +724,7 @@ export function Detail({
                   导出
                 </Button>
                 <Button onClick={() => setFileEditor(true)}>编辑属性</Button>
-                <Button primary onClick={() => setEditor(null)}>
+                <Button variant="default" onClick={() => setEditor(null)}>
                   新增题目
                 </Button>
               </div>
@@ -746,7 +752,7 @@ export function Detail({
               />
             </div>
             {questions.length ? (
-              <table className="data-table">
+              <Table>
                 <thead>
                   <tr>
                     <th>题目</th>
@@ -777,7 +783,7 @@ export function Detail({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             ) : (
               <EmptyState
                 title="没有符合条件的题目"

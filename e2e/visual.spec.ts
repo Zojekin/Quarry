@@ -68,7 +68,7 @@ for (const layout of layouts) {
   test('visual pages in ' + layout.name + ' layout', async ({ quarry }) => {
     const { page } = quarry;
     const sessions = await seed(page);
-    await page.setViewportSize({ width: layout.width, height: layout.height });
+    await quarry.resize(layout.width, layout.height);
     await page.clock.setFixedTime(new Date('2024-12-31T12:00:00Z'));
     await page.reload();
     if (layout.compact) await button(page, '收起侧栏').click();
@@ -77,6 +77,7 @@ for (const layout of layouts) {
         await expect(page.getByText('正在加载…', { exact: true })).toHaveCount(0);
         await page.waitForLoadState('networkidle');
         await assertPageHealthy(page);
+        await page.mouse.move(layout.width - 8, layout.height - 8);
         const name = view + '-' + layout.name + '.png';
         const options = { animations: 'disabled' as const, caret: 'hide' as const };
         if (process.env.QUARRY_CAPTURE_REVIEW === '1') {
@@ -112,7 +113,7 @@ for (const layout of layouts) {
     await nav(page, '资料库').click();
     await button(page, paperName).click();
     await expect(page.getByRole('heading', { name: paperName })).toBeVisible();
-    await expect(page.locator('summary.paper-new-question')).toHaveCSS('border-top-style', 'solid');
+    await expect(button(page, '添加题目')).toBeVisible();
     await capture('paper-detail');
     await nav(page, '错题本').click();
     const mistake = page.locator('.mistake-row');
@@ -133,6 +134,10 @@ for (const layout of layouts) {
     await nav(page, '学习记录').click();
     await expect(page.getByRole('button', { name: '继续作答', exact: true })).toHaveCount(2);
     await capture('records');
+    await button(page, '查看结果').click();
+    await expect(page.getByRole('heading', { name: '答题结果' })).toBeVisible();
+    await capture('result');
+    await nav(page, '学习记录').click();
     for (const [mode, view] of [['练习', 'study-practice'], ['考试', 'study-exam']] as const) {
       await page.clock.setFixedTime(new Date(sessions[mode].start_time));
       const session = page.getByRole('row').filter({ hasText: mode }).filter({ hasText: '进行中' });

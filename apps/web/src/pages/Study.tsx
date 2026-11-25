@@ -1,4 +1,13 @@
+import { Input, Textarea } from "../components/ui/form.js";
 import { useEffect, useRef, useState } from "react";
+import { Card } from "../components/ui/card.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "../components/ui/dialog.js";
+import { Segmented } from "../components/ui/toggle-group.js";
 import { client } from "../api/client.js";
 import type { Session, QuestionView, StudyAnswer } from "../api/client.js";
 import { formatTime } from "../state.js";
@@ -91,7 +100,7 @@ export function Answer({
       ) : answer.kind === "blanks" ? (
         <div className="answer-inputs">
           {answer.values.map((v, i) => (
-            <input
+            <Input
               key={i}
               aria-label={`第 ${i + 1} 空`}
               disabled={locked}
@@ -109,7 +118,7 @@ export function Answer({
         </div>
       ) : answer.kind === "text" ? (
         <div className="answer-inputs">
-          <textarea
+          <Textarea
             aria-label="作答"
             disabled={locked}
             value={answer.value}
@@ -307,7 +316,8 @@ export function Study({
       session ? (
         <div className="study-side">
           <Button
-            className="quiet small study-exit"
+            variant="ghost"
+            className="small study-exit"
             onClick={() => navigate({ page: "records" })}
           >
             <Icon name="back" />
@@ -330,7 +340,7 @@ export function Study({
             </span>
             <div className="actions">
               <Button
-                className="compact"
+                size="compact"
                 disabled={busy}
                 onClick={() =>
                   void act(async () =>
@@ -341,8 +351,8 @@ export function Study({
                 暂停
               </Button>
               <Button
-                className="compact"
-                primary={session.mode === "exam"}
+                size="compact"
+                variant={session.mode === "exam" ? "default" : "outline"}
                 disabled={busy}
                 onClick={() => {
                   confirmation.ask(
@@ -447,9 +457,10 @@ export function Study({
                   .sort((a, b) => b.attempt_index - a.attempt_index)[0];
                 const locked = !!record && !redo.includes(q.id);
                 return (
-                  <article
+                  <Card
+                    as="article"
                     id={`question-${session.items.indexOf(item)}`}
-                    className={`card question-card study-question-card ${session.mode === "exam" ? "exam-question-card" : ""}`}
+                    className={`question-card study-question-card ${session.mode === "exam" ? "exam-question-card" : ""}`}
                     key={q.id}
                   >
                     <header className="study-info">
@@ -497,6 +508,7 @@ export function Study({
                       {session.mode === "practice" && (
                         <div className="study-actions">
                           <Button
+                            variant={locked ? "outline" : "default"}
                             disabled={busy}
                             onClick={() => {
                               if (locked) {
@@ -542,7 +554,7 @@ export function Study({
                               上一题
                             </Button>
                             <Button
-                              primary
+                              variant={locked ? "default" : "outline"}
                               disabled={
                                 index === session.items.length - 1 || busy
                               }
@@ -569,7 +581,7 @@ export function Study({
                           </Button>
                         )}
                     </div>
-                  </article>
+                  </Card>
                 );
               })}
           </div>
@@ -597,39 +609,31 @@ function PauseScreen({
   exit: () => void;
   busy: boolean;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current!;
-    if (typeof element.showModal === "function") element.showModal();
-    else element.setAttribute("open", "");
-    return () => {
-      if (typeof element.close === "function") element.close();
-    };
-  }, []);
   return (
-    <dialog
-      ref={dialog}
-      className="pause-screen"
-      aria-modal="true"
-      aria-label="答题已暂停"
-      onCancel={(event) => event.preventDefault()}
-    >
-      <div>
-        <div className="pause-mark">
-          <Icon name="pause" />
-        </div>
-        <div className="serif">休息一下，再继续。</div>
-        <p>计时已暂停，答题内容已遮挡。</p>
-        <Button primary disabled={busy} onClick={resume}>
-          继续答题
-        </Button>
-        <div className="space-top-4">
-          <Button className="quiet" onClick={exit}>
-            返回学习记录
+    <Dialog open>
+      <DialogContent
+        className="pause-screen inset-0 translate-none rounded-none border-0"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <div>
+          <div className="pause-mark">
+            <Icon name="pause" />
+          </div>
+          <DialogTitle className="sr-only">答题已暂停</DialogTitle>
+          <div className="serif">休息一下，再继续。</div>
+          <DialogDescription>计时已暂停，答题内容已遮挡。</DialogDescription>
+          <Button variant="default" disabled={busy} onClick={resume}>
+            继续答题
           </Button>
+          <div className="space-top-4">
+            <Button variant="ghost" onClick={exit}>
+              返回学习记录
+            </Button>
+          </div>
         </div>
-      </div>
-    </dialog>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -718,29 +722,18 @@ export function Result({
             </div>
           </div>
           <div className="toolbar">
-            <div
-              className="tabs result-tabs"
-              role="group"
-              aria-label="结果筛选"
-            >
-              {[
+            <Segmented
+              label="结果筛选"
+              options={[
                 ["all", "全部题目"],
                 ["incorrect", "未满分与未作答"],
                 ["unanswered", "未作答"],
-              ].map(([value, label]) => (
-                <button
-                  type="button"
-                  className={`button tab ${filter === value ? "active" : ""}`}
-                  key={value}
-                  aria-pressed={filter === value}
-                  onClick={() => setFilter(value!)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+              ]}
+              value={filter}
+              onChange={setFilter}
+            />
             <Button
-              className="quiet"
+              variant="ghost"
               onClick={() => navigate({ page: "mistakes" })}
             >
               打开错题本 <Icon name="forward" />

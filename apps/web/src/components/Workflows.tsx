@@ -1,3 +1,4 @@
+import { NativeSelect } from "./ui/form.js";
 import { useState } from "react";
 import { client } from "../api/client.js";
 import type { Paper, Tag, ComposerSection } from "../api/client.js";
@@ -85,7 +86,7 @@ export function QuestionPicker({
         <>
           <Button onClick={onClose}>取消</Button>
           <Button
-            primary
+            variant="default"
             disabled={busy || !ids.length}
             onClick={() => void save()}
           >
@@ -95,7 +96,7 @@ export function QuestionPicker({
       }
     >
       <div className="toolbar">
-        <select
+        <NativeSelect
           className="filter"
           aria-label="题库"
           value={bank}
@@ -110,7 +111,7 @@ export function QuestionPicker({
               {b.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <Facet
           label="题型"
           options={types}
@@ -219,7 +220,11 @@ export function FollowDialog({
       actions={
         <>
           <Button onClick={onClose}>取消</Button>
-          <Button primary disabled={busy || !data} onClick={() => void apply()}>
+          <Button
+            variant="default"
+            disabled={busy || !data}
+            onClick={() => void apply()}
+          >
             {paper.follow_source ? "应用更新" : "开启跟随并应用"}
           </Button>
         </>
@@ -276,7 +281,7 @@ export function ImportDialog({
         <>
           <Button onClick={onClose}>取消</Button>
           <Button
-            primary
+            variant="default"
             disabled={!data || busy || !!error}
             onClick={() => {
               setBusy(true);

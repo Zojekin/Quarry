@@ -70,7 +70,7 @@
 | :--- | :--- | :--- | :--- |
 | **工程管理** | pnpm Workspaces + Turborepo | `pnpm@10.28.2`, `turbo`, `typescript@^5.9.3`, `vitest` | 隔离依赖、缓存构建/测试/类型检查流水线 |
 | **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `esbuild` | 窗口托管、随机端口本地服务进程、Windows NSIS/ZIP 打包 |
-| **网页前端** | React 19 + Vite 6 | `react`, `react-dom`, `vite`, `@testing-library/react`, `jsdom` | 单页应用、多标签工作区（sessionStorage）、自研视觉样式系统 |
+| **网页前端** | React 19 + Vite 6 + shadcn/ui | `react`、`vite`、Tailwind CSS 4、Radix UI、`@testing-library/react` | 单页应用、多标签工作区（sessionStorage）、共享交互组件与主题令牌 |
 | **富文本排版** | React Markdown + KaTeX | `react-markdown`, `remark-math`, `rehype-katex`, `katex` | 离线 LaTeX 数学公式、代码块、表格，禁用原始 HTML，独立分块懒加载 |
 | **后端服务** | Node.js（Node-API 10，`^22.14.0 \|\| >=23.6.0`）+ Hono | `hono`, `@hono/node-server`, `fflate` | 轻量 RESTful API、附件流式传输、ZIP 导入导出与备份打包 |
 | **领域与契约** | Pure TypeScript + Zod 4 | `zod` | 端到端 Schema 校验、一票否决导入检验、纯函数判分/打乱/跨天计时 |
@@ -127,7 +127,7 @@
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史；一级栏目为首页（学习看板）、资料库、错题本、学习记录，另含设置与回收站。
-- **共用视觉组件**：`components/Icons.tsx` 提供导航和操作按钮所用的 SVG 图标。`components/QuestionPreview.tsx` 供资料详情和错题本复用，按页面状态展示题目、答案与解析。`visual.css` 定义视觉令牌、组件原语和页面布局，`production.css` 适配 Markdown、KaTeX 与 React 控件。
+- **共用视觉组件**：`components/ui/` 存放随应用打包的 shadcn/ui 组件源码。对话框、弹出层、菜单、单选分段控件和进度条复用 Radix UI。`components/ui.tsx` 封装题匣的确认框、多选筛选、标签和状态展示。`theme.css` 定义主题 CSS 变量并映射到 Tailwind CSS 4，由 Vite 插件编译。Tailwind 只加载主题与工具类，保留 Markdown 的浏览器排版基础。`visual.css` 维护页面布局和判分等领域视觉状态，`production.css` 适配 Markdown 和 KaTeX。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML；打包产物内置 `src/assets/serif.woff2` 思源宋体与 `src/assets/logo.svg` 透明图标。
 
 ---
@@ -135,6 +135,7 @@
 ## 7. Electron 桌面宿主与 Windows 打包 (`apps/desktop`)
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
+- **窗口栏 (`src/main.ts`)**：主进程移除应用菜单。Windows 使用隐藏标题栏与原生 Window Controls Overlay，保留最小化、最大化和关闭按钮。渲染器使用 CSS `titlebar-area-*` 环境变量为控件留出空间；页签及侧栏按钮可点击，顶部空白区可拖动。普通浏览器使用同一布局的 CSS 回退值。
 - **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 仅校验并暴露只读字符串 `window.__QUARRY_API_URL__`，不暴露任何 IPC 或文件系统桥接。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
 - **运行时打包与 N-API 原生绑定**：
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
@@ -159,5 +160,5 @@
 - `scripts/dev-web.mjs` 由 `pnpm run dev:web` 调用，在同一 Node 进程运行开发 API 和 Vite，通过 `VITE_API_URL` 连接，使用工作树内 `.quarry-dev-data/`。
 - `apps/desktop/scripts/dev.mjs` 由 `pnpm run dev:desktop` 调用，等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
 - `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
-- 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 33 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
+- 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 36 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
 - `.github/workflows/ci.yml` 的 `e2e-windows` 作业构建解包应用，运行 `Quarry.exe` 冒烟、业务流程和重启持久化测试，再执行 Windows 视觉回归。Electron 自带 Chromium；失败时保留 Playwright HTML 报告与测试工件 7 天。

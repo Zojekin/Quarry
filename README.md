@@ -66,7 +66,7 @@
 quarry/
 ├── apps/
 │   ├── desktop/          # Electron 宿主 (随机端口 Node.js 后端守护进程、沙箱预加载与 Windows 打包)
-│   └── web/              # React 19 + Vite Web 应用 (多工作区标签、BackendClient、离线 KaTeX)
+│   └── web/              # React 19 + Vite + shadcn/ui + Tailwind CSS（工作区、BackendClient、离线 KaTeX）
 ├── packages/
 │   ├── core/             # 领域核心 (判分算法、种子打乱、跨天切分，纯函数零 IO，100% 覆盖率)
 │   ├── database/         # 数据访问层 (Kysely + SQLite better-sqlite3 WAL 模式，仓储模式解耦)
@@ -137,11 +137,11 @@ Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二
 
 ### 6. Electron 端到端与视觉回归
 
-桌面工作区沿用题匣视觉系统，覆盖展开侧栏、收起侧栏和窄屏布局。资料库支持列表和卡片视图，设置中的文件标签与题目标签可分开选色并自动保存。
+桌面工作区使用 shadcn/ui 与 Tailwind CSS，保留纸白、松绿和离线衬线字体。Windows 的最小化、最大化与关闭按钮和工作区页签共用顶部空间，拖动页签旁的空白处即可移动窗口。资料库支持列表和卡片视图，多选筛选可用键盘操作。设置中的文件标签与题目标签可分开选色并自动保存。
 
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
 * `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用。
-* `pnpm exec playwright test --project=visual` 在 Windows 比对 33 张截图基线，日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
+* `pnpm exec playwright test --project=visual` 在 Windows 比对 36 张截图基线，覆盖展开侧栏、收起侧栏（1440×900）与窄屏（960×760），并遮罩日期和计时字段。其他平台仍执行页面交互与健康检查。
 * 在 Windows 用 `pnpm run test:e2e:update-snapshots all` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
 * GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流和重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
 

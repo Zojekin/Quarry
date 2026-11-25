@@ -60,17 +60,8 @@
 }
 
 .breadcrumb button:hover {
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: underline;
-}
-
-.facet-options {
-  position: absolute;
-  inset: calc(100% + var(--space-2)) auto auto 0;
-  z-index: 10;
-  min-width: 100%;
-  width: max-content;
-  max-width: 260px;
 }
 
 .facet-options label,
@@ -82,7 +73,7 @@
 }
 
 .facet-options label:hover {
-  background: var(--soft);
+  background: var(--accent);
 }
 
 .tag-list {
@@ -108,10 +99,6 @@
   box-shadow: var(--focus-ring);
 }
 
-.modal-backdrop {
-  display: contents;
-}
-
 .modal .diff-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -124,16 +111,6 @@
 
 .preview-question + .preview-question {
   margin-top: var(--space-6);
-}
-
-dialog.pause-screen {
-  border: 0;
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  color: var(--ink);
 }
 
 .pause-mark svg {

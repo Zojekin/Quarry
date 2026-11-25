@@ -1,3 +1,4 @@
+import { Input, Textarea } from "./ui/form.js";
 import { useState } from "react";
 import { client } from "../api/client.js";
 import type { Document, Paper, Tag } from "../api/client.js";
@@ -87,7 +88,7 @@ export function DocumentEditor({
         <>
           <Button onClick={onClose}>取消</Button>
           <Button
-            primary
+            variant="default"
             disabled={busy || !name.trim()}
             onClick={() => void save()}
           >
@@ -98,8 +99,8 @@ export function DocumentEditor({
     >
       <label className="field">
         <span>名称</span>
-        <input
-          autoFocus
+        <Input
+          data-autofocus
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -107,7 +108,7 @@ export function DocumentEditor({
       {kind !== "folders" && (
         <label className="field">
           <span>简介</span>
-          <textarea
+          <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -115,13 +116,13 @@ export function DocumentEditor({
       )}
       <label className="field">
         <span>文件标签（英文逗号分隔）</span>
-        <input value={names} onChange={(e) => setNames(e.target.value)} />
+        <Input value={names} onChange={(e) => setNames(e.target.value)} />
       </label>
       {kind === "papers" && (
         <>
           <label className="field">
             <span>考试时间（分钟，空白为不限时）</span>
-            <input
+            <Input
               type="number"
               min="1"
               value={minutes}
@@ -211,7 +212,7 @@ export function ComposerEditor({
         <>
           <Button onClick={onClose}>取消</Button>
           <Button
-            primary
+            variant="default"
             disabled={busy || !!error}
             onClick={() => void save()}
           >
@@ -271,7 +272,7 @@ export function ComposerEditor({
           ))}
           <label className="field">
             <span>固定组（题号用逗号，组间用分号）</span>
-            <input
+            <Input
               defaultValue={section.fixed_groups
                 .map((g) =>
                   g
@@ -308,7 +309,7 @@ export function ComposerEditor({
       ))}
       <label className="field">
         <span>合并打乱分区（编号用逗号，组间用分号）</span>
-        <input value={merged} onChange={(e) => setMerged(e.target.value)} />
+        <Input value={merged} onChange={(e) => setMerged(e.target.value)} />
       </label>
       <label className="editor-switch-line">
         <span>共用材料组间打乱</span>

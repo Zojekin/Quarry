@@ -37,8 +37,8 @@ it("opens a production create form and saves the current folder ownership", asyn
       setSearch={() => {}}
     />,
   );
-  fireEvent.click(screen.getByText("＋ 新建"));
-  fireEvent.click(screen.getByRole("button", { name: "新建文件夹" }));
+  fireEvent.keyDown(screen.getByRole("button", { name: "新建" }), { key: "Enter" });
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建文件夹" }));
   fireEvent.change(screen.getByLabelText("名称"), {
     target: { value: "New folder" },
   });

@@ -1,14 +1,17 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Icon, type IconName } from "./Icons.js";
 import { BackendError } from "../api/client.js";
+import { Button } from "./ui/button.js";
+import { Badge } from "./ui/badge.js";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "./ui/dialog.js";
+import { Input } from "./ui/form.js";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
 export function errorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof BackendError && Array.isArray(error.details))
@@ -21,30 +24,7 @@ export function errorMessage(error: unknown) {
     ].join("\n");
   return message;
 }
-export function Button({
-  children,
-  onClick,
-  disabled = false,
-  primary = false,
-  className = "",
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={`button ${primary ? "primary" : ""} ${className}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
+export { Button };
 
 export function IconButton({
   icon,
@@ -60,16 +40,16 @@ export function IconButton({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={`button icon-only ${className}`}
+    <Button
+      size="icon"
+      className={`icon-only ${className}`}
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onClick}
     >
       <Icon name={icon} />
-    </button>
+    </Button>
   );
 }
 
@@ -88,38 +68,53 @@ export function Modal({
   className?: string;
   onSubmit?: () => void;
 }) {
-  const heading = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const node = dialog.current!;
-    const previous = document.activeElement;
-    if (typeof node.showModal === "function") node.showModal();
-    else node.setAttribute("open", "");
-    return () => {
-      if (typeof node.close === "function") node.close();
-      if (previous instanceof HTMLElement) previous.focus();
-    };
-  }, []);
+  const activeElement = document.activeElement;
+  const menuTriggerId = activeElement
+    ?.closest('[role="menu"]')
+    ?.getAttribute("aria-labelledby");
+  const previousFocus = useRef(
+    menuTriggerId ? document.getElementById(menuTriggerId) : activeElement,
+  );
+  const content = useRef<HTMLDivElement>(null);
   const body = (
     <>
-      <div className="modal-head modal-heading">
-        <h2 id={heading}>{title}</h2>
-        <IconButton icon="close" label="关闭" onClick={onClose} />
+      <div className="modal-heading">
+        <DialogTitle asChild>
+          <h2>{title}</h2>
+        </DialogTitle>
+        <DialogClose asChild>
+          <Button size="icon" variant="ghost" aria-label="关闭">
+            <Icon name="close" />
+          </Button>
+        </DialogClose>
       </div>
       {children && <div className="modal-body">{children}</div>}
       <div className="modal-actions">{actions}</div>
     </>
   );
   return (
-    <div className="modal-backdrop">
-      <dialog
-        ref={dialog}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        ref={content}
         className={`modal ${className}`}
-        aria-modal="true"
-        aria-labelledby={heading}
-        onCancel={(event) => {
+        aria-describedby={undefined}
+        onInteractOutside={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          const input =
+            content.current?.querySelector<HTMLElement>("[data-autofocus]");
+          if (!input) return;
           event.preventDefault();
-          onClose();
+          input.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (previousFocus.current instanceof HTMLElement)
+            previousFocus.current.focus();
         }}
       >
         {onSubmit ? (
@@ -134,8 +129,8 @@ export function Modal({
         ) : (
           body
         )}
-      </dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -162,9 +157,9 @@ function ActionDialog({
       actions={
         <>
           <Button onClick={onClose}>取消</Button>
-          <button className="button primary" type="submit" disabled={disabled}>
+          <Button variant="default" type="submit" disabled={disabled}>
             {action}
-          </button>
+          </Button>
         </>
       }
     >
@@ -219,8 +214,8 @@ export function PromptDialog({
     >
       <label className="field">
         {label}
-        <input
-          autoFocus
+        <Input
+          data-autofocus
           required
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -279,11 +274,62 @@ export function Notice({
   loading: boolean;
 }) {
   return error ? (
-    <p role="alert">{error}</p>
+    <p
+      className="my-4 rounded-md border border-solid border-destructive/25 bg-destructive/8 p-3 text-ui-sm text-destructive whitespace-pre-wrap"
+      role="alert"
+    >
+      {error}
+    </p>
   ) : loading ? (
-    <p role="status">正在加载…</p>
+    <p className="my-4 text-ui-sm text-muted-foreground" role="status">
+      正在加载…
+    </p>
   ) : null;
 }
+export function FilterPopover({
+  label,
+  summary,
+  active,
+  children,
+  contentClassName,
+  open,
+  onOpenChange,
+}: {
+  label: string;
+  summary: string;
+  active: boolean;
+  children: ReactNode;
+  contentClassName: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  return (
+    <div className={`quarry-select filter-card ${active ? "is-filtered" : ""}`}>
+      <Popover
+        {...(open === undefined ? {} : { open })}
+        {...(onOpenChange ? { onOpenChange } : {})}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="select-trigger"
+            aria-label={label}
+            title={summary}
+          >
+            <span className="filter-value">
+              <span data-select-value>{summary}</span>
+            </span>
+            <Icon name="chevron" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent aria-label={label} className={contentClassName}>
+          {children}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export function Facet({
   label,
   options,
@@ -305,48 +351,37 @@ export function Facet({
             .join("、")
         : "未选择";
   return (
-    <details
-      className={`quarry-select filter-card ${value === undefined ? "" : "is-filtered"}`}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-        }
-      }}
+    <FilterPopover
+      label={label}
+      summary={summary}
+      active={value !== undefined}
+      contentClassName="facet-options max-h-[min(320px,var(--radix-popover-content-available-height))] overflow-auto p-1.5"
     >
-      <summary className="select-trigger" aria-label={label} title={summary}>
-        <span className="filter-value">
-          <span data-select-value>{summary}</span>
-        </span>
-        <Icon name="chevron" />
-      </summary>
-      <div className="select-popover facet-options">
-        <label>
+      <label>
+        <input
+          type="checkbox"
+          checked={value === undefined}
+          onChange={(e) => onChange(e.target.checked ? undefined : [])}
+        />
+        全选
+      </label>
+      {options.map((o) => (
+        <label key={o.id}>
           <input
             type="checkbox"
-            checked={value === undefined}
-            onChange={(e) => onChange(e.target.checked ? undefined : [])}
+            checked={value === undefined || value.includes(o.id)}
+            onChange={(e) => {
+              const current = value ?? options.map((o) => o.id);
+              const next = e.target.checked
+                ? [...current, o.id]
+                : current.filter((id) => id !== o.id);
+              onChange(next.length === options.length ? undefined : next);
+            }}
           />
-          全选
+          {o.name}
         </label>
-        {options.map((o) => (
-          <label key={o.id}>
-            <input
-              type="checkbox"
-              checked={value === undefined || value.includes(o.id)}
-              onChange={(e) => {
-                const current = value ?? options.map((o) => o.id);
-                const next = e.target.checked
-                  ? [...current, o.id]
-                  : current.filter((id) => id !== o.id);
-                onChange(next.length === options.length ? undefined : next);
-              }}
-            />
-            {o.name}
-          </label>
-        ))}
-      </div>
-    </details>
+      ))}
+    </FilterPopover>
   );
 }
 const tagPalette = ["#E4EADE", "#EEE7DA", "#EBE6EE"];
@@ -411,7 +446,7 @@ export function StatusPill({
       ? statusIcons[state as keyof typeof statusIcons]
       : undefined;
   return (
-    <span className={`pill status-pill status-${state}`}>
+    <Badge className={`pill status-pill status-${state}`}>
       {icon ? (
         <span className="status-mark">
           <Icon name={icon} />
@@ -420,7 +455,7 @@ export function StatusPill({
         <span className="status-dot" aria-hidden="true" />
       )}
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -438,7 +473,7 @@ export function SearchField({
   return (
     <label className="search">
       <Icon name="search" />
-      <input
+      <Input
         type="search"
         aria-label={label}
         placeholder={placeholder}

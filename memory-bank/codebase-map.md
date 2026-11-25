@@ -19,7 +19,7 @@
 
 ## 启动与平台接口
 
-- `apps/desktop/src/main.ts` 启动本地后端，创建窗口，选择 Vite URL 或本地 `index.html`。
+- `apps/desktop/src/main.ts` 启动本地后端，创建无应用菜单的窗口，为 Windows 启用 Window Controls Overlay，选择 Vite URL 或本地 `index.html`。
 - `apps/desktop/src/backend-manager.ts` 初始化 SQLite、迁移、附件目录与恢复点。桌面 API 绑定 `127.0.0.1` 随机端口。
 - `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`。
 - `apps/desktop/scripts/bundle.mjs` 打包为 ESM `dist/runtime/main.js` 和 CJS `dist/runtime/preload.cjs`。
@@ -32,9 +32,9 @@
 
 ## 渲染器
 
-- `apps/web/src/main.tsx` 挂载 React，加载 `visual.css` 的令牌、组件原语和页面布局，以及 `production.css` 的 Markdown 与控件适配。
-- `apps/web/src/App.tsx` 负责导航、工作区标签、前进后退和每个视图的滚动恢复。
-- `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供基础组件与可访问弹窗。
+- `apps/web/src/main.tsx` 挂载 React，加载 `theme.css` 的 Tailwind 工具类与主题令牌、`visual.css` 的页面布局和状态样式，以及 `production.css` 的内容适配。
+- `apps/web/src/App.tsx` 负责导航、工作区标签、前进后退和每个视图的滚动恢复。`visual.css` 根据标准 CSS 环境变量为 Windows 窗口按钮预留空间。
+- `apps/web/src/state.ts` 定义路由、页签和计时格式。`components/ui/` 提供 shadcn/ui 组件源码，`components/ui.tsx` 组装多选筛选、确认框及领域状态，`lib/utils.ts` 负责合并组件工具类。
 - `apps/web/src/api/client.ts` 包装 HTTP、错误与文件处理。API 地址优先使用 preload，其次使用 `VITE_API_URL`。
 - `pages/Library.tsx` 管理文件夹、题库和套题，`components/DocumentEditor.tsx` 编辑资料属性与套题编排。
 - `components/QuestionEditor.tsx` 编辑六种题型、题目标记与上传图片。
@@ -81,7 +81,8 @@
 
 - `e2e/setup.ts` 为开发运行时构建 Web 并打包主进程。打包测试直接加载当前解包目录。
 - `e2e/fixtures/electron.ts` 管理临时目录与重启，监控预加载、控制台、网络和渲染错误。
-- `e2e/visual.spec.ts` 写入固定题目、打乱种子和有序会话，检查 11 个页面的 3 种布局。Windows 对比 `e2e/snapshots/win32/` 中的基线，其他平台检查页面健康。
+- `e2e/visual.spec.ts` 写入固定题目、打乱种子和有序会话，检查 12 个视图的 3 种布局。Windows 对比 `e2e/snapshots/win32/` 中的 36 张基线，其他平台检查页面健康。
+- `e2e/smoke.spec.ts` 验证 Electron 应用菜单、Windows 窗口按钮预留区与不同窗口尺寸下的页签点击。业务用例使用实际菜单和对话框完成资料创建、答题、归档与恢复。
 - `[data-dynamic-date]` 标记界面中的日期和计时，`e2e/visual-screenshot.css` 固定遮罩日期的占位宽度。保留真实时间的审阅 PNG 输出到 Git 忽略的 `e2e/review-screenshots/`。
 - `e2e-windows` 在 Windows 上构建并验证解包 `Quarry.exe`，随后对比视觉基线。失败时上传 `playwright-report/` 和 `test-results/`，保留 7 天。
 

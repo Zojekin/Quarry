@@ -100,6 +100,7 @@ describe("Workspace and study interactions", () => {
       );
     }
     render(<Example />);
+    fireEvent.click(screen.getByRole("button", { name: "题型" }));
     const all = screen.getByLabelText("全选");
     fireEvent.click(all);
     expect(screen.getByText("未选择")).toBeTruthy();
@@ -108,7 +109,7 @@ describe("Workspace and study interactions", () => {
     );
     fireEvent.click(screen.getByLabelText("甲"));
     fireEvent.click(screen.getByLabelText("乙"));
-    expect(screen.getByText("题型")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "题型" }).textContent).toBe("题型");
     expect(screen.getByLabelText("全选")).toBe(all);
     expect((all as HTMLInputElement).checked).toBe(true);
   });

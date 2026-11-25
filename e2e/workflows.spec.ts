@@ -3,6 +3,7 @@ import { api, assertPageHealthy, expect, test } from './fixtures/electron';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jQ1sAAAAASUVORK5CYII=', 'base64');
 const button = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: true });
+const menuItem = (page: Page, name: string) => page.getByRole('menuitem', { name, exact: true });
 const sidebar = (page: Page, name: string) =>
   page.locator('.app-sidebar').getByRole('button', { name, exact: true });
 const row = (page: Page, name: string) => page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) });
@@ -39,19 +40,19 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
 
   await test.step('create and rename folder, bank and paper with tags', async () => {
     await sidebar(page, '资料库').click();
-    await page.locator('.library-heading summary').click();
-    await button(page, '新建文件夹').click();
+    await button(page, '新建').press('Enter');
+    await menuItem(page, '新建文件夹').press('Enter');
     await saveDocument(page, '资料草稿', '地理');
     await row(page, '资料草稿').getByRole('button', { name: /^编辑.+属性$/ }).click();
     await saveDocument(page, folder);
     await button(page, folder).click();
-    await page.locator('.library-heading summary').click();
-    await button(page, '新建题库').click();
+    await button(page, '新建').click();
+    await menuItem(page, '新建题库').click();
     await saveDocument(page, '题库草稿', '地理');
     await row(page, '题库草稿').getByRole('button', { name: /^编辑.+属性$/ }).click();
     await saveDocument(page, bank);
-    await page.locator('.library-heading summary').click();
-    await button(page, '新建套题').click();
+    await button(page, '新建').click();
+    await menuItem(page, '新建套题').click();
     await saveDocument(page, '套题草稿', '地理');
     await row(page, '套题草稿').getByRole('button', { name: /^编辑.+属性$/ }).click();
     await saveDocument(page, paper);
@@ -100,7 +101,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await button(page, folder).click();
     await button(page, paper).click();
     await page.getByLabel('添加题目').click();
-    await button(page, '从题库选题').click();
+    await menuItem(page, '从题库选题').click();
     const picker = page.getByRole('dialog', { name: '从题库选题' });
     await picker.getByLabel('题库', { exact: true }).selectOption({ label: bank });
     await picker.getByLabel('全选当前结果').check();
@@ -130,6 +131,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await button(page, folder).click();
     await button(page, paper).click();
     await button(page, '开始考试').click();
+    await expect(button(page, '交卷')).toHaveCSS('color', 'rgb(255, 255, 255)');
     await button(page, /玄武岩/).click();
     await button(page, '暂停').click();
     const pause = page.getByRole('dialog', { name: '答题已暂停' });
@@ -147,9 +149,9 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await expect(page.locator('.mistake-row')).toHaveCount(0);
     await page.getByPlaceholder('搜索题干或来源').fill('火山岩');
     await button(page, '标记已掌握').click();
-    await button(page, '已掌握').click();
+    await page.getByRole('radio', { name: '已掌握', exact: true }).click();
     await button(page, '标记待复习').click();
-    await button(page, '待复习').click();
+    await page.getByRole('radio', { name: '待复习', exact: true }).click();
     await page.getByRole('checkbox', { name: '选择错题' }).check();
     await button(page, '保存复习套题').click();
     const naming = page.getByRole('dialog', { name: '保存复习套题' });
@@ -180,8 +182,8 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     const backupFile = testInfo.outputPath('quarry.quarry-backup');
     await quarry.download(backupFile, () => button(page, '完整备份').click());
     await sidebar(page, '资料库').click();
-    await page.locator('.library-heading summary').click();
-    await button(page, '新建文件夹').click();
+    await button(page, '新建').click();
+    await menuItem(page, '新建文件夹').click();
     await saveDocument(page, '备份之后');
     await expect(row(page, '备份之后')).toBeVisible();
     await sidebar(page, '设置').click();

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startLocalBackend, type LocalBackend } from './backend-manager.js';
@@ -17,6 +17,11 @@ async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
     icon: iconPath,
+    autoHideMenuBar: true,
+    ...(process.platform === 'win32' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: '#f9f9f7', symbolColor: '#386450', height: 44 },
+    } : {}),
     webPreferences: {
       preload: path.join(directory, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
@@ -67,6 +72,7 @@ function fail(error: unknown): void {
 }
 
 void app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   startup = (async () => {
     const userDataDir = process.env.QUARRY_USER_DATA_DIR || app.getPath('userData');
     backend = await startLocalBackend({ userDataDir });

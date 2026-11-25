@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Input, NativeSelect } from "../components/ui/form.js";
+import { useEffect, useRef, useState } from "react";
+import { buttonVariants } from "../components/ui/button.js";
+import { Card } from "../components/ui/card.js";
+import { Progress } from "../components/ui/progress.js";
+import { Segmented } from "../components/ui/toggle-group.js";
+import { Table } from "../components/ui/table.js";
 import { client } from "../api/client.js";
 import type {
   Query,
@@ -18,6 +24,7 @@ import {
   tagBackground,
   tagColorStyle,
   Facet,
+  FilterPopover,
   Notice,
   PromptDialog,
   types,
@@ -47,34 +54,6 @@ function sessionProgress(session: Session) {
       .filter(([, answer]) => hasAnswer(answer))
       .map(([id]) => id),
   ]).size;
-}
-
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly (readonly [string, string])[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="tabs segmented" role="group" aria-label={label}>
-      {options.map(([key, name]) => (
-        <button
-          type="button"
-          className={`button tab ${key === value ? "active" : ""}`}
-          key={key}
-          aria-pressed={key === value}
-          onClick={() => onChange(key)}
-        >
-          {name}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 export function Home({ navigate }: { navigate: (r: Route) => void }) {
@@ -148,111 +127,11 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
               </div>
             </div>
           </div>
-          <div className="home-middle">
-            <section>
-              <div className="section-head">
-                <h2>接着上次的学习</h2>
-                <span className="muted small">
-                  {pending.length} 份未完成套题
-                </span>
-              </div>
-              <div className="paper-grid">
-                {pending.map((session) => {
-                  const count = sessionProgress(session);
-                  const progress = session.items.length
-                    ? Math.round((count / session.items.length) * 100)
-                    : 0;
-                  return (
-                    <article className="card paper-card" key={session.id}>
-                      <div className="card-meta">
-                        <span>{session.mode === "exam" ? "考试" : "练习"}</span>
-                        <span>
-                          {session.status === "paused" ? "已暂停" : "进行中"}
-                        </span>
-                      </div>
-                      <h3>
-                        {session.paper_name ??
-                          data[2].find((paper) => paper.id === session.paper_id)
-                            ?.name ??
-                          "历史套题"}
-                      </h3>
-                      <div className="paper-progress">
-                        <span>
-                          <strong>{count}</strong> / {session.items.length} 题
-                        </span>
-                        <span>已答 {progress}%</span>
-                      </div>
-                      <div className="progress" aria-hidden="true">
-                        <i
-                          style={
-                            { "--progress": progress + "%" } as CSSProperties
-                          }
-                        />
-                      </div>
-                      <div className="card-bottom">
-                        <span data-dynamic-date="duration">
-                          已用时{" "}
-                          {formatTime(session.effective_duration_seconds)}
-                        </span>
-                        <Button
-                          primary
-                          onClick={() =>
-                            navigate({ page: "study", id: session.id })
-                          }
-                        >
-                          继续作答
-                        </Button>
-                      </div>
-                    </article>
-                  );
-                })}
-                {!pending.length && (
-                  <article className="card">
-                    <h3>准备好新的练习</h3>
-                    <p className="muted space-y-6">
-                      从资料库挑选一份套题，开始学习。
-                    </p>
-                    <Button
-                      primary
-                      onClick={() => navigate({ page: "library" })}
-                    >
-                      打开资料库
-                    </Button>
-                  </article>
-                )}
-              </div>
-            </section>
-            <section className="home-review">
-              <h2>复习错题</h2>
-              <div className="big-number">
-                {reviewing.length}
-                <span className="unit">题待复习</span>
-              </div>
-              {types.map(({ id, name }) => {
-                const count = reviewing.filter(
-                  (mistake) => mistake.question_snapshot.type === id,
-                ).length;
-                return count ? (
-                  <div className="subject-row" key={id}>
-                    <span>{name}</span>
-                    <span className="serif">{count}</span>
-                  </div>
-                ) : null;
-              })}
-              <button
-                type="button"
-                className="review-action"
-                onClick={() => navigate({ page: "mistakes" })}
-              >
-                去错题本选题 <Icon name="forward" />
-              </button>
-            </section>
-          </div>
-          <section className="activity">
+          <Card className="activity">
             <div className="section-head">
               <div className="activity-title">
                 <h2>日积月累</h2>
-                <select
+                <NativeSelect
                   className="filter"
                   aria-label="年份"
                   value={year}
@@ -273,7 +152,7 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
                         {value}
                       </option>
                     ))}
-                </select>
+                </NativeSelect>
               </div>
               <Segmented
                 label="活动统计口径"
@@ -315,26 +194,120 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
                 );
               })}
             </div>
-            <div className="legend">
-              <span>少</span>
-              <i className="legend-level-1" />
-              <i className="legend-level-2" />
-              <i className="legend-level-3" />
-              <i />
-              <span>
-                多　{metric === "count" ? "按作答量着色" : "按用时着色"}
-                　未到日期为空心格
-              </span>
-            </div>
-            <div className="align-end space-top-6">
+            <div className="activity-footer">
+              <div className="legend">
+                <span>少</span>
+                <i className="legend-level-1" />
+                <i className="legend-level-2" />
+                <i className="legend-level-3" />
+                <i />
+                <span>多</span>
+                <span className="legend-note">未到日期为空心格</span>
+              </div>
               <Button
-                className="quiet"
+                variant="ghost"
+                size="compact"
                 onClick={() => navigate({ page: "records" })}
               >
-                学习记录 ↗
+                学习记录 <Icon name="forward" />
               </Button>
             </div>
-          </section>
+          </Card>
+          <div className="home-middle">
+            <section>
+              <div className="section-head">
+                <h2>接着上次的学习</h2>
+                <span className="muted small">
+                  {pending.length} 份未完成套题
+                </span>
+              </div>
+              <div className="paper-grid">
+                {pending.map((session) => {
+                  const count = sessionProgress(session);
+                  const progress = session.items.length
+                    ? Math.round((count / session.items.length) * 100)
+                    : 0;
+                  return (
+                    <Card as="article" className="paper-card" key={session.id}>
+                      <div className="card-meta">
+                        <span>{session.mode === "exam" ? "考试" : "练习"}</span>
+                        <StatusPill state={session.status}>
+                          {session.status === "paused" ? "已暂停" : "进行中"}
+                        </StatusPill>
+                      </div>
+                      <h3>
+                        {session.paper_name ??
+                          data[2].find((paper) => paper.id === session.paper_id)
+                            ?.name ??
+                          "历史套题"}
+                      </h3>
+                      <div className="paper-progress">
+                        <span>
+                          <strong>{count}</strong> / {session.items.length} 题
+                        </span>
+                        <span>已答 {progress}%</span>
+                      </div>
+                      <Progress value={progress} aria-label="答题进度" />
+                      <div className="card-bottom">
+                        <span data-dynamic-date="duration">
+                          已用时{" "}
+                          {formatTime(session.effective_duration_seconds)}
+                        </span>
+                        <Button
+                          variant="default"
+                          size="compact"
+                          onClick={() =>
+                            navigate({ page: "study", id: session.id })
+                          }
+                        >
+                          继续作答
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+                {!pending.length && (
+                  <Card as="article">
+                    <h3>准备好新的练习</h3>
+                    <p className="muted space-y-6">
+                      从资料库挑选一份套题，开始学习。
+                    </p>
+                    <Button
+                      variant="default"
+                      onClick={() => navigate({ page: "library" })}
+                    >
+                      打开资料库
+                    </Button>
+                  </Card>
+                )}
+              </div>
+            </section>
+            <section className="home-review">
+              <h2>复习错题</h2>
+              <div className="big-number">
+                {reviewing.length}
+                <span className="unit">题待复习</span>
+              </div>
+              {types.map(({ id, name }) => {
+                const count = reviewing.filter(
+                  (mistake) => mistake.question_snapshot.type === id,
+                ).length;
+                return count ? (
+                  <div className="subject-row" key={id}>
+                    <span>{name}</span>
+                    <span className="serif">{count}</span>
+                  </div>
+                ) : null;
+              })}
+              <button
+                type="button"
+                className="review-action"
+                onClick={() => navigate({ page: "mistakes" })}
+              >
+                去错题本选题 <Icon name="forward" />
+              </button>
+            </section>
+          </div>
         </>
       )}
     </>
@@ -408,7 +381,7 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
       <Notice error={error} loading={!data} />
       {data &&
         (rows.length ? (
-          <table className="data-table">
+          <Table>
             <thead>
               <tr>
                 <th>套题</th>
@@ -447,30 +420,37 @@ export function Records({ navigate }: { navigate: (r: Route) => void }) {
                     </span>
                   </td>
                   <td className="optional muted">
-                    <time dateTime={session.start_time} data-dynamic-date="date">
+                    <time
+                      dateTime={session.start_time}
+                      data-dynamic-date="date"
+                    >
                       {new Date(session.start_time).toLocaleDateString("zh-CN")}
                     </time>
                   </td>
                   <td>
                     <div className="row-actions">
                       <Button
-                        className="quiet"
+                        variant="ghost"
                         onClick={() =>
                           navigate({
                             page:
-                              session.status === "completed" ? "result" : "study",
+                              session.status === "completed"
+                                ? "result"
+                                : "study",
                             id: session.id,
                           })
                         }
                       >
-                        {session.status === "completed" ? "查看结果" : "继续作答"}
+                        {session.status === "completed"
+                          ? "查看结果"
+                          : "继续作答"}
                       </Button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         ) : (
           <EmptyState
             title="暂无符合条件的记录"
@@ -525,7 +505,7 @@ export function Mistakes({
   const [dateFrom, setDateFrom] = useState(String(query.date_from ?? ""));
   const [dateTo, setDateTo] = useState(String(query.date_to ?? ""));
   const [dateError, setDateError] = useState("");
-  const dateFilter = useRef<HTMLDetailsElement>(null);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const inspect =
     visible?.find((item) => item.id === inspectId) ?? visible?.[0];
   useEffect(() => {
@@ -561,7 +541,7 @@ export function Mistakes({
     setDateFrom(start);
     setDateTo(end);
     setDateError("");
-    if (dateFilter.current) dateFilter.current.open = false;
+    setDateFilterOpen(false);
   }
   async function act(task: () => Promise<unknown>) {
     try {
@@ -598,7 +578,7 @@ export function Mistakes({
         </div>
         <div className="actions">
           <Button
-            primary
+            variant="default"
             disabled={!visible || !selected.length}
             onClick={() => setNamingPaper(true)}
           >
@@ -637,57 +617,51 @@ export function Mistakes({
           {facet("folder_ids", "文件夹", folders)}
           {facet("tag_ids", "题目标签", tags)}
           {facet("types", "题型", types)}
-          <details
-            ref={dateFilter}
-            className={`date-filter-card ${query.date_from || query.date_to ? "is-filtered" : ""}`}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-            }}
+          <FilterPopover
+            label="日期"
+            summary={
+              query.date_from || query.date_to
+                ? `${query.date_from ?? "不限"} 至 ${query.date_to ?? "不限"}`
+                : "日期"
+            }
+            active={Boolean(query.date_from || query.date_to)}
+            open={dateFilterOpen}
+            onOpenChange={setDateFilterOpen}
+            contentClassName="date-filter-popover w-72 p-4"
           >
-            <summary className="select-trigger" aria-label="日期">
-              <span className="filter-value">
-                <span data-select-value>
-                  {query.date_from || query.date_to
-                    ? `${query.date_from ?? "不限"} 至 ${query.date_to ?? "不限"}`
-                    : "日期"}
-                </span>
-              </span>
-              <Icon name="chevron" />
-            </summary>
-            <div className="date-filter-popover">
-              <label className="field">
-                <span>开始日期</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(event) => setDateFrom(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>结束日期</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(event) => setDateTo(event.target.value)}
-                />
-              </label>
-              {dateError && (
-                <p className="date-filter-error" role="alert">
-                  {dateError}
-                </p>
-              )}
-              <div className="actions">
-                <Button className="quiet" onClick={() => applyDate("", "")}>
-                  清除
-                </Button>
-                <Button primary onClick={() => applyDate(dateFrom, dateTo)}>
-                  应用
-                </Button>
-              </div>
+            <label className="field">
+              <span>开始日期</span>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => setDateFrom(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>结束日期</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(event) => setDateTo(event.target.value)}
+              />
+            </label>
+            {dateError && (
+              <p className="date-filter-error" role="alert">
+                {dateError}
+              </p>
+            )}
+            <div className="actions">
+              <Button variant="ghost" onClick={() => applyDate("", "")}>
+                清除
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => applyDate(dateFrom, dateTo)}
+              >
+                应用
+              </Button>
             </div>
-          </details>
+          </FilterPopover>
         </div>
         <SearchField
           label="搜索题干或来源"
@@ -721,8 +695,9 @@ export function Mistakes({
                 <span className="small muted">共 {visible.length} 题</span>
               </div>
               {visible.map((item) => (
-                <article
-                  className={`card mistake-row ${item.id === inspect.id ? "active" : ""}`}
+                <Card
+                  as="article"
+                  className={`mistake-row ${item.id === inspect.id ? "active" : ""}`}
                   key={item.id}
                 >
                   <input
@@ -767,9 +742,9 @@ export function Mistakes({
                       </time>
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="button slay-button"
+                  <Button
+                    variant="ghost"
+                    className="slay-button"
                     aria-label={
                       item.mastery_status === "mastered"
                         ? "标记待复习"
@@ -789,20 +764,24 @@ export function Mistakes({
                     }
                   >
                     {item.mastery_status === "mastered" ? "复" : "斩"}
-                  </button>
-                </article>
+                  </Button>
+                </Card>
               ))}
               {selected.length > 0 && (
                 <div className="selection-bar">
                   <span>已选 {selected.length} 道错题</span>
-                  <Button primary onClick={() => setNamingPaper(true)}>
+                  <Button
+                    variant="default"
+                    onClick={() => setNamingPaper(true)}
+                  >
                     保存复习套题
                   </Button>
                 </div>
               )}
             </section>
-            <aside
-              className="card inspector mistake-preview"
+            <Card
+              as="aside"
+              className="inspector mistake-preview"
               aria-label="题目预览"
             >
               <div className="section-head preview-heading">
@@ -826,7 +805,10 @@ export function Mistakes({
               <h2 className="preview-history-heading">错误历史</h2>
               {inspect.history.map((item, index) => (
                 <div className="history-item" key={index}>
-                  <time dateTime={item.answered_at} data-dynamic-date="timestamp">
+                  <time
+                    dateTime={item.answered_at}
+                    data-dynamic-date="timestamp"
+                  >
                     {new Date(item.answered_at).toLocaleString("zh-CN")}
                   </time>
                   <div>
@@ -842,7 +824,7 @@ export function Mistakes({
                   </div>
                 </div>
               ))}
-            </aside>
+            </Card>
           </div>
         ) : (
           <EmptyState
@@ -907,7 +889,7 @@ function ColorRow({ tag }: { tag: Tag }) {
         {message}
       </span>
       {message.startsWith("保存失败") && (
-        <Button className="compact" onClick={() => save(color)}>
+        <Button size="compact" onClick={() => save(color)}>
           重试
         </Button>
       )}
@@ -951,7 +933,8 @@ export function Settings() {
         <h1>设置</h1>
       </div>
       <div className="settings-page">
-        <section
+        <Card
+          as="section"
           className="settings-section tag-color-settings"
           aria-labelledby="settings-tags-heading"
         >
@@ -962,7 +945,7 @@ export function Settings() {
                 文件标签与题目标签分别管理，修改后自动保存。
               </p>
             </div>
-            <select
+            <NativeSelect
               className="filter"
               aria-label="标签类型"
               value={namespace}
@@ -970,7 +953,7 @@ export function Settings() {
             >
               <option value="file">文件标签</option>
               <option value="question">题目标签</option>
-            </select>
+            </NativeSelect>
           </div>
           <Notice error={error} loading={!data} />
           {["file", "question"].map((kind) => (
@@ -988,8 +971,9 @@ export function Settings() {
               )}
             </div>
           ))}
-        </section>
-        <section
+        </Card>
+        <Card
+          as="section"
           className="settings-section about-product"
           aria-labelledby="settings-about-heading"
         >
@@ -1025,16 +1009,12 @@ export function Settings() {
             {Object.entries(__PRODUCT__.links)
               .filter(([, value]) => safeLink(value))
               .map(([key, value]) => (
-                <a
-                  className="button quiet"
-                  key={key}
-                  href={safeLink(value)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {linkNames[key] ?? key}
-                  <Icon name="export" />
-                </a>
+                <Button asChild variant="ghost" key={key}>
+                  <a href={safeLink(value)} target="_blank" rel="noreferrer">
+                    {linkNames[key] ?? key}
+                    <Icon name="export" />
+                  </a>
+                </Button>
               ))}
           </div>
           <div className="actions space-top-6">
@@ -1048,7 +1028,9 @@ export function Settings() {
             >
               完整备份
             </Button>
-            <label className="button file-input-button">
+            <label
+              className={buttonVariants({ className: "file-input-button" })}
+            >
               恢复备份
               <input
                 type="file"
@@ -1072,7 +1054,7 @@ export function Settings() {
             </label>
           </div>
           <p role="status">{message}</p>
-        </section>
+        </Card>
       </div>
       {confirmation.dialog}
     </>
@@ -1108,7 +1090,7 @@ export function Trash() {
       <Notice error={error || message} loading={!data} />
       {data &&
         (data.length ? (
-          <table className="data-table">
+          <Table>
             <thead>
               <tr>
                 <th>名称</th>
@@ -1124,7 +1106,7 @@ export function Trash() {
                   <td>
                     <div className="row-actions">
                       <Button
-                        className="quiet"
+                        variant="ghost"
                         onClick={() =>
                           void action(() =>
                             client.trash.restore(item.entity, item.id),
@@ -1134,12 +1116,15 @@ export function Trash() {
                         恢复
                       </Button>
                       <Button
-                        className="quiet danger"
+                        variant="ghost"
+                        className="danger"
                         onClick={() =>
-                          confirmation.ask("永久删除？此操作不可撤销。", () =>
-                            void action(() =>
-                              client.trash.purge(item.entity, item.id),
-                            ),
+                          confirmation.ask(
+                            "永久删除？此操作不可撤销。",
+                            () =>
+                              void action(() =>
+                                client.trash.purge(item.entity, item.id),
+                              ),
                           )
                         }
                       >
@@ -1150,7 +1135,7 @@ export function Trash() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         ) : (
           <EmptyState
             title="回收站为空"

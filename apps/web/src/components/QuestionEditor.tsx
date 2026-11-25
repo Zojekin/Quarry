@@ -1,3 +1,5 @@
+import { buttonVariants } from "./ui/button.js";
+import { Input, NativeSelect, Textarea } from "./ui/form.js";
 import { useState } from "react";
 import { QuestionSchema } from "@quarry/shared";
 import { client } from "../api/client.js";
@@ -117,7 +119,7 @@ export function QuestionEditor({
       actions={
         <>
           <Button onClick={onClose}>取消</Button>
-          <Button primary disabled={busy} onClick={() => void save()}>
+          <Button variant="default" disabled={busy} onClick={() => void save()}>
             保存
           </Button>
         </>
@@ -125,14 +127,14 @@ export function QuestionEditor({
     >
       <label className="field">
         <span>共用材料</span>
-        <textarea
+        <Textarea
           value={material}
           onChange={(e) => setMaterial(e.target.value)}
         />
       </label>
       <label className="field">
         <span>题型</span>
-        <select
+        <NativeSelect
           value={type}
           onChange={(e) => setType(e.target.value as typeof type)}
         >
@@ -141,17 +143,17 @@ export function QuestionEditor({
               {t.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <label className="field">
         <span>题干</span>
-        <textarea
+        <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />
       </label>
       <Markdown text={content} />
-      <label className="button file-input-button">
+      <label className={buttonVariants({ className: "file-input-button" })}>
         插入图片附件
         <input
           type="file"
@@ -189,13 +191,13 @@ export function QuestionEditor({
       ].includes(type) && (
         <label className="field">
           <span>判分规则</span>
-          <select
+          <NativeSelect
             value={scoreMode}
             onChange={(e) => setScoreMode(e.target.value)}
           >
             <option value="all_or_nothing">完全匹配得分</option>
             <option value="proportional">按正确比例得分</option>
-          </select>
+          </NativeSelect>
         </label>
       )}
       {type.includes("choice") ? (
@@ -221,7 +223,7 @@ export function QuestionEditor({
                 <span className="serif" aria-hidden="true">
                   {String.fromCharCode(65 + i)}
                 </span>
-                <input
+                <Input
                   data-option-text
                   aria-label={`选项 ${i + 1}`}
                   value={o.content}
@@ -257,7 +259,7 @@ export function QuestionEditor({
       ) : type === "strict_fill_in_blank" ? (
         <label className="field">
           <span>每行一空，备选答案用 | 分隔</span>
-          <textarea
+          <Textarea
             value={blanks}
             onChange={(e) => setBlanks(e.target.value)}
           />
@@ -265,7 +267,7 @@ export function QuestionEditor({
       ) : (
         <label className="field">
           <span>参考答案</span>
-          <textarea
+          <Textarea
             value={reference}
             onChange={(e) => setReference(e.target.value)}
           />
@@ -273,7 +275,7 @@ export function QuestionEditor({
       )}
       <label className="field">
         <span>解析</span>
-        <textarea
+        <Textarea
           value={explanation}
           onChange={(e) => setExplanation(e.target.value)}
         />
@@ -281,7 +283,7 @@ export function QuestionEditor({
       {!["subjective", "free_fill_in_blank"].includes(type) && (
         <label className="field">
           <span>分值</span>
-          <input
+          <Input
             type="number"
             min="1"
             value={score}
@@ -291,7 +293,7 @@ export function QuestionEditor({
       )}
       <label className="field">
         <span>题目标签（英文逗号分隔）</span>
-        <input value={tags} onChange={(e) => setTags(e.target.value)} />
+        <Input value={tags} onChange={(e) => setTags(e.target.value)} />
       </label>
       <p role="alert">{error}</p>
     </Modal>

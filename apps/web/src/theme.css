@@ -1,0 +1,63 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-sidebar: var(--sidebar);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --text-ui: var(--text-body);
+  --text-ui-sm: var(--text-small);
+  --shadow-surface: var(--shadow-card);
+  --shadow-panel: var(--shadow-popover);
+}
+
+:root {
+  --background: #f9f9f7;
+  --foreground: #252c29;
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #386450;
+  --primary-foreground: #ffffff;
+  --primary-hover: #2b5140;
+  --muted: #eeefe8;
+  --muted-foreground: #62695f;
+  --accent: #e5eae0;
+  --accent-foreground: var(--primary-hover);
+  --border: #d8dcd2;
+  --input: var(--border);
+  --ring: var(--primary);
+  --destructive: #9b4d40;
+  --sidebar: #eeeee5;
+  --radius: 10px;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
