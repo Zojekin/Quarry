@@ -910,6 +910,108 @@ it("renders Result reference answers via Markdown and keeps original question nu
   expect(screen.getByText("第 2 题")).toBeTruthy();
 });
 
+it("redirects completed sessions to Result and disables editing handlers", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue({
+    ...session,
+    status: "completed",
+  });
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  const navigate = vi.fn();
+
+  render(<Study id="s" navigate={navigate} onRail={() => {}} />);
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith({ page: "result", id: "s" }),
+  );
+  expect(screen.queryByRole("button", { name: /查看答案/ })).toBeNull();
+  expect(screen.queryByText("Alpha")).toBeNull();
+});
+
+it("computes active elapsed time from timestamps and restores saved current_index on re-entry", async () => {
+  const now = Date.parse("2026-11-25T10:05:00.000Z");
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  const twoItemsSession: Session = {
+    ...session,
+    current_index: 1,
+    start_time: new Date(now - 300_000).toISOString(),
+    paused_duration_seconds: 60,
+    effective_duration_seconds: 0,
+    items: [
+      session.items[0]!,
+      {
+        id: "i2",
+        source_question_id: null,
+        question: {
+          ...session.items[0]!.question,
+          id: "q2",
+          content: "Second question stem",
+        },
+      },
+    ],
+  };
+  vi.spyOn(client.sessions, "get").mockResolvedValue(twoItemsSession);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={() => {}} onRail={setRail} />
+      </div>
+    );
+  }
+  render(<Harness />);
+
+  await screen.findByText("Second question stem");
+  expect(screen.getByText("04:00")).toBeTruthy();
+});
+
+it("keeps edits locked while confirmed discard exit is pausing", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue(session);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  const saveDraft = vi
+    .spyOn(client.sessions, "saveDraft")
+    .mockRejectedValue(new Error("保存失败"));
+  let releasePause!: (s: Session) => void;
+  const pause = vi.spyOn(client.sessions, "pause").mockImplementation(
+    () =>
+      new Promise<Session>((resolve) => {
+        releasePause = resolve;
+      }),
+  );
+  const navigate = vi.fn();
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={navigate} onRail={setRail} />
+      </div>
+    );
+  }
+  render(<Harness />);
+
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  await screen.findByRole("alert");
+
+  fireEvent.click(screen.getByRole("button", { name: "退出答题" }));
+  const confirmDialog = await screen.findByRole("dialog");
+  fireEvent.click(within(confirmDialog).getByRole("button", { name: "确认" }));
+
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(1));
+  const beta = screen.getByRole("radio", { name: /Beta/ }) as HTMLButtonElement;
+  expect(beta.disabled).toBe(true);
+  fireEvent.click(beta);
+  expect(saveDraft).toHaveBeenCalledTimes(2);
+  expect(navigate).not.toHaveBeenCalled();
+
+  releasePause({ ...session, status: "paused" });
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith({ page: "records" }),
+  );
+});
+
 it("filters bank questions by search, type, and tag and paper questions by search", async () => {
   const q1: QuestionView = {
     ...session.items[0]!.question,

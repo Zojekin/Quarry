@@ -321,7 +321,6 @@ export function Study({
   const [drafts, setDrafts] = useState<Record<string, StudyAnswer>>({});
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
   const [checked, setChecked] = useState<Record<string, CheckedState>>({});
-  const [elapsed, setElapsed] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -363,6 +362,10 @@ export function Study({
     failedDraftsRef.current.clear();
     failedIndexRef.current = null;
     setDraftError("");
+    if (loadedSession.status === "completed") {
+      navigate({ page: "result", id: loadedSession.id });
+      return;
+    }
 
     const title = loadedSession.paper_name ?? foundPaper?.name ?? "作答";
     onTitleRef.current?.(
@@ -383,14 +386,10 @@ export function Study({
       }
     }
 
-    const firstUnchecked =
-      loadedSession.mode === "practice"
-        ? items.findIndex((item) => !latestRecordByQ.has(item.question.id))
-        : -1;
-    const initialIndex =
-      firstUnchecked >= 0
-        ? firstUnchecked
-        : Math.min(loadedSession.current_index, Math.max(0, items.length - 1));
+    const initialIndex = Math.max(
+      0,
+      Math.min(loadedSession.current_index, Math.max(0, items.length - 1)),
+    );
     setIndex(initialIndex);
 
     const initDrafts: Record<string, StudyAnswer> = {};
@@ -416,7 +415,6 @@ export function Study({
     }
     setAttemptCounts(initAttempts);
     setChecked(initChecked);
-    setElapsed(loadedSession.effective_duration_seconds);
     setNowMs(Date.now());
   }, [data]);
 
@@ -431,9 +429,6 @@ export function Study({
     if (session.status !== "in_progress" && deadlineMs === null) return;
     const timer = window.setInterval(() => {
       setNowMs(Date.now());
-      if (sessionRef.current?.status === "in_progress") {
-        setElapsed((sec) => sec + 1);
-      }
     }, 1000);
     return () => window.clearInterval(timer);
   }, [session?.id, session?.status, deadlineMs]);
@@ -600,7 +595,12 @@ export function Study({
   }
 
   function updateAnswer(question: QuestionView, nextAnswer: StudyAnswer) {
-    if (busyRef.current || leavingRef.current) return;
+    if (
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
     setDrafts((prev) => ({ ...prev, [question.id]: nextAnswer }));
     if (
       !(
@@ -613,7 +613,12 @@ export function Study({
   }
 
   function go(nextIndex: number) {
-    if (busyRef.current || leavingRef.current) return;
+    if (
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
     setIndex(nextIndex);
     queueDraft(nextIndex);
   }
@@ -623,7 +628,13 @@ export function Study({
   const currentCheck = currentQuestion ? checked[currentQuestion.id] : undefined;
 
   async function checkCurrent() {
-    if (!session || !currentQuestion || busyRef.current) return;
+    if (
+      !session ||
+      sessionRef.current?.status !== "in_progress" ||
+      !currentQuestion ||
+      busyRef.current
+    )
+      return;
     busyRef.current = true;
     setBusy(true);
     setMessage("");
@@ -677,7 +688,13 @@ export function Study({
   }
 
   function redoCurrent() {
-    if (!currentQuestion || busyRef.current || leavingRef.current) return;
+    if (
+      !currentQuestion ||
+      busyRef.current ||
+      leavingRef.current ||
+      sessionRef.current?.status !== "in_progress"
+    )
+      return;
     setChecked((prev) => {
       const next = { ...prev };
       delete next[currentQuestion.id];
@@ -688,7 +705,12 @@ export function Study({
   }
 
   async function addMistake(recordId: string) {
-    if (!session || busyRef.current) return;
+    if (
+      !session ||
+      sessionRef.current?.status !== "in_progress" ||
+      busyRef.current
+    )
+      return;
     busyRef.current = true;
     setBusy(true);
     try {
@@ -704,7 +726,12 @@ export function Study({
   }
 
   async function finishPractice() {
-    if (!session || busyRef.current) return;
+    if (
+      !session ||
+      sessionRef.current?.status === "completed" ||
+      busyRef.current
+    )
+      return;
     busyRef.current = true;
     setBusy(true);
     try {
@@ -725,7 +752,12 @@ export function Study({
 
   async function submitExam(isAuto = false) {
     let currentSession = sessionRef.current ?? session;
-    if (!currentSession || busyRef.current) return;
+    if (
+      !currentSession ||
+      currentSession.status === "completed" ||
+      busyRef.current
+    )
+      return;
     if (isAuto) autoSubmitted.current = true;
     busyRef.current = true;
     setBusy(true);
@@ -802,14 +834,20 @@ export function Study({
             `存在未保存的草稿（${reason}），确认放弃未保存更改并退出吗？`,
             () =>
               void (async () => {
+                if (busyRef.current) return;
+                busyRef.current = true;
+                setBusy(true);
+                leavingRef.current = true;
                 pauseSentForRef.current = active.id;
                 try {
                   const paused = await client.sessions.pause(active.id);
                   commitSession(paused);
                 } catch {
                   pauseSentForRef.current = null;
+                } finally {
+                  busyRef.current = false;
+                  setBusy(false);
                 }
-                leavingRef.current = true;
                 navigate({ page: "records" });
               })(),
           );
@@ -915,7 +953,7 @@ export function Study({
 
   /* Inject Study Rail into App Sidebar (no divider lines!) */
   useEffect(() => {
-    if (!session) {
+    if (!session || session.status === "completed") {
       onRail(null);
       return;
     }
@@ -923,10 +961,19 @@ export function Study({
       if (session.mode === "practice") return !!checked[item.question.id];
       return hasAnswer(drafts[item.question.id]);
     }).length;
+    const anchorMs =
+      session.status === "paused" && session.paused_at
+        ? Date.parse(session.paused_at)
+        : nowMs;
+    const elapsedSeconds = Math.max(
+      0,
+      Math.floor((anchorMs - Date.parse(session.start_time)) / 1000) -
+        (session.paused_duration_seconds ?? 0),
+    );
     const displayedSeconds =
       deadlineMs !== null
         ? Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000))
-        : elapsed;
+        : elapsedSeconds;
     const paperTitle = session.paper_name ?? paperMeta?.name ?? "试卷作答";
 
     onRail(
@@ -1042,12 +1089,15 @@ export function Study({
       </div>,
     );
     return () => onRail(null);
-  }, [session, paperMeta, drafts, checked, index, elapsed, nowMs, busy, deadlineMs]);
+  }, [session, paperMeta, drafts, checked, index, nowMs, busy, deadlineMs]);
 
-  if (error || !session) {
+  if (error || !session || session.status === "completed") {
     return (
       <div className="space-y-4">
-        <Notice error={error} loading={!error && !session} />
+        <Notice
+          error={error}
+          loading={!error && (!session || session.status === "completed")}
+        />
         {error && (
           <Button variant="outline" onClick={reload}>
             重试加载
