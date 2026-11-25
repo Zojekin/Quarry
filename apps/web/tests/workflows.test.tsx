@@ -963,7 +963,7 @@ it("computes active elapsed time from timestamps and restores saved current_inde
   render(<Harness />);
 
   await screen.findByText("Second question stem");
-  expect(screen.getByText("04:00")).toBeTruthy();
+  expect(await screen.findByText("04:00")).toBeTruthy();
 });
 
 it("keeps edits locked while confirmed discard exit is pausing", async () => {
@@ -1009,6 +1009,84 @@ it("keeps edits locked while confirmed discard exit is pausing", async () => {
   releasePause({ ...session, status: "paused" });
   await waitFor(() =>
     expect(navigate).toHaveBeenCalledWith({ page: "records" }),
+  );
+});
+
+it("updates checked state and increments attempt index even when follow-up session refresh fails", async () => {
+  const get = vi
+    .spyOn(client.sessions, "get")
+    .mockResolvedValueOnce(session)
+    .mockRejectedValueOnce(new Error("刷新超时"))
+    .mockResolvedValue({ ...session, records: [] });
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.sessions, "saveDraft").mockResolvedValue(session);
+  const submitQuestion = vi
+    .spyOn(client.sessions, "submitQuestion")
+    .mockResolvedValueOnce({
+      id: "r1",
+      question_id: "q",
+      attempt_index: 1,
+      score: 6,
+      is_correct: 1,
+      answer: { kind: "choice", option_ids: ["a"] },
+      answered_at: "",
+    })
+    .mockResolvedValueOnce({
+      id: "r2",
+      question_id: "q",
+      attempt_index: 2,
+      score: 6,
+      is_correct: 1,
+      answer: { kind: "choice", option_ids: ["b"] },
+      answered_at: "",
+    });
+
+  render(<Study id="s" navigate={() => {}} onRail={() => {}} />);
+  fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
+  await screen.findByRole("button", { name: "重新作答" });
+  expect(get).toHaveBeenCalledTimes(2);
+
+  fireEvent.click(screen.getByRole("button", { name: "重新作答" }));
+  fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
+  await waitFor(() => expect(submitQuestion).toHaveBeenCalledTimes(2));
+  expect(submitQuestion.mock.calls.map((c) => c[1].attempt_index)).toEqual([
+    1, 2,
+  ]);
+});
+
+it("recovers a committed exam submission and redirects to Result when submit response is lost", async () => {
+  const exam: Session = {
+    ...session,
+    mode: "exam",
+    status: "in_progress",
+    time_limit_seconds: null,
+  };
+  vi.spyOn(client.sessions, "get")
+    .mockResolvedValueOnce(exam)
+    .mockResolvedValueOnce({ ...exam, status: "completed" });
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.sessions, "submitExam").mockRejectedValue(
+    new Error("连接中断"),
+  );
+  const navigate = vi.fn();
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={navigate} onRail={setRail} />
+      </div>
+    );
+  }
+  render(<Harness />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "交卷" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
+
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith({ page: "result", id: "s" }),
   );
 });
 

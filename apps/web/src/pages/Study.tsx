@@ -638,30 +638,17 @@ export function Study({
     busyRef.current = true;
     setBusy(true);
     setMessage("");
-    try {
-      await saveChain.current;
-      const answer = drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion);
-      const attempt = (attemptCounts[currentQuestion.id] ?? 0) + 1;
-      const result = await client.sessions.submitQuestion(session.id, {
-        question_id: currentQuestion.id,
-        answer,
-        attempt_index: attempt,
-      });
-      const refreshed = await client.sessions.get(session.id);
-      const latest = sessionRef.current;
-      commitSession(
-        latest
-          ? {
-              ...latest,
-              items: refreshed.items,
-              records: refreshed.records,
-            }
-          : refreshed,
-      );
+    const qid = currentQuestion.id;
+    const answer = drafts[qid] ?? emptyAnswer(currentQuestion);
+    const attempt = (attemptCounts[qid] ?? 0) + 1;
+    const applySubmission = (record: RecordView) => {
       const maxScore = currentQuestion.max_score;
-      const graded = maxScore !== undefined && result.score !== null;
-      setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attempt }));
-      failedDraftsRef.current.delete(currentQuestion.id);
+      const graded = maxScore !== undefined && record.score !== null;
+      setAttemptCounts((prev) => ({
+        ...prev,
+        [qid]: Math.max(prev[qid] ?? 0, record.attempt_index),
+      }));
+      failedDraftsRef.current.delete(qid);
       if (
         failedDraftsRef.current.size === 0 &&
         failedIndexRef.current === null
@@ -671,16 +658,55 @@ export function Study({
       }
       setChecked((prev) => ({
         ...prev,
-        [currentQuestion.id]: {
-          score: graded ? result.score : null,
-          recordId: result.id,
-          correct: graded ? (result.score ?? 0) >= maxScore : null,
-          answer,
+        [qid]: {
+          score: graded ? record.score : null,
+          recordId: record.id,
+          correct: graded ? (record.score ?? 0) >= maxScore : null,
+          answer: record.answer ?? answer,
         },
       }));
+    };
+    try {
+      await saveChain.current;
+      const result = await client.sessions.submitQuestion(session.id, {
+        question_id: qid,
+        answer,
+        attempt_index: attempt,
+      });
+      applySubmission(result);
+      const latest = sessionRef.current ?? session;
+      const refreshed = await client.sessions.get(session.id).catch(() => null);
+      if (refreshed) {
+        commitSession({
+          ...latest,
+          items: refreshed.items,
+          records: refreshed.records,
+        });
+      } else {
+        commitSession({
+          ...latest,
+          records: [...latest.records, result],
+        });
+      }
       onSubmitted?.();
     } catch (e) {
-      setMessage(errorMessage(e));
+      const recovered = await client.sessions.get(session.id).catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: session.id });
+        return;
+      }
+      const savedRecord = recovered?.records
+        .filter((r) => r.question_id === qid)
+        .sort((a, b) => b.attempt_index - a.attempt_index)[0];
+      if (recovered && savedRecord && savedRecord.attempt_index >= attempt) {
+        commitSession(recovered);
+        applySubmission(savedRecord);
+        onSubmitted?.();
+      } else {
+        setMessage(errorMessage(e));
+      }
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -742,6 +768,13 @@ export function Study({
       onSubmitted?.();
       navigate({ page: "result", id: session.id });
     } catch (e) {
+      const recovered = await client.sessions.get(session.id).catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: session.id });
+        return;
+      }
       sessionRef.current = session;
       setMessage(errorMessage(e));
     } finally {
@@ -778,6 +811,15 @@ export function Study({
       onSubmitted?.();
       navigate({ page: "result", id: currentSession.id });
     } catch (e) {
+      const recovered = await client.sessions
+        .get(currentSession.id)
+        .catch(() => null);
+      if (recovered?.status === "completed") {
+        commitSession(recovered);
+        onSubmitted?.();
+        navigate({ page: "result", id: currentSession.id });
+        return;
+      }
       sessionRef.current = currentSession;
       if (!isAuto) autoSubmitted.current = false;
       setMessage(errorMessage(e));
