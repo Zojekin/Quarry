@@ -44,6 +44,17 @@ export function hasAnswer(answer?: StudyAnswer) {
   return !!answer.value.trim();
 }
 
+function referenceText(q: QuestionView): string | undefined {
+  return (
+    q.reference_answer ??
+    q.options
+      ?.filter((o) => o.is_correct)
+      .map((o) => o.content)
+      .join("；") ??
+    q.blanks?.map((b) => b.valid_answers?.join(" / ")).join("；")
+  );
+}
+
 export function Answer({
   q,
   answer,
@@ -589,6 +600,7 @@ export function Study({
   }
 
   function updateAnswer(question: QuestionView, nextAnswer: StudyAnswer) {
+    if (busyRef.current || leavingRef.current) return;
     setDrafts((prev) => ({ ...prev, [question.id]: nextAnswer }));
     if (
       !(
@@ -601,6 +613,7 @@ export function Study({
   }
 
   function go(nextIndex: number) {
+    if (busyRef.current || leavingRef.current) return;
     setIndex(nextIndex);
     queueDraft(nextIndex);
   }
@@ -664,7 +677,7 @@ export function Study({
   }
 
   function redoCurrent() {
-    if (!currentQuestion) return;
+    if (!currentQuestion || busyRef.current || leavingRef.current) return;
     setChecked((prev) => {
       const next = { ...prev };
       delete next[currentQuestion.id];
@@ -770,9 +783,12 @@ export function Study({
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
-      leavingRef.current = true;
       try {
-        await saveChain.current;
+        let prevChain: Promise<void>;
+        do {
+          prevChain = saveChain.current;
+          await prevChain;
+        } while (saveChain.current !== prevChain);
         if (
           failedDraftsRef.current.size > 0 ||
           failedIndexRef.current !== null
@@ -782,26 +798,33 @@ export function Study({
         if (draftFailedRef.current) {
           const reason = draftFailedRef.current.message;
           setMessage(reason);
-          leavingRef.current = false;
           confirm.ask(
             `存在未保存的草稿（${reason}），确认放弃未保存更改并退出吗？`,
-            () => {
-              pauseSentForRef.current = active.id;
-              leavingRef.current = true;
-              navigate({ page: "records" });
-            },
+            () =>
+              void (async () => {
+                pauseSentForRef.current = active.id;
+                try {
+                  const paused = await client.sessions.pause(active.id);
+                  commitSession(paused);
+                } catch {
+                  pauseSentForRef.current = null;
+                }
+                leavingRef.current = true;
+                navigate({ page: "records" });
+              })(),
           );
           return;
         }
         pauseSentForRef.current = active.id;
         const paused = await client.sessions.pause(active.id);
+        leavingRef.current = true;
         commitSession(paused);
       } catch (e) {
+        pauseSentForRef.current = null;
+        leavingRef.current = false;
         const reason = errorMessage(e);
         setMessage(reason);
-        leavingRef.current = false;
         confirm.ask(`暂停会话失败（${reason}），仍要退出答题吗？`, () => {
-          pauseSentForRef.current = active.id;
           leavingRef.current = true;
           navigate({ page: "records" });
         });
@@ -1050,16 +1073,7 @@ export function Study({
     currentQuestion &&
     ["subjective", "free_fill_in_blank"].includes(currentQuestion.type);
 
-  const reference =
-    currentQuestion &&
-    (currentQuestion.reference_answer ??
-      currentQuestion.options
-        ?.filter((o) => o.is_correct)
-        .map((o) => o.content)
-        .join("；") ??
-      currentQuestion.blanks
-        ?.map((b) => b.valid_answers?.join(" / "))
-        .join("；"));
+  const reference = currentQuestion ? referenceText(currentQuestion) : undefined;
 
   return (
     <div className="space-y-6">
@@ -1121,7 +1135,7 @@ export function Study({
                   ? currentCheck.answer
                   : (drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion))
               }
-              locked={!!currentCheck}
+              locked={!!currentCheck || busy}
               reveal={!!currentCheck}
               onChange={(val) => updateAnswer(currentQuestion, val)}
             />
@@ -1172,13 +1186,13 @@ export function Study({
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <Button
                 variant="outline"
-                disabled={index === 0}
+                disabled={busy || index === 0}
                 onClick={() => go(index - 1)}
               >
                 上一题
               </Button>
               {currentCheck ? (
-                <Button variant="default" onClick={redoCurrent}>
+                <Button variant="default" disabled={busy} onClick={redoCurrent}>
                   重新作答
                 </Button>
               ) : (
@@ -1192,7 +1206,7 @@ export function Study({
               )}
               <Button
                 variant="outline"
-                disabled={index >= session.items.length - 1}
+                disabled={busy || index >= session.items.length - 1}
                 onClick={() => go(index + 1)}
               >
                 下一题
@@ -1227,7 +1241,7 @@ export function Study({
                 <Answer
                   q={q}
                   answer={drafts[q.id] ?? emptyAnswer(q)}
-                  locked={false}
+                  locked={busy}
                   reveal={false}
                   onChange={(val) => updateAnswer(q, val)}
                 />
@@ -1274,15 +1288,17 @@ export function Result({
     0,
   );
 
-  const rows = items.filter((item) => {
-    const r = records.get(item.question.id);
-    const maxScore = item.question.max_score;
-    if (filter === "missed") {
-      return !r || (maxScore !== undefined && (r.score ?? 0) < maxScore);
-    }
-    if (filter === "unanswered") return !r;
-    return true;
-  });
+  const rows = items
+    .map((item, idx) => ({ item, number: idx + 1 }))
+    .filter(({ item }) => {
+      const r = records.get(item.question.id);
+      const maxScore = item.question.max_score;
+      if (filter === "missed") {
+        return !r || (maxScore !== undefined && (r.score ?? 0) < maxScore);
+      }
+      if (filter === "unanswered") return !r;
+      return true;
+    });
 
   return (
     <div className="space-y-6">
@@ -1341,27 +1357,21 @@ export function Result({
           </div>
 
           <div className="space-y-4">
-            {rows.map((item, idx) => {
+            {rows.map(({ item, number }) => {
               const q = item.question;
               const r = records.get(q.id);
               const maxScore = q.max_score;
               const graded = maxScore !== undefined && r && r.score !== null;
               const score = r?.score ?? 0;
               const full = graded && score >= maxScore;
-              const refText =
-                q.reference_answer ??
-                q.options
-                  ?.filter((o) => o.is_correct)
-                  .map((o) => o.content)
-                  .join("；") ??
-                q.blanks?.map((b) => b.valid_answers?.join(" / ")).join("；");
+              const refText = referenceText(q);
 
               return (
                 <Card key={item.id} className="p-5">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
                       <Badge variant="outline" className="tabular-nums">
-                        第 {idx + 1} 题
+                        第 {number} 题
                       </Badge>
                       <span>{types.find((t) => t.id === q.type)?.name ?? q.type}</span>
                     </div>
@@ -1400,9 +1410,15 @@ export function Result({
                       {r ? "参考答案" : "答案与解析"}
                     </summary>
                     <div className="mt-2 space-y-1.5">
-                      <div>
+                      <div className="space-y-1">
                         <span className="font-semibold">参考答案：</span>
-                        <span>{refText || "暂无参考答案"}</span>
+                        {refText ? (
+                          <div className="text-foreground/90">
+                            <Markdown text={refText} />
+                          </div>
+                        ) : (
+                          <span>暂无参考答案</span>
+                        )}
                       </div>
                       {!r && q.explanation && (
                         <div className="text-muted-foreground">

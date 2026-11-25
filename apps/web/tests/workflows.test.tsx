@@ -770,7 +770,56 @@ it("requires confirmation on exit when draft retry or pause fails instead of dis
   expect(pause).not.toHaveBeenCalled();
 
   fireEvent.click(within(confirmDialog).getByRole("button", { name: "确认" }));
-  expect(navigate).toHaveBeenCalledWith({ page: "records" });
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith({ page: "records" }),
+  );
+});
+
+it("freezes edits during exit drain and retries automatic pause on unmount after a failed exit pause", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue(session);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  let releaseDraft!: () => void;
+  const saveDraft = vi.spyOn(client.sessions, "saveDraft").mockImplementation(
+    () =>
+      new Promise<Session>((resolve) => {
+        releaseDraft = () => resolve(session);
+      }),
+  );
+  const pause = vi
+    .spyOn(client.sessions, "pause")
+    .mockRejectedValueOnce(new Error("暂停超时"))
+    .mockResolvedValueOnce({ ...session, status: "paused" });
+  const navigate = vi.fn();
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={navigate} onRail={setRail} />
+      </div>
+    );
+  }
+
+  const view = render(<Harness />);
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+
+  fireEvent.click(screen.getByRole("button", { name: "退出答题" }));
+  const beta = screen.getByRole("radio", { name: /Beta/ }) as HTMLButtonElement;
+  expect(beta.disabled).toBe(true);
+  fireEvent.click(beta);
+  expect(saveDraft).toHaveBeenCalledTimes(1);
+
+  releaseDraft();
+  const failDialog = await screen.findByRole("dialog");
+  expect(failDialog.textContent).toContain("暂停会话失败");
+  fireEvent.click(within(failDialog).getByRole("button", { name: "取消" }));
+  expect(navigate).not.toHaveBeenCalled();
+
+  view.unmount();
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(2));
 });
 
 it("renders practice reference answers via Markdown rather than literal source", async () => {
@@ -810,6 +859,55 @@ it("renders practice reference answers via Markdown rather than literal source",
   fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
   const strong = await screen.findByText("关键术语");
   expect(strong.tagName).toBe("STRONG");
+});
+
+it("renders Result reference answers via Markdown and keeps original question numbering under filters", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue({
+    ...session,
+    status: "completed",
+    items: [
+      {
+        ...session.items[0]!,
+        id: "i1",
+        question: {
+          ...session.items[0]!.question,
+          id: "q1",
+          max_score: 5,
+          reference_answer: "**满分题**",
+        },
+      },
+      {
+        ...session.items[0]!,
+        id: "i2",
+        question: {
+          ...session.items[0]!.question,
+          id: "q2",
+          content: "Second stem",
+          max_score: 5,
+          reference_answer: "**核心解析点**",
+        },
+      },
+    ],
+    records: [
+      {
+        id: "r1",
+        question_id: "q1",
+        attempt_index: 1,
+        score: 5,
+        is_correct: 1,
+        answer: { kind: "choice", option_ids: ["a"] },
+        answered_at: "",
+      },
+    ],
+  });
+
+  render(<Result id="s" />);
+  const md = await screen.findByText("核心解析点");
+  expect(md.tagName).toBe("STRONG");
+
+  fireEvent.click(screen.getByRole("button", { name: "未作答" }));
+  expect(screen.queryByText("Pick one")).toBeNull();
+  expect(screen.getByText("第 2 题")).toBeTruthy();
 });
 
 it("filters bank questions by search, type, and tag and paper questions by search", async () => {
