@@ -7,11 +7,13 @@ import {
   ChevronDown,
   Clock,
   Command,
+  Download,
   Eye,
   FileText,
   Folder,
   History,
   Home,
+  Layers,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -29,17 +31,20 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const icons: Record<string, LucideIcon> = {
+const icons = {
   eye: Eye,
   play: Play,
   pause: Pause,
   pencil: Pencil,
+  edit: Pencil,
   forward: ArrowRight,
   back: ArrowLeft,
   grid: LayoutGrid,
   list: List,
   export: Upload,
+  download: Download,
   close: X,
+  cross: X,
   chevron: ChevronDown,
   check: Check,
   home: Home,
@@ -49,6 +54,7 @@ const icons: Record<string, LucideIcon> = {
   trash: Trash2,
   settings: Settings,
   folder: Folder,
+  bank: Layers,
   paper: FileText,
   panel: PanelLeft,
   search: Search,
@@ -57,7 +63,7 @@ const icons: Record<string, LucideIcon> = {
   command: Command,
   clock: Clock,
   reset: RotateCcw,
-};
+} satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
 
@@ -68,6 +74,6 @@ export function Icon({
   name: IconName;
   className?: string;
 }) {
-  const Component = icons[name] ?? FileText;
+  const Component = icons[name];
   return <Component className={className} strokeWidth={1.75} aria-hidden="true" />;
 }

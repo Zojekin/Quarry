@@ -207,6 +207,7 @@ export function QuestionEditor({
               accept="image/*"
               onChange={(e) => {
                 const file = e.target.files?.[0];
+                e.target.value = "";
                 if (file) {
                   void client.attachments
                     .upload(file)

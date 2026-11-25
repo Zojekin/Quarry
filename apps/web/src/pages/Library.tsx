@@ -1055,7 +1055,6 @@ export function Detail({
                 const q = "question" in entry ? entry.question : entry;
                 const typeName =
                   types.find((t) => t.id === q.type)?.name ?? q.type;
-                const maxScore = q.max_score ?? 1;
                 return (
                   <Card
                     key={itemId}
@@ -1069,7 +1068,9 @@ export function Detail({
                             第 {idx + 1} 题
                           </span>
                           <Badge variant="outline">{typeName}</Badge>
-                          <span className="tabular-nums">{maxScore} 分</span>
+                          <span className="tabular-nums">
+                            {q.max_score !== undefined ? `${q.max_score} 分` : "不计分"}
+                          </span>
                           <TagPills tags={qTags} ids={q.tag_ids} />
                         </div>
                         <div className="font-serif text-[16px] leading-[1.7] font-normal text-foreground">
@@ -1188,7 +1189,10 @@ export function Detail({
                       className="rounded-lg border border-border bg-card p-4"
                     >
                       <div className="mb-1.5 text-[12px] font-medium text-muted-foreground tabular-nums">
-                        第 {i + 1} 题 · {item.question.max_score ?? 1} 分
+                        第 {i + 1} 题 ·{" "}
+                        {item.question.max_score !== undefined
+                          ? `${item.question.max_score} 分`
+                          : "不计分"}
                       </div>
                       <QuestionPreview
                         question={item.question}

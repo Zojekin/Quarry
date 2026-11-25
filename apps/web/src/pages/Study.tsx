@@ -267,10 +267,12 @@ export function Study({
   const [drafts, setDrafts] = useState<Record<string, StudyAnswer>>({});
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
   const [checked, setChecked] = useState<
-    Record<string, { score: number; recordId: string; correct: boolean }>
+    Record<string, { score: number | null; recordId: string; correct: boolean | null }>
   >({});
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
   const [message, setMessage] = useState("");
   const confirm = useConfirmation();
   const pauseButtonRef = useRef<HTMLButtonElement>(null);
@@ -321,7 +323,7 @@ export function Study({
     const initAttempts: Record<string, number> = {};
     const initChecked: Record<
       string,
-      { score: number; recordId: string; correct: boolean }
+      { score: number | null; recordId: string; correct: boolean | null }
     > = {};
     for (const r of loadedSession.records) {
       initAttempts[r.question_id] = Math.max(
@@ -329,12 +331,12 @@ export function Study({
         r.attempt_index,
       );
       const item = items.find((it) => it.question.id === r.question_id);
-      const maxScore = item?.question.max_score ?? 1;
-      const score = r.score ?? 0;
+      const maxScore = item?.question.max_score;
+      const graded = maxScore !== undefined && r.score !== null;
       initChecked[r.question_id] = {
-        score,
+        score: graded ? r.score : null,
         recordId: r.id,
-        correct: score >= maxScore,
+        correct: graded ? (r.score ?? 0) >= maxScore : null,
       };
     }
     setAttemptCounts(initAttempts);
@@ -434,7 +436,8 @@ export function Study({
   const currentCheck = currentQuestion ? checked[currentQuestion.id] : undefined;
 
   async function checkCurrent() {
-    if (!session || !currentQuestion) return;
+    if (!session || !currentQuestion || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setMessage("");
     try {
@@ -456,21 +459,22 @@ export function Study({
             }
           : refreshed,
       );
-      const maxScore = currentQuestion.max_score ?? 1;
-      const score = result.score ?? 0;
+      const maxScore = currentQuestion.max_score;
+      const graded = maxScore !== undefined && result.score !== null;
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attempt }));
       setChecked((prev) => ({
         ...prev,
         [currentQuestion.id]: {
-          score,
+          score: graded ? result.score : null,
           recordId: result.id,
-          correct: score >= maxScore,
+          correct: graded ? (result.score ?? 0) >= maxScore : null,
         },
       }));
       onSubmitted?.();
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -555,10 +559,21 @@ export function Study({
   }
 
   async function resumeExam() {
-    if (!session) return;
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
     resumeFocusPending.current = true;
-    const updated = await client.sessions.resume(session.id);
-    setSession(updated);
+    try {
+      const updated = await client.sessions.resume(session.id);
+      setSession(updated);
+    } catch (e) {
+      resumeFocusPending.current = false;
+      setMessage((e as Error).message);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -571,6 +586,7 @@ export function Study({
       return;
     const locked = !!checked[currentQuestion.id];
     const onKeyDown = (event: KeyboardEvent) => {
+      if (busyRef.current || document.querySelector('[role="dialog"]')) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -678,9 +694,11 @@ export function Study({
                     isCurrent
                       ? "border-primary bg-primary text-primary-foreground shadow-sm"
                       : check
-                        ? check.correct
-                          ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
-                          : "border-[var(--error-border)] bg-[var(--error-bg)] text-[var(--error-fg)]"
+                        ? check.correct === null
+                          ? "border-border bg-accent text-accent-foreground"
+                          : check.correct
+                            ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]"
+                            : "border-[var(--error-border)] bg-[var(--error-bg)] text-[var(--error-fg)]"
                         : done
                           ? "border-[var(--selection-border)] bg-[var(--selection-bg)] text-[var(--selection-ink)]"
                           : "border-border bg-card text-muted-foreground hover:bg-muted/70 hover:text-foreground",
@@ -785,7 +803,10 @@ export function Study({
                   currentQuestion.type}
               </span>
               <span className="tabular-nums">
-                · {currentQuestion.max_score ?? 1} 分
+                ·{" "}
+                {currentQuestion.max_score !== undefined
+                  ? `${currentQuestion.max_score} 分`
+                  : "不计分"}
               </span>
             </div>
 
@@ -814,11 +835,19 @@ export function Study({
               <div className="space-y-2 rounded-xl bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <StatusPill
-                    state={currentCheck.correct ? "completed" : "disabled"}
+                    state={
+                      currentCheck.correct === null
+                        ? "in_progress"
+                        : currentCheck.correct
+                          ? "completed"
+                          : "disabled"
+                    }
                   >
-                    {currentCheck.correct
-                      ? `回答正确 · +${currentCheck.score} 分`
-                      : `本题得分 ${currentCheck.score} / ${currentQuestion.max_score ?? 1} 分`}
+                    {currentCheck.correct === null
+                      ? "非自动判分 · 已开放参考答案"
+                      : currentCheck.correct
+                        ? `回答正确 · +${currentCheck.score ?? 0} 分`
+                        : `本题得分 ${currentCheck.score ?? 0} / ${currentQuestion.max_score} 分`}
                   </StatusPill>
                   <Button
                     variant="ghost"
@@ -883,7 +912,7 @@ export function Study({
                   </Badge>
                   <span>
                     {types.find((t) => t.id === q.type)?.name ?? q.type} ·{" "}
-                    {q.max_score ?? 1} 分
+                    {q.max_score !== undefined ? `${q.max_score} 分` : "不计分"}
                   </span>
                 </div>
                 {q.material && (
@@ -956,8 +985,10 @@ export function Result({
 
   const rows = items.filter((item) => {
     const r = records.get(item.question.id);
-    const maxScore = item.question.max_score ?? 1;
-    if (filter === "missed") return !r || (r.score ?? 0) < maxScore;
+    const maxScore = item.question.max_score;
+    if (filter === "missed") {
+      return !r || (maxScore !== undefined && (r.score ?? 0) < maxScore);
+    }
     if (filter === "unanswered") return !r;
     return true;
   });
@@ -999,7 +1030,7 @@ export function Result({
               <div className="text-right">
                 <div className="text-[12px] text-muted-foreground">最终得分</div>
                 <div className="score font-serif text-[38px] leading-none font-normal text-primary tabular-nums">
-                  {obtained}/ {totalScore} 分
+                  {obtained} / {totalScore} 分
                 </div>
               </div>
             </div>
@@ -1022,9 +1053,10 @@ export function Result({
             {rows.map((item, idx) => {
               const q = item.question;
               const r = records.get(q.id);
-              const maxScore = q.max_score ?? 1;
+              const maxScore = q.max_score;
+              const graded = maxScore !== undefined && r && r.score !== null;
               const score = r?.score ?? 0;
-              const full = !!r && score >= maxScore;
+              const full = graded && score >= maxScore;
               const refText =
                 q.reference_answer ??
                 q.options
@@ -1042,8 +1074,22 @@ export function Result({
                       </Badge>
                       <span>{types.find((t) => t.id === q.type)?.name ?? q.type}</span>
                     </div>
-                    <StatusPill state={full ? "completed" : "disabled"}>
-                      {r ? `得分 ${score} / ${maxScore}` : "未作答"}
+                    <StatusPill
+                      state={
+                        !r
+                          ? "disabled"
+                          : !graded
+                            ? "in_progress"
+                            : full
+                              ? "completed"
+                              : "disabled"
+                      }
+                    >
+                      {!r
+                        ? "未作答"
+                        : !graded
+                          ? "非自动判分"
+                          : `得分 ${score} / ${maxScore}`}
                     </StatusPill>
                   </div>
                   <div className="mb-3 font-serif text-[17px] leading-[1.75] font-normal text-foreground">

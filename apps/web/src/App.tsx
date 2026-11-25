@@ -340,7 +340,7 @@ export function App() {
     <TooltipProvider delayDuration={300}>
       <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
         {/* Integrated 42px Frameless Titlebar & Workspace Tabs */}
-        <header className="quarry-titlebar sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-sidebar/95 px-2.5 backdrop-blur-sm">
+        <header className="quarry-titlebar sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-sidebar">
           <div className="quarry-no-drag flex shrink-0 items-center gap-2 px-1.5">
             <img
               src={logoUrl}
@@ -593,7 +593,7 @@ export function App() {
             </CommandGroup>
             {quickItems.papers.length > 0 && (
               <CommandGroup heading="套题">
-                {quickItems.papers.slice(0, 8).map((paper) => (
+                {quickItems.papers.map((paper) => (
                   <CommandItem
                     key={paper.id}
                     value={`套题 ${paper.name}`}
@@ -617,7 +617,7 @@ export function App() {
             )}
             {quickItems.banks.length > 0 && (
               <CommandGroup heading="题库">
-                {quickItems.banks.slice(0, 8).map((bank) => (
+                {quickItems.banks.map((bank) => (
                   <CommandItem
                     key={bank.id}
                     value={`题库 ${bank.name}`}

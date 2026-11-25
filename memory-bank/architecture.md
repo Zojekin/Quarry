@@ -159,5 +159,5 @@
 - `scripts/dev-web.mjs` 由 `pnpm run dev:web` 调用，在同一 Node 进程运行开发 API 和 Vite，通过 `VITE_API_URL` 连接，使用工作树内 `.quarry-dev-data/`。
 - `apps/desktop/scripts/dev.mjs` 由 `pnpm run dev:desktop` 调用，等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
 - `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
-- 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 33 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
+- 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 36 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
 - `.github/workflows/ci.yml` 的 `e2e-windows` 作业构建解包应用，运行 `Quarry.exe` 冒烟、业务流程和重启持久化测试，再执行 Windows 视觉回归。Electron 自带 Chromium；失败时保留 Playwright HTML 报告与测试工件 7 天。

@@ -189,7 +189,7 @@ it("counts the latest question attempt once in the result score", async () => {
     ],
   });
   render(<Result id="s" />);
-  await waitFor(() => expect(document.querySelector(".result-hero .score")?.textContent).toBe("3/ 6 分"));
+  await waitFor(() => expect(document.querySelector(".result-hero .score")?.textContent).toBe("3 / 6 分"));
 });
 
 it("auto-submits persisted exam drafts when the immutable deadline expires", async () => {

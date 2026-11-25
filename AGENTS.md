@@ -17,7 +17,7 @@
 
 采用 **pnpm 10 Workspaces + Turborepo 2 + TypeScript 5.9 + Vitest 3** Monorepo：
 - `apps/desktop`：Electron 45 桌面宿主 + esbuild 运行时打包 + `better-sqlite3` v13 N-API 跨运行时原生绑定；仅负责窗口托管与本地 loopback HTTP 服务拉起
-- `apps/web`：React 19 + Vite 6 + `react-markdown` + `remark-math` + `rehype-katex` + KaTeX + 自研 `visual.css` / `production.css`（纯 Web 前端，无 Electron 专有依赖）
+- `apps/web`：React 19 + Vite 6 + `react-markdown` + `remark-math` + `rehype-katex` + KaTeX + Tailwind CSS v4 + `shadcn/ui`（`index.css` / `production.css`，纯 Web 前端，无 Electron 专有依赖）
 - `packages/shared`：Zod 4 Schema、枚举、DTO、统一 `AppError`、Portable Document 契约
 - `packages/core`：纯函数领域核心（6 题型判分、带种子打乱、跨午夜切分；零 I/O，**100% 单元测试覆盖率强制阈值**）
 - `packages/database`：Kysely + `better-sqlite3`（SQLite WAL 模式 + 外键约束 + Repository 仓储接口与快照适配器）

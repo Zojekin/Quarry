@@ -20,7 +20,7 @@ async function createWindow(): Promise<void> {
     autoHideMenuBar: true,
     ...(process.platform === 'win32' ? {
       titleBarStyle: 'hidden',
-      titleBarOverlay: { color: '#fafaf7', symbolColor: '#2d5c48', height: 42 },
+      titleBarOverlay: { color: '#f3f3ee', symbolColor: '#2d5c48', height: 42 },
     } : {}),
     webPreferences: {
       preload: path.join(directory, 'preload.cjs'),

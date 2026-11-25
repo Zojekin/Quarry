@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Calendar, Play, Sparkles, Trash2, Upload } from "lucide-react";
 import logoUrl from "../assets/logo.svg";
 import { client } from "../api/client.js";
@@ -528,7 +528,8 @@ export function Records({ navigate }: { navigate: (route: Route) => void }) {
                     </StatusPill>
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {s.records.length} / {s.items.length}
+                    {new Set(s.records.map((r) => r.question_id)).size} /{" "}
+                    {s.items.length}
                   </TableCell>
                   <TableCell className="tabular-nums" data-dynamic-date="duration">
                     {formatTime(s.effective_duration_seconds)}
@@ -1005,7 +1006,7 @@ export function Settings() {
   const [message, setMessage] = useState("");
   const confirm = useConfirmation();
 
-  useMemo(() => {
+  useEffect(() => {
     if (data) setTags(data);
   }, [data]);
 
