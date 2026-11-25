@@ -132,6 +132,42 @@ describe('sessions, mistakes and analytics', () => {
       expect(order).toHaveLength(6);
     }
   });
+  it.each(['section', 'merged sections', 'materials'])('keeps a selected material parent and child together when shuffling %s', async mode => {
+    const bank = await request('/banks', { name: 'Materials' }, 201);
+    const question = (content: string) => ({ type: 'subjective', content, reference_answer: 'Reference' });
+    const owner = { owner_type: 'question_bank', owner_id: bank.id };
+    const parent = await request('/questions', { ...question('Q1'), ...owner, material: 'Shared passage' }, 201);
+    const child = await request('/questions', { ...question('Q2'), ...owner, material_parent_id: parent.id }, 201);
+    const sectionId = randomUUID();
+    const otherSectionId = randomUUID();
+    const fixedId = randomUUID();
+    const parentItemId = randomUUID();
+    const paper = await request('/papers', { name: 'Material blocks', shuffle_materials: mode === 'materials',
+      merged_shuffle_sections: mode === 'merged sections' ? [[sectionId, otherSectionId]] : [],
+      sections: [{ id: sectionId, title: 'Questions', question_type: 'subjective',
+        shuffle_questions: mode === 'section', fixed_groups: [[fixedId, parentItemId]], items: [
+          { id: fixedId, question: question('Fixed') },
+          { id: parentItemId, source_question_id: parent.id },
+          { source_question_id: child.id },
+          { question: question('Loose') },
+          { question: { ...question('Solo'), material: 'Standalone passage' } },
+        ] },
+        { id: otherSectionId, title: 'Blanks', question_type: 'strict_fill_in_blank', items: [{
+          question: { type: 'strict_fill_in_blank', content: 'Blank', blanks: [{ id: randomUUID(), valid_answers: ['A'] }] },
+        }] },
+      ] }, 201);
+    const orders: string[][] = [];
+    for (const seed of [0, 1, 2, 3, 4]) {
+      const session = await request('/sessions', { paper_id: paper.id, mode: 'practice', seed }, 201);
+      const order = session.items.map((item: { question: { content: string } }) => item.question.content);
+      const first = order.indexOf('Fixed');
+      expect(order.slice(first, first + 3)).toEqual(['Fixed', 'Q1', 'Q2']);
+      expect([...order].sort()).toEqual(['Blank', 'Fixed', 'Loose', 'Q1', 'Q2', 'Solo']);
+      orders.push(order);
+    }
+    if (mode === 'materials') expect(orders).toContainEqual(['Solo', 'Loose', 'Fixed', 'Q1', 'Q2', 'Blank']);
+    else expect(new Set(orders.map(order => order.join(','))).size).toBeGreaterThan(1);
+  });
   it('deduplicates manual no-source requests and can review snapshots whose tags were removed', async () => {
     const tag = await request('/tags', { name: 'Temporary', target_type: 'question' }, 201);
     const paper = await request('/papers', { name: 'Inline', sections: [{ title: 'Manual', question_type: 'subjective', items: [{ question: {

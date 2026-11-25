@@ -22,6 +22,37 @@ const itemInput = z.strictObject({ id: IdSchema.optional(), source_question_id: 
   question: z.record(z.string(), z.unknown()).optional(), question_id: IdSchema.optional(),
   full_score: z.number().finite().positive().optional(), score_mode: z.enum(ScoreMode).optional() });
 type Composer = z.infer<typeof composerSchema>;
+type ItemInput = z.infer<typeof itemInput>;
+type PaperItem = Row<'paper_items'> & { source_available: boolean; question: QuestionView };
+type SourceSnapshots = Map<string, Set<string>>;
+
+export function materialGroups<T extends { question: { id: string; material_parent_id: string | null } }>(
+  items: readonly T[],
+): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const { question } of items) {
+    const parentId = question.material_parent_id;
+    if (parentId && !groups.has(parentId)) groups.set(parentId, []);
+  }
+  for (const item of items) {
+    const { id, material_parent_id } = item.question;
+    if (material_parent_id) groups.get(material_parent_id)!.push(item);
+    groups.get(id)?.push(item);
+  }
+  return groups;
+}
+
+function rememberSnapshot(snapshots: SourceSnapshots, sourceId: string, copyId: string) {
+  const copies = snapshots.get(sourceId) ?? new Set<string>();
+  copies.add(copyId);
+  snapshots.set(sourceId, copies);
+}
+
+function unboundSnapshot(snapshots: SourceSnapshots, bound: ReadonlySet<string>, sourceId: string) {
+  for (const copyId of snapshots.get(sourceId) ?? []) {
+    if (!bound.has(copyId)) return copyId;
+  }
+}
 
 export class PaperService {
   readonly questions: QuestionService;
@@ -29,7 +60,7 @@ export class PaperService {
   async get(id: string) {
     const row = found(await this.repositories.papers.findById(id));
     const composer = parse(composerSchema, JSON.parse(row.composer_json));
-    const items: (Row<'paper_items'> & { source_available: boolean; question: QuestionView })[] = [];
+    const items: PaperItem[] = [];
     for (const item of await this.repositories.papers.listItems(id)) {
       const question = await this.repositories.questions.findById(item.question_id);
       if (question) items.push({ ...item, source_available: !item.source_invalid,
@@ -61,7 +92,7 @@ export class PaperService {
     await this.questions.tags.replace(paperId, 'file', tag_ids);
     let composer: Composer = { sections: old?.sections.map(({ items, ...config }) => config) ?? [],
       merged_shuffle_sections, shuffle_materials };
-    if (sections) composer = await this.compose(paperId, sections, composer);
+    if (sections) composer = await this.compose(paperId, sections, composer, old?.sections ?? []);
     await this.validateComposer(paperId, composer);
     await this.repositories.papers.update(paperId, { composer_json: JSON.stringify(composer) });
     return this.get(paperId);
@@ -86,32 +117,42 @@ export class PaperService {
     if (!row?.bank_id || !await this.repositories.questionBanks.findById(row.bank_id)) return undefined;
     return row;
   }
-  private async snapshot(source: Row<'questions'>, paperId: string, parents: Map<string, string>): Promise<QuestionView> {
+  private async sourceSnapshots(items: readonly PaperItem[]): Promise<SourceSnapshots> {
+    const snapshots: SourceSnapshots = new Map();
+    // Prefer the copy an existing child already uses, including on papers with duplicate source selections.
+    for (const item of items) {
+      if (!item.source_question_id || !item.question.material_parent_id) continue;
+      const source = await this.source(item.source_question_id);
+      if (source?.material_parent_id && await this.repositories.questions.findById(item.question.material_parent_id))
+        rememberSnapshot(snapshots, source.material_parent_id, item.question.material_parent_id);
+    }
+    for (const item of items) {
+      if (item.source_question_id) rememberSnapshot(snapshots, item.source_question_id, item.question.id);
+    }
+    return snapshots;
+  }
+  private async snapshot(source: Row<'questions'>, paperId: string, snapshots: SourceSnapshots): Promise<QuestionView> {
     let parentId: string | null = null;
     if (source.material_parent_id) {
-      parentId = parents.get(source.material_parent_id) ?? null;
+      parentId = snapshots.get(source.material_parent_id)?.values().next().value ?? null;
       if (!parentId) {
         const parent = found(await this.source(source.material_parent_id));
-        parentId = (await this.snapshot(parent, paperId, parents)).id;
+        parentId = (await this.snapshot(parent, paperId, snapshots)).id;
       }
     }
     const original = await this.questions.view(source);
     const copy = await this.questions.save({ ...original, id: randomUUID(), owner_type: 'paper', owner_id: paperId,
       material_parent_id: parentId, material: await this.material(source) });
-    parents.set(source.id, copy.id);
+    rememberSnapshot(snapshots, source.id, copy.id);
     return copy;
   }
-  private async compose(id: string, rawSections: unknown[], previous: Composer): Promise<Composer> {
+  private async compose(id: string, rawSections: unknown[], previous: Composer,
+    previousSections: readonly { items: PaperItem[] }[]): Promise<Composer> {
     const existing = await this.repositories.papers.listItems(id);
     const retained = new Set<string>();
     const sections: Composer['sections'] = [];
-    const parents = new Map<string, string>();
-    for (const item of existing) if (item.source_question_id) {
-      const source = await this.source(item.source_question_id);
-      const copy = await this.repositories.questions.findById(item.question_id);
-      if (source?.material_parent_id && copy?.material_parent_id)
-        parents.set(source.material_parent_id, copy.material_parent_id);
-    }
+    const bound = new Set(existing.map(item => item.question_id));
+    const snapshots = await this.sourceSnapshots(previousSections.flatMap(section => section.items));
     for (const [index, raw] of rawSections.entries()) {
       const value = parse(z.record(z.string(), z.unknown()), raw);
       const { items: rawItems, ...config } = value;
@@ -138,14 +179,16 @@ export class PaperService {
         if ([!!input.source_question_id, !!input.question, !!input.question_id].filter(Boolean).length !== 1)
           invalid('Provide exactly one source_question_id, question_id or inline question');
         let question: QuestionView;
-        let source: Row<'questions'> | undefined;
+        let sourceVersion: number | null = null;
         if (input.source_question_id) {
-          source = found(await this.source(input.source_question_id));
-          question = await this.snapshot(source, id, parents);
+          const source = found(await this.source(input.source_question_id));
+          const reusable = unboundSnapshot(snapshots, bound, source.id);
+          question = reusable ? await this.questions.get(reusable) : await this.snapshot(source, id, snapshots);
+          sourceVersion = question.version;
         } else if (input.question_id) {
           question = await this.questions.get(input.question_id);
           if (question.owner_type !== 'paper' || question.owner_id !== id) invalid('Question must belong to this paper');
-          if (existing.some(item => item.question_id === question.id)) invalid('Question is already composed');
+          if (bound.has(question.id)) invalid('Question is already composed');
         } else question = await this.questions.save({ ...input.question, id: randomUUID(), owner_type: 'paper', owner_id: id });
         if (input.full_score !== undefined || input.score_mode !== undefined) question = await this.questions.save({
           ...('max_score' in question && input.full_score !== undefined ? { max_score: input.full_score } : {}),
@@ -153,56 +196,48 @@ export class PaperService {
         }, question.id);
         const itemId = input.id ?? randomUUID();
         const item = await this.repositories.papers.addItem({ id: itemId, paper_id: id, question_id: question.id,
-          source_question_id: source?.id ?? null, source_version: source?.version ?? null,
+          source_question_id: input.source_question_id ?? null, source_version: sourceVersion,
           section_index: index, section_name: section.title, sort_order: order,
           group_id: section.fixed_groups.find(group => group.includes(itemId))?.[0] ?? null });
         retained.add(item.id);
+        bound.add(question.id);
       }
     }
-    for (const item of existing) if (!retained.has(item.id)) {
-      await this.repositories.papers.removeItem(item.id);
-      await this.repositories.questions.delete(item.question_id);
-    }
-    // Existing material siblings form an indivisible ordered block.
-    const before = new Map<string, string[]>();
-    for (const item of existing) {
-      const question = await this.repositories.questions.findById(item.question_id);
-      if (!question?.material_parent_id || !retained.has(item.id)) continue;
-      const siblings = before.get(question.material_parent_id) ?? [];
-      siblings.push(item.id);
-      before.set(question.material_parent_id, siblings);
-    }
-    const after = await this.repositories.papers.listItems(id);
-    for (const siblings of before.values()) {
-      const reordered = after.filter(item => siblings.includes(item.id)).map(item => item.id);
-      if (JSON.stringify(reordered) !== JSON.stringify(siblings)) invalid('Material children must retain their relative order');
+    const removed = existing.filter(item => !retained.has(item.id));
+    for (const item of removed) await this.repositories.papers.removeItem(item.id);
+    await this.deleteUnreferencedQuestions(id, removed.map(item => item.question_id));
+
+    const positions = new Map((await this.repositories.papers.listItems(id)).map((item, index) => [item.id, index]));
+    for (const section of previousSections) {
+      for (const group of materialGroups(section.items).values()) {
+        let last = -1;
+        for (const item of group) {
+          const position = positions.get(item.id);
+          if (position === undefined) continue;
+          if (position < last) invalid('Material group items must retain their relative order');
+          last = position;
+        }
+      }
     }
     return { ...previous, sections };
   }
   private async validateComposer(id: string, composer: Composer) {
     if (new Set(composer.sections.map(s => s.id)).size !== composer.sections.length) invalid('Duplicate section IDs');
     const items = await this.repositories.papers.listItems(id);
-    const materialGroups = new Map<string, Row<'paper_items'>[]>();
-    for (const item of items) {
-      const question = found(await this.repositories.questions.findById(item.question_id));
-      if (!question.material_parent_id) continue;
-      const siblings = materialGroups.get(question.material_parent_id) ?? [];
-      siblings.push(item);
-      materialGroups.set(question.material_parent_id, siblings);
-    }
-    for (const siblings of materialGroups.values()) {
-      if (siblings.some((item, index) => item.section_index !== siblings[0]!.section_index
-        || (index > 0 && item.sort_order !== siblings[index - 1]!.sort_order + 1)))
-        invalid('Material children must remain together in one section');
-    }
     for (const [index, section] of composer.sections.entries()) {
       const sectionItems = items.filter(item => item.section_index === index);
-      const validated = [];
+      const questions = [];
       for (const item of sectionItems) {
-        const { material, material_parent_id, ...question } = await this.questions.get(item.question_id);
-        validated.push({ id: item.id, question, source_question_id: item.source_question_id,
+        questions.push({ id: item.id, sort_order: item.sort_order, question: await this.questions.get(item.question_id),
+          source_question_id: item.source_question_id,
           source_version: item.source_version, source_available: !item.source_invalid });
       }
+      for (const group of materialGroups(questions).values()) {
+        if (group.some((item, i) => i > 0 && item.sort_order !== group[i - 1]!.sort_order + 1))
+          invalid('Material group items must be contiguous within a section');
+      }
+      const validated = questions.map(({ sort_order, question: { material, material_parent_id, ...question }, ...item }) =>
+        ({ ...item, question }));
       parse(PaperSectionSchema, { ...section, items: validated });
       for (const group of section.fixed_groups) {
         const indexes = group.map(member => sectionItems.findIndex(i => i.id === member));
@@ -220,17 +255,44 @@ export class PaperService {
     const paper = await this.get(id);
     const parsed = parse(itemInput, input);
     const source = parsed.source_question_id ? found(await this.source(parsed.source_question_id)) : undefined;
-    const type = source?.type ?? (parsed.question_id ? (await this.questions.get(parsed.question_id)).type : parsed.question?.type);
-    parse(z.enum(QuestionType), type);
-    const sections = paper.sections.map(section => ({ ...section, items: section.items.map(item => ({ id: item.id })) }));
-    let section = sections.find(s => s.question_type === type);
-    if (!section) {
-      section = { id: randomUUID(), title: String(type), question_type: type as QuestionType,
-        shuffle_questions: false, fixed_groups: [], items: [] };
-      sections.push(section);
+    const question = parsed.question_id ? await this.questions.get(parsed.question_id) : undefined;
+    const type = parse(z.enum(QuestionType), source?.type ?? question?.type ?? parsed.question?.type);
+    const index = paper.sections.findIndex(section => section.question_type === type);
+    const sections = paper.sections.map(section => ({ ...section, items: section.items.map<ItemInput>(item => ({ id: item.id })) }));
+    if (index === -1) {
+      sections.push({ id: randomUUID(), title: type, question_type: type,
+        shuffle_questions: false, fixed_groups: [], items: [parsed] });
+    } else {
+      let questionId = question?.id;
+      let parentId = question?.material_parent_id ?? parsed.question?.material_parent_id;
+      if (source) {
+        const items = paper.sections.flatMap(section => section.items);
+        const snapshots = await this.sourceSnapshots(items);
+        questionId = unboundSnapshot(snapshots, new Set(items.map(item => item.question_id)), source.id);
+        parentId = source.material_parent_id ? snapshots.get(source.material_parent_id)?.values().next().value : undefined;
+      }
+      const items = sections[index]!.items;
+      let insertAt = items.length;
+      for (const [position, { question }] of paper.sections[index]!.items.entries()) {
+        if ((parentId != null && (question.id === parentId || question.material_parent_id === parentId))
+          || (questionId !== undefined && question.material_parent_id === questionId)) insertAt = position + 1;
+      }
+      items.splice(insertAt, 0, parsed);
     }
-    (section.items as unknown[]).push(parsed);
     return this.save({ sections }, id);
+  }
+  private async deleteUnreferencedQuestions(paperId: string, questionIds: string[]) {
+    if (!questionIds.length) return;
+    const removed = new Set(questionIds);
+    const questions = (await this.repositories.questions.list()).filter(question => question.paper_id === paperId);
+    const parents = new Map(questions.map(question => [question.id, question.material_parent_id]));
+    // A parent removed from the composition can still supply material to a remaining question.
+    for (const question of questions) {
+      if (removed.has(question.id)) continue;
+      let parentId = question.material_parent_id;
+      while (parentId && removed.delete(parentId)) parentId = parents.get(parentId) ?? null;
+    }
+    for (const questionId of removed) await this.repositories.questions.delete(questionId);
   }
   async diff(id: string) {
     await this.get(id);
@@ -299,7 +361,7 @@ export class PaperService {
     for (const section of composer.sections) section.fixed_groups = section.fixed_groups
       .map(group => group.filter(id => id !== itemId)).filter(group => group.length >= 2);
     await this.repositories.papers.removeItem(itemId);
-    await this.repositories.questions.delete(item.question_id);
+    await this.deleteUnreferencedQuestions(paperId, [item.question_id]);
     const orders = new Map<number, number>();
     for (const remaining of await this.repositories.papers.listItems(paperId)) {
       const section = composer.sections[remaining.section_index];
