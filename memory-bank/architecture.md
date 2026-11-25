@@ -121,14 +121,14 @@
 ## 6. 正式网页前端架构 (`apps/web`)
 
 - **构建与注入**：`tsc -p tsconfig.json && vite build` 输出至 `apps/web/dist/`（`base: './'` 兼容桌面端 `loadFile` 离线加载）。`vite.config.ts` 在构建期将根目录 `product-info.json` 与根 `package.json` 的 `version` 注入 `__PRODUCT__`，不为此创建额外后端 API。
-- **资源与附件**：logo 与衬线字体经 Vite 打包，题干存储 `attachment://<id>`，渲染时由 `BackendClient` 解析至当前 API。旧的 `/api/attachments/<id>` 和随机端口 loopback 地址继续可读。
+- **资源与附件**：`src/assets/logo.svg` 为外部透明的闭合六棱柱图标，竹纹与柱面接缝填充暖米白（`#faf8f2`）。图标与 `src/assets/serif.woff2` 思源宋体经 Vite 打包。题干存储 `attachment://<id>`，渲染时由 `BackendClient` 解析至当前 API。旧的 `/api/attachments/<id>` 和随机端口 loopback 地址继续可读。
 - **BackendClient 地址解析顺序**：
   1. 宿主注入的 `window.__QUARRY_API_URL__`
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史，整合于 `42px` 一体化标题栏并支持 `Ctrl+K` 快速命令跳转；一级栏目为首页（学习概览）、题库与套题、错题本、练习记录，另含回收站与系统设置。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 定义 Tailwind CSS v4 令牌与主题变量，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
-- **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML；打包产物内置 `src/assets/serif.woff2` 思源宋体与 `src/assets/logo.svg` 透明图标。
+- **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---
 
@@ -139,6 +139,7 @@
 - **运行时打包与 N-API 原生绑定**：
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
   - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。
+- **应用图标**：`resources/icon.png`（1024×1024）与 `resources/icon.ico`（16–256 px 多尺寸）沿用 Web 图标的暖米白填充和透明外部，分别供桌面窗口和 Windows 打包使用。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
   1. NSIS 向导安装包 `Quarry-Setup-<version>-x64.exe` 支持自定义安装路径。简体中文向导通过 `apps/desktop/resources/installer.nsh` 在路径页后独立选择桌面与开始菜单快捷方式。两项默认勾选，首次 `/S` 静默安装沿用默认值，自动更新保留已有快捷方式状态。创建与卸载清理由 electron-builder 的快捷方式逻辑负责，`deleteAppDataOnUninstall: false` 保留本地题库。
   2. 绿色压缩包：`Quarry-<version>-win-x64.zip`
