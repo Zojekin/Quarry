@@ -16,15 +16,17 @@
 | `skills/question-converter` | 将题目材料转换为便携文档的工作流程 |
 | `playwright.config.ts` / `e2e/` | Electron 冒烟、业务流程、视觉回归 |
 | `.github/workflows/ci.yml` | PR 标题、双平台构建验证与 `e2e-windows` 回归门禁 |
+| `.github/workflows/release-please.yml` | 动态发版、Windows 构建及更新清单校验与上传 |
 
 ## 启动与平台接口
 
-- `apps/desktop/src/main.ts` 启动本地后端，创建窗口，选择 Vite URL 或本地 `index.html`。
+- `apps/desktop/src/main.ts` 启动本地后端，创建窗口，选择 Vite URL 或本地 `index.html`，统一协调普通退出与更新重启前的后端关闭。
 - `apps/desktop/src/backend-manager.ts` 初始化 SQLite、迁移、附件目录与恢复点。桌面 API 绑定 `127.0.0.1` 随机端口。
-- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`，并提供 `window.__QUARRY_DESKTOP__.setTitleBarOverlay`。主进程与 preload 复用 `titlebar-overlay.ts` 校验颜色，主进程仅为 Windows 目标窗口更新按钮区。
+- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`，并在 `window.__QUARRY_DESKTOP__` 中提供 `setTitleBarOverlay` 和 `updater` 操作及状态订阅。主进程与 preload 复用 `titlebar-overlay.ts` 校验颜色，主进程仅为 Windows 目标窗口更新按钮区。
+- `apps/desktop/src/updater.ts` 持久化自动更新偏好，协调 NSIS 版本检查、下载进度与安装。`packages/shared/src/desktop-updater.ts` 定义桌面和 Web 共用的状态与桥接类型。
 - `apps/desktop/scripts/bundle.mjs` 打包为 ESM `dist/runtime/main.js` 和 CJS `dist/runtime/preload.cjs`。
 - `apps/desktop/scripts/before-pack.cjs` 在 electron-builder 打包时执行同一打包脚本。
-- `apps/desktop/package.json` 声明解包与分发产物、Web extraResources 及 SQLite 原生绑定的 ASAR 解包规则。
+- `apps/desktop/package.json` 声明解包与分发产物、GitHub 更新源、Web extraResources 及 SQLite 原生绑定的 ASAR 解包规则。Windows 发布产物包含 `.exe`、`.zip` 和 `latest.yml`。
 - `apps/desktop/resources/installer.nsh` 定义 Windows 安装向导的快捷方式选项，`apps/desktop/tests/installer.test.ts` 验证 NSIS 配置、默认勾选和卸载约定。
 - `apps/desktop/scripts/dev.mjs` 等待 Vite 后打包主进程，启动 Electron 并处理退出。
 - `scripts/dev-web.mjs` 通过 `bundle-backend.mjs` 复用桌面后端组合，数据落在 `.quarry-dev-data/`。
@@ -45,8 +47,9 @@
 - `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
 - `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
 - `pages/Study.tsx` 实现练习左右分栏（常规字重题干、无方框 `A/B/C/D` 选项、无底座三操作按钮与数字键/回车快捷键）、考试整卷作答、防并发 409 草稿队列、暂停遮罩与焦点返回以及成绩报告。
-- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `TagManagerCard`、`PreferencesSettingsCard`、`DiagnosticsCard`、备份恢复区和 `CliGuideCard`。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
+- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `ThemeSettingsCard`、`TagManagerCard`、`UpdateSettingsCard`、`PreferencesSettingsCard`、`DiagnosticsCard`、备份恢复区和 `CliGuideCard`。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
 - `components/ThemeSettingsCard.tsx` 在设置页提供预设预览、自定义颜色与对比度调整。`components/ThemeModeToggle.tsx` 提供标题栏快捷切换。
+- `components/UpdateSettingsCard.tsx` 显示桌面更新状态和操作，纯 Web 环境查询 GitHub Releases API。`lib/desktop-updater.ts` 读取桌面更新状态，供设置卡片和侧栏提示使用。
 - `components/Markdown.tsx` 懒加载 `MarkdownContent.tsx`，离线渲染 Markdown 与 KaTeX。
 - `assets/logo.svg` / `assets/serif.woff2` 由 Vite 解析和打包，字体授权保留在 `public/assets/LICENSE.txt`。
 

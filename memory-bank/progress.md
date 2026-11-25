@@ -14,6 +14,7 @@
 | **Phase 2 & 6** | **Electron 桌面宿主与 Windows 打包** | 🟢 已完成 | 随机端口本地 Hono 守护进程、沙箱化 `preload`、Windows x64 NSIS/ZIP 分发配置、`better-sqlite3` v13 N-API 预编译绑定 |
 | **Issue #19** | **Windows 安装器快捷方式选项** | 🟢 已实现 | 简体中文安装向导可独立勾选桌面与开始菜单快捷方式，默认创建两项，卸载保留本地题库 |
 | **Issue #20** | **闭合六棱柱应用图标** | 🟢 已实现 | Web SVG、桌面 PNG 与 Windows ICO 的竹纹和柱面接缝填充暖米白，轮廓外部透明 |
+| **Issue #18** | **Windows 桌面应用更新** | 🟢 已实现 | 自动检查与后台下载、重启或退出时安装、设置状态与待重启提示、网页版发布查询 |
 | **Phase 3–5** | **正式 React 19 前端交付** | 🟢 已完成 | React 19 + Vite 生产应用、多标签工作区、KaTeX 公式分块加载、资料库/编排/练习（45/55 分栏）/考试（防提前泄露）/错题复习组卷/学习看板热力图/设置/回收站，与真实 Hono/SQLite 联调通过 |
 | **Issue #5** | **Quarry CLI 与题目转换 Skill** | 🟢 已完成 | `packages/shared` Portable Schema、`packages/cli`（`spec`/`validate`/`convert`）、`skills/question-converter/SKILL.md` |
 | **工程治理** | **仓库清理、文档收敛与自动化流水线** | 🟢 已完成 | 清理历史原型与重复大文件、归档过时文档、收敛 `AGENTS.md`/`memory-bank`、建立双平台 CI、PR 标题门禁、`release-please` 动态发版与 Windows Release 自动打包 |
@@ -29,8 +30,8 @@
 
 | 决策 ID | 事项说明 | 决策结果 | 状态 |
 | :--- | :--- | :--- | :---: |
-| **DEC-001** | 前后端解耦 | 业务通信通过 `BackendClient` 面向标准 HTTP REST。渲染器通过独立、可选的宿主方法同步 Windows 按钮颜色 | ✅ 已敲定 |
+| **DEC-001** | 前后端解耦 | 业务通信通过 `BackendClient` 面向标准 HTTP REST。渲染器通过可选的桌面宿主接口同步 Windows 按钮颜色，并使用共享类型管理应用更新 | ✅ 已敲定 |
 | **DEC-002** | 数据库抽象 | 排除 Prisma，采用 Kysely + `better-sqlite3`（WAL + 外键）；业务层仅依赖 Repository 接口 | ✅ 已敲定 |
 | **DEC-003** | 附件虚拟化 | 本地按 SHA-256 哈希防重存储，对外仅暴露 `/api/attachments/:id` 虚拟 URL | ✅ 已敲定 |
 | **DEC-004** | 选项身份绑定 | 选项使用稳定 UUID 标识，答案绑定选项 ID；打乱仅改变展示顺序与 A/B/C/D 映射 | ✅ 已敲定 |
-| **DEC-005** | 自动化发版与产物规范 | 采用 `release-please` Manifest 模式同步 Monorepo 全包版本号。Tag 与 Release 标题均不带 `v` 前缀，Release 正文自动移除开头重复的版本标题。Windows 仅上传 `Quarry-*` 安装包与 ZIP，由 GitHub Releases 提供 SHA-256 摘要 | ✅ 已敲定 |
+| **DEC-005** | 自动化发版与产物规范 | 采用 `release-please` Manifest 模式同步 Monorepo 全包版本号。Tag 与 Release 标题均不带 `v` 前缀，Release 正文自动移除开头重复的版本标题。Windows 发布上传 NSIS `.exe`、绿色 `.zip` 及 `latest.yml`，更新清单记录安装包的 SHA-512，GitHub Releases 为各附件提供 SHA-256 摘要 | ✅ 已敲定 |

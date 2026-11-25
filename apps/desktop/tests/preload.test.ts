@@ -1,23 +1,32 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { updaterChannels } from '../src/updater-channels.js';
 
-const expose = vi.hoisted(() => vi.fn());
-const send = vi.hoisted(() => vi.fn());
-vi.mock('electron', () => ({ contextBridge: { exposeInMainWorld: expose }, ipcRenderer: { send } }));
+const { expose, ipcRenderer } = vi.hoisted(() => ({
+  expose: vi.fn(),
+  ipcRenderer: { send: vi.fn(), invoke: vi.fn(), on: vi.fn(), removeListener: vi.fn() },
+}));
+vi.mock('electron', () => ({ contextBridge: { exposeInMainWorld: expose }, ipcRenderer }));
 const originalArguments = [...process.argv];
 afterEach(() => {
   process.argv = [...originalArguments];
-  expose.mockClear();
-  send.mockClear();
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
 
-it('exposes the backend URL and only the narrow titlebar bridge method', async () => {
+it('exposes the backend URL and one desktop bridge for the titlebar and updater', async () => {
   process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
   await import('../src/preload.js');
   expect(expose.mock.calls).toEqual([
     ['__QUARRY_API_URL__', 'http://127.0.0.1:54321'],
-    ['__QUARRY_DESKTOP__', { setTitleBarOverlay: expect.any(Function) }],
+    ['__QUARRY_DESKTOP__', {
+      setTitleBarOverlay: expect.any(Function),
+      updater: {
+        getState: expect.any(Function), checkForUpdates: expect.any(Function),
+        downloadUpdate: expect.any(Function), quitAndInstall: expect.any(Function),
+        setAutoUpdate: expect.any(Function), onStateChange: expect.any(Function),
+      },
+    }],
   ]);
 });
 
@@ -32,11 +41,36 @@ it('preserves existing desktop properties and sends only validated #RRGGBB color
     { color: '#000000', symbolColor: 123456 }]) {
     bridge.setTitleBarOverlay(colors);
   }
-  expect(send).not.toHaveBeenCalled();
+  expect(ipcRenderer.send).not.toHaveBeenCalled();
   bridge.setTitleBarOverlay({ color: '#001234', symbolColor: '#AABBCC', height: 99 });
-  expect(send.mock.calls).toEqual([
+  expect(ipcRenderer.send.mock.calls).toEqual([
     ['quarry:set-title-bar-overlay', { color: '#001234', symbolColor: '#AABBCC' }],
   ]);
+});
+
+it('invokes named updater channels and forwards only the state to subscribers', async () => {
+  process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
+  await import('../src/preload.js');
+  const { updater } = expose.mock.calls[1]![1];
+  updater.getState();
+  updater.checkForUpdates();
+  updater.downloadUpdate();
+  updater.quitAndInstall();
+  updater.setAutoUpdate(false);
+  expect(ipcRenderer.invoke.mock.calls).toEqual([
+    [updaterChannels.getState], [updaterChannels.checkForUpdates],
+    [updaterChannels.downloadUpdate], [updaterChannels.quitAndInstall],
+    [updaterChannels.setAutoUpdate, false],
+  ]);
+  const callback = vi.fn();
+  const unsubscribe = updater.onStateChange(callback);
+  const [channel, listener] = ipcRenderer.on.mock.calls[0]!;
+  const state = { currentVersion: '1.0.0', status: 'idle', autoUpdate: false, supported: true };
+  expect(channel).toBe(updaterChannels.stateChange);
+  listener({ sender: 'private' }, state);
+  expect(callback).toHaveBeenCalledExactlyOnceWith(state);
+  unsubscribe();
+  expect(ipcRenderer.removeListener).toHaveBeenCalledExactlyOnceWith(channel, listener);
 });
 
 it.each([undefined, 'https://example.com', 'file:///C:/secret', 'http://127.0.0.1:42/path'])(

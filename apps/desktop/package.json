@@ -20,6 +20,7 @@
     "@quarry/database": "workspace:*",
     "@hono/node-server": "^1.19.0",
     "better-sqlite3": "^13.2.0",
+    "electron-updater": "^6.8.11",
     "kysely": "^0.28.19"
   },
   "devDependencies": {
@@ -50,8 +51,14 @@
       }
     ],
     "beforePack": "./scripts/before-pack.cjs",
+    "publish": {
+      "provider": "github",
+      "owner": "Zojekin",
+      "repo": "Quarry"
+    },
     "win": {
       "icon": "resources/icon.ico",
+      "verifyUpdateCodeSignature": false,
       "artifactName": "Quarry-${version}-win-${arch}.${ext}",
       "target": [
         {

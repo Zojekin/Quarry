@@ -68,7 +68,8 @@ jobs:
           $releaseDir = "apps/desktop/release"
           $expected = @(
             "Quarry-Setup-$env:RELEASE_VERSION-x64.exe",
-            "Quarry-$env:RELEASE_VERSION-win-x64.zip"
+            "Quarry-$env:RELEASE_VERSION-win-x64.zip",
+            "latest.yml"
           )
           $assets = @()
           foreach ($name in $expected) {
@@ -77,6 +78,15 @@ jobs:
               throw "Expected release artifact not found: $filePath"
             }
             $assets += $filePath
+          }
+          $metadata = Get-Content -LiteralPath (Join-Path $releaseDir 'latest.yml') -Raw
+          $installer = [regex]::Escape($expected[0])
+          $version = [regex]::Escape($env:RELEASE_VERSION)
+          $hash = (Get-FileHash -LiteralPath $assets[0] -Algorithm SHA512).Hash
+          $sha512 = [regex]::Escape([Convert]::ToBase64String([Convert]::FromHexString($hash)))
+          if ($metadata -cnotmatch "(?m)^version: $version\r?$" -or
+              $metadata -cnotmatch "(?m)^files:\r?\n  - url: $installer\r?\n    sha512: $sha512\r?$") {
+            throw 'latest.yml does not match the release version and installer SHA-512'
           }
           gh release upload $env:RELEASE_TAG @assets --clobber
           if ($LASTEXITCODE -ne 0) {

@@ -69,7 +69,7 @@
 | 层次 | 现行选型 | 核心依赖 / 工具 | 职责说明 |
 | :--- | :--- | :--- | :--- |
 | **工程管理** | pnpm Workspaces + Turborepo | `pnpm@10.28.2`, `turbo`, `typescript@^5.9.3`, `vitest` | 隔离依赖、缓存构建/测试/类型检查流水线 |
-| **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `esbuild` | 无菜单栏一体化窗口（Windows `titleBarOverlay` 42px）、随机端口本地服务进程、Windows NSIS/ZIP 打包 |
+| **桌面宿主** | Electron + esbuild | `electron`, `electron-builder`, `electron-updater`, `esbuild` | 无菜单栏一体化窗口（Windows `titleBarOverlay` 42px）、随机端口本地服务进程、Windows NSIS/ZIP 打包与自动更新 |
 | **网页前端** | React 19 + Vite 6 | `react`, `react-dom`, `vite`, `@tailwindcss/vite`, `@radix-ui/*`, `cmdk`, `lucide-react` | 单页应用、多标签工作区（sessionStorage）、`Ctrl+K` 快速命令、`shadcn/ui` + Tailwind v4 组件体系 |
 | **富文本排版** | React Markdown + KaTeX | `react-markdown`, `remark-math`, `rehype-katex`, `katex` | 离线 LaTeX 数学公式、代码块、表格，禁用原始 HTML，独立分块懒加载 |
 | **后端服务** | Node.js（Node-API 10，`^22.14.0 \|\| >=23.6.0`）+ Hono | `hono`, `@hono/node-server`, `fflate` | 轻量 RESTful API、附件流式传输、ZIP 导入导出与备份打包 |
@@ -139,14 +139,16 @@
 ## 7. Electron 桌面宿主与 Windows 打包 (`apps/desktop`)
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
-- **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，以及单向的 `window.__QUARRY_DESKTOP__.setTitleBarOverlay({ color, symbolColor })`。Windows 主进程只接受目标窗口主帧传入的两项 `#RRGGBB` 颜色，并以固定 42px 更新原生按钮区。Web 端通过可选宿主接口同步窗口外观，业务通信继续经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，并在同一个可选的 `window.__QUARRY_DESKTOP__` 接口提供 `setTitleBarOverlay({ color, symbolColor })` 和 `updater`。主进程仅接受应用窗口主帧发出的更新请求和标题栏颜色请求。Windows 标题栏使用两项 `#RRGGBB` 颜色更新固定 42px 的原生按钮区。Web 端使用 `packages/shared/src/desktop-updater.ts` 的平台无关类型获取更新状态，业务通信继续经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **版本更新 (`src/updater.ts`)**：带更新源配置的 Windows 发布构建启动 5 秒后默认检查公开的 `Zojekin/Quarry` GitHub Releases，`userData/updater-settings.json` 保存自动检查和下载偏好。`electron-updater` 后台下载完整 NSIS 安装包并校验 `latest.yml` 的 SHA-512。当前构建为无签名发布，关闭 Authenticode 发布者匹配。安装器在本地 HTTP 服务与 SQLite 关闭后启动，支持手动重启和正常退出时安装。纯 Web 设置页手动查询 GitHub Releases API 并显示下载链接。
 - **运行时打包与 N-API 原生绑定**：
-  - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
+  - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成包含 `electron-updater` 的 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
   - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。
 - **应用图标**：`resources/icon.png`（1024×1024）与 `resources/icon.ico`（16–256 px 多尺寸）沿用 Web 图标的暖米白填充和透明外部，分别供桌面窗口和 Windows 打包使用。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
   1. NSIS 向导安装包 `Quarry-Setup-<version>-x64.exe` 支持自定义安装路径。简体中文向导通过 `apps/desktop/resources/installer.nsh` 在路径页后独立选择桌面与开始菜单快捷方式。两项默认勾选，首次 `/S` 静默安装沿用默认值，自动更新保留已有快捷方式状态。创建与卸载清理由 electron-builder 的快捷方式逻辑负责，`deleteAppDataOnUninstall: false` 保留本地题库。
   2. 绿色压缩包：`Quarry-<version>-win-x64.zip`
+  3. `latest.yml`：`electron-builder --publish never` 生成更新清单，`release-please.yml` 先核验版本、安装包文件名和 SHA-512，再随安装包与 ZIP 上传至 GitHub Releases。
 
 ---
 

@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Workspace manifests point at TS source. Bundle it so Electron never loads TS.
+// Bundle workspace TS and electron-updater. Only Electron and the native SQLite binding stay external.
 await build({
   absWorkingDir: root,
   entryPoints: ['src/main.ts'], outfile: 'dist/runtime/main.js',

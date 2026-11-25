@@ -44,6 +44,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tooltip.js";
 import { cn } from "./lib/utils.js";
+import { getDesktopUpdater, useDesktopUpdateState } from "./lib/desktop-updater.js";
 import { questionSizes, usePreferences } from "./lib/preferences.js";
 import { ThemeProvider } from "./lib/theme-context.js";
 import { Detail, Library } from "./pages/Library.js";
@@ -115,6 +116,7 @@ function Workspace() {
   const [rail, setRail] = useState<ReactNode>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [reviewCount, setReviewCount] = useState(0);
+  const updateReady = useDesktopUpdateState(getDesktopUpdater())?.status === "downloaded";
   useLayoutEffect(() => {
     const style = document.documentElement.style;
     style.setProperty("--question-size", `${questionSize}px`);
@@ -295,6 +297,7 @@ function Workspace() {
     badge?: number,
   ) {
     const activeItem = isNavActive(item.key);
+    const showUpdate = item.key === "settings" && updateReady;
     const IconComp = item.icon;
     const button = (
       <button
@@ -302,9 +305,10 @@ function Workspace() {
         type="button"
         aria-current={activeItem ? "page" : undefined}
         aria-label={item.label}
+        aria-description={showUpdate ? "更新已就绪" : undefined}
         onClick={() => navigate({ page: item.key })}
         className={cn(
-          "group flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
+          "group relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
           compact && "justify-center px-0",
           !compact && "max-[960px]:justify-center max-[960px]:px-0",
           activeItem
@@ -321,6 +325,9 @@ function Workspace() {
           )}
           aria-hidden="true"
         />
+        {showUpdate && (
+          <span aria-hidden="true" title="更新已就绪" className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
+        )}
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-left",
@@ -349,7 +356,7 @@ function Workspace() {
     return (
       <Tooltip key={item.key}>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="right">{item.label}</TooltipContent>
+        <TooltipContent side="right">{showUpdate ? `${item.label}（更新已就绪）` : item.label}</TooltipContent>
       </Tooltip>
     );
   }

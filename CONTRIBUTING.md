@@ -76,5 +76,5 @@ CI 的 `PR Title (Conventional Commits)` 检查会强制校验 PR 标题格式�
    - 合并瞬间自动完成：
      1. 打出 `X.Y.Z` Git Tag 并创建 GitHub Release；
      2. 自动触发 `build-windows` 任务在 `windows-latest` 上执行 `pnpm run package`；
-     3. 上传 Windows x64 安装包 `Quarry-Setup-<version>-x64.exe` 与绿色压缩包 `Quarry-<version>-win-x64.zip`。GitHub Releases 为每个附件提供原生 SHA-256 摘要。
+     3. 上传 Windows x64 安装包 `Quarry-Setup-<version>-x64.exe`、绿色压缩包 `Quarry-<version>-win-x64.zip` 及更新清单 `latest.yml`。上传前核验清单中的版本、安装包文件名和 SHA-512 摘要，GitHub Releases 也为每个附件提供 SHA-256 摘要。
      4. 将 Release 标题设为版本号，并自动移除 Release 正文开头重复的版本标题。`CHANGELOG.md` 保留完整版本标题。
