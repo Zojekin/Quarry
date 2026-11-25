@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { client } from "../api/client.js";
-import type { Paper, QuestionView, RecordView, Session, StudyAnswer } from "../api/client.js";
+import type {
+  Paper,
+  QuestionView,
+  RecordView,
+  Session,
+  StudyAnswer,
+  SubmitQuestionResult,
+} from "../api/client.js";
 import { formatTime, type Route } from "../state.js";
 import { Icon } from "../components/Icons.js";
 import { Markdown } from "../components/Markdown.js";
@@ -55,6 +62,48 @@ function referenceText(q: QuestionView): string | undefined {
   );
 }
 
+function hydrateQuestionFeedback(
+  q: QuestionView,
+  result: SubmitQuestionResult,
+): QuestionView {
+  let next: QuestionView = q;
+  if (
+    q.options &&
+    Array.isArray(result.correct_answer) &&
+    (result.correct_answer.length === 0 ||
+      typeof result.correct_answer[0] === "string")
+  ) {
+    const correctIds = new Set(result.correct_answer as string[]);
+    next = {
+      ...next,
+      options: q.options.map((opt) => ({
+        ...opt,
+        is_correct: correctIds.has(opt.id),
+      })),
+    };
+  } else if (
+    q.blanks &&
+    Array.isArray(result.correct_answer) &&
+    (result.correct_answer.length === 0 ||
+      Array.isArray(result.correct_answer[0]))
+  ) {
+    const validSets = result.correct_answer as string[][];
+    next = {
+      ...next,
+      blanks: q.blanks.map((blank, i) => ({
+        ...blank,
+        valid_answers: validSets[i] ?? blank.valid_answers ?? [],
+      })),
+    };
+  } else if (typeof result.correct_answer === "string") {
+    next = { ...next, reference_answer: result.correct_answer };
+  }
+  if (result.analysis !== undefined) {
+    next = { ...next, explanation: result.analysis };
+  }
+  return next;
+}
+
 export function Answer({
   q,
   answer,
@@ -99,7 +148,7 @@ export function Answer({
             const chosen = selected.includes(option.id);
             const right = reveal && chosen && !!option.is_correct;
             const missed = reveal && !chosen && !!option.is_correct;
-            const wrong = reveal && chosen && !option.is_correct;
+            const wrong = reveal && chosen && option.is_correct === false;
 
             return (
               <button
@@ -673,6 +722,7 @@ export function Study({
         answer,
         attempt_index: attempt,
       });
+      const hydratedQuestion = hydrateQuestionFeedback(currentQuestion, result);
       applySubmission(result);
       const latest = sessionRef.current ?? session;
       const refreshed = await client.sessions.get(session.id).catch(() => null);
@@ -685,6 +735,11 @@ export function Study({
       } else {
         commitSession({
           ...latest,
+          items: latest.items.map((it) =>
+            it.question.id === qid
+              ? { ...it, question: hydratedQuestion }
+              : it,
+          ),
           records: [...latest.records, result],
         });
       }

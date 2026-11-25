@@ -68,6 +68,11 @@ export interface RecordView {
   is_correct: number | null;
   answered_at: string;
 }
+export interface SubmitQuestionResult extends RecordView {
+  locked?: boolean;
+  correct_answer?: string[] | string[][] | string;
+  analysis?: string;
+}
 export interface Session {
   paper_name?: string;
   time_limit_seconds?: number | null;
@@ -283,7 +288,11 @@ export class BackendClient {
         attempt_index: number;
       },
     ) =>
-      this.request<RecordView>(`sessions/${id}/submit-question`, "POST", input),
+      this.request<SubmitQuestionResult>(
+        `sessions/${id}/submit-question`,
+        "POST",
+        input,
+      ),
     submitExam: (
       id: string,
       answers: { question_id: string; answer: StudyAnswer }[],

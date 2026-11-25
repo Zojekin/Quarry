@@ -1030,6 +1030,8 @@ it("updates checked state and increments attempt index even when follow-up sessi
       is_correct: 1,
       answer: { kind: "choice", option_ids: ["a"] },
       answered_at: "",
+      correct_answer: ["a"],
+      analysis: "这是解析内容",
     })
     .mockResolvedValueOnce({
       id: "r2",
@@ -1039,12 +1041,20 @@ it("updates checked state and increments attempt index even when follow-up sessi
       is_correct: 1,
       answer: { kind: "choice", option_ids: ["b"] },
       answered_at: "",
+      correct_answer: ["a"],
+      analysis: "这是解析内容",
     });
 
   render(<Study id="s" navigate={() => {}} onRail={() => {}} />);
-  fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  fireEvent.click(screen.getByRole("button", { name: /查看答案/ }));
   await screen.findByRole("button", { name: "重新作答" });
   expect(get).toHaveBeenCalledTimes(2);
+  expect(screen.getByText("回答正确 · +6 分")).toBeTruthy();
+  expect(screen.getByText("正确")).toBeTruthy();
+  expect(screen.queryByText("选错")).toBeNull();
+  expect(screen.queryByText("暂无参考答案")).toBeNull();
+  expect(screen.getByText("这是解析内容")).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: "重新作答" }));
   fireEvent.click(await screen.findByRole("button", { name: /查看答案/ }));
