@@ -7,6 +7,7 @@ import { Icon } from "../components/Icons.js";
 import { Markdown } from "../components/Markdown.js";
 import {
   Button,
+  errorMessage,
   Modal,
   NavigationControls,
   Notice,
@@ -30,7 +31,7 @@ export function emptyAnswer(q: QuestionView): StudyAnswer {
   ) {
     return { kind: "choice", option_ids: [] };
   }
-  if (q.type === "strict_fill_in_blank" || q.type === "free_fill_in_blank") {
+  if (q.type === "strict_fill_in_blank") {
     return { kind: "blanks", values: Array(q.blanks?.length ?? 1).fill("") };
   }
   return { kind: "text", value: "" };
@@ -158,10 +159,7 @@ export function Answer({
     );
   }
 
-  if (
-    q.type === "strict_fill_in_blank" ||
-    q.type === "free_fill_in_blank"
-  ) {
+  if (q.type === "strict_fill_in_blank") {
     const blanks =
       q.blanks && q.blanks.length > 0 ? q.blanks : [{ id: "0", valid_answers: [] }];
     const current = answer.kind === "blanks" ? answer.values : [];
@@ -193,19 +191,33 @@ export function Answer({
     );
   }
 
+  const isFreeBlank = q.type === "free_fill_in_blank";
   return (
     <div className="space-y-3">
       <label className="block space-y-1.5 text-[13px] font-medium">
-        <span className="text-muted-foreground">作答内容</span>
-        <Textarea
-          disabled={locked}
-          rows={6}
-          value={answer.kind === "text" ? answer.value : ""}
-          onChange={(event) =>
-            onChange({ kind: "text", value: event.target.value })
-          }
-          placeholder="输入你的作答…"
-        />
+        <span className="text-muted-foreground">
+          {isFreeBlank ? "填空作答" : "作答内容"}
+        </span>
+        {isFreeBlank ? (
+          <Input
+            disabled={locked}
+            value={answer.kind === "text" ? answer.value : ""}
+            onChange={(event) =>
+              onChange({ kind: "text", value: event.target.value })
+            }
+            placeholder="输入你的作答…"
+          />
+        ) : (
+          <Textarea
+            disabled={locked}
+            rows={6}
+            value={answer.kind === "text" ? answer.value : ""}
+            onChange={(event) =>
+              onChange({ kind: "text", value: event.target.value })
+            }
+            placeholder="输入你的作答…"
+          />
+        )}
       </label>
       {reveal && q.explanation && (
         <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
@@ -217,28 +229,57 @@ export function Answer({
   );
 }
 
-function PauseScreen({ onResume }: { onResume: () => void }) {
+function PauseScreen({
+  mode,
+  error,
+  busy,
+  onResume,
+  onExit,
+}: {
+  mode: "practice" | "exam";
+  error: string;
+  busy: boolean;
+  onResume: () => void;
+  onExit: () => void;
+}) {
   return (
     <div
       className="flex min-h-[65vh] flex-col items-center justify-center rounded-xl border border-border bg-card/80 p-10 text-center"
-      aria-label="考试暂停遮罩"
+      aria-label="答题暂停遮罩"
     >
       <Modal
         title="答题已暂停"
         onClose={onResume}
         actions={
-          <Button variant="default" onClick={onResume}>
-            继续答题
-          </Button>
+          <>
+            <Button variant="outline" onClick={onExit}>
+              返回练习记录
+            </Button>
+            <Button variant="default" disabled={busy} onClick={onResume}>
+              继续答题
+            </Button>
+          </>
         }
       >
-        <p className="m-0 text-[13.5px] leading-relaxed text-muted-foreground">
-          计时已暂停，题目内容已在恢复前安全隐藏。按 Esc 或点击「继续答题」回到当前位置。
-        </p>
+        <div className="space-y-3">
+          <p className="m-0 text-[13.5px] leading-relaxed text-muted-foreground">
+            {mode === "exam"
+              ? "已隐藏题目内容，考试截止时间按开考时间固定计算。按 Esc 或点击「继续答题」回到作答位置。"
+              : "计时已暂停，题目内容已安全隐藏。按 Esc 或点击「继续答题」回到作答位置。"}
+          </p>
+          <Notice error={error} loading={busy} />
+        </div>
       </Modal>
     </div>
   );
 }
+
+type CheckedState = {
+  score: number | null;
+  recordId: string;
+  correct: boolean | null;
+  answer: StudyAnswer;
+};
 
 export function Study({
   id,
@@ -266,21 +307,29 @@ export function Study({
   const [index, setIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, StudyAnswer>>({});
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
-  const [checked, setChecked] = useState<
-    Record<string, { score: number | null; recordId: string; correct: boolean | null }>
-  >({});
+  const [checked, setChecked] = useState<Record<string, CheckedState>>({});
   const [elapsed, setElapsed] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const [message, setMessage] = useState("");
+  const [draftError, setDraftError] = useState("");
   const confirm = useConfirmation();
   const pauseButtonRef = useRef<HTMLButtonElement>(null);
   const resumeFocusPending = useRef(false);
   const saveChain = useRef(Promise.resolve());
+  const draftFailedRef = useRef<Error | null>(null);
+  const lastDraftRef = useRef<{
+    index: number;
+    questionId?: string;
+    userAnswer?: StudyAnswer;
+  }>({ index: 0 });
   const autoSubmitted = useRef(false);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
 
   const onTitleRef = useRef(onTitle);
   onTitleRef.current = onTitle;
@@ -292,65 +341,83 @@ export function Study({
     setSession(loadedSession);
     setPaperMeta(foundPaper);
     autoSubmitted.current = false;
+    draftFailedRef.current = null;
+    setDraftError("");
 
-    const title = foundPaper?.name ?? loadedSession.paper_name ?? "作答";
-    onTitleRef.current?.(`${title} · ${loadedSession.mode === "exam" ? "考试" : "练习"}`);
-
-    const items = loadedSession.items;
-    const firstUnchecked =
-      loadedSession.mode === "practice"
-        ? items.findIndex(
-            (item) =>
-              !loadedSession.records.some(
-                (r) => r.question_id === item.question.id,
-              ),
-          )
-        : -1;
-    setIndex(
-      firstUnchecked >= 0
-        ? firstUnchecked
-        : Math.min(loadedSession.current_index, Math.max(0, items.length - 1)),
+    const title = loadedSession.paper_name ?? foundPaper?.name ?? "作答";
+    onTitleRef.current?.(
+      `${title} · ${loadedSession.mode === "exam" ? "考试" : "练习"}`,
     );
 
-    const initDrafts: Record<string, StudyAnswer> = {};
-    for (const item of items) {
-      initDrafts[item.question.id] =
-        loadedSession.draft_answers[item.question.id] ??
-        emptyAnswer(item.question);
-    }
-    setDrafts(initDrafts);
-
+    const items = loadedSession.items;
+    const latestRecordByQ = new Map<string, RecordView>();
     const initAttempts: Record<string, number> = {};
-    const initChecked: Record<
-      string,
-      { score: number | null; recordId: string; correct: boolean | null }
-    > = {};
     for (const r of loadedSession.records) {
       initAttempts[r.question_id] = Math.max(
         initAttempts[r.question_id] ?? 0,
         r.attempt_index,
       );
-      const item = items.find((it) => it.question.id === r.question_id);
+      const prev = latestRecordByQ.get(r.question_id);
+      if (!prev || r.attempt_index >= prev.attempt_index) {
+        latestRecordByQ.set(r.question_id, r);
+      }
+    }
+
+    const firstUnchecked =
+      loadedSession.mode === "practice"
+        ? items.findIndex((item) => !latestRecordByQ.has(item.question.id))
+        : -1;
+    const initialIndex =
+      firstUnchecked >= 0
+        ? firstUnchecked
+        : Math.min(loadedSession.current_index, Math.max(0, items.length - 1));
+    setIndex(initialIndex);
+    lastDraftRef.current = { index: initialIndex };
+
+    const initDrafts: Record<string, StudyAnswer> = {};
+    for (const item of items) {
+      initDrafts[item.question.id] =
+        loadedSession.draft_answers[item.question.id] ??
+        latestRecordByQ.get(item.question.id)?.answer ??
+        emptyAnswer(item.question);
+    }
+    setDrafts(initDrafts);
+
+    const initChecked: Record<string, CheckedState> = {};
+    for (const [qid, r] of latestRecordByQ.entries()) {
+      const item = items.find((it) => it.question.id === qid);
       const maxScore = item?.question.max_score;
       const graded = maxScore !== undefined && r.score !== null;
-      initChecked[r.question_id] = {
+      initChecked[qid] = {
         score: graded ? r.score : null,
         recordId: r.id,
         correct: graded ? (r.score ?? 0) >= maxScore : null,
+        answer: r.answer,
       };
     }
     setAttemptCounts(initAttempts);
     setChecked(initChecked);
     setElapsed(loadedSession.effective_duration_seconds);
+    setNowMs(Date.now());
   }, [data]);
 
+  const timeLimit = session?.time_limit_seconds ?? null;
+  const deadlineMs =
+    session && session.mode === "exam" && timeLimit
+      ? Date.parse(session.start_time) + timeLimit * 1000
+      : null;
+
   useEffect(() => {
-    if (session?.status !== "in_progress") return;
+    if (!session || session.status === "completed") return;
+    if (session.status !== "in_progress" && deadlineMs === null) return;
     const timer = window.setInterval(() => {
-      setElapsed((sec) => sec + 1);
+      setNowMs(Date.now());
+      if (sessionRef.current?.status === "in_progress") {
+        setElapsed((sec) => sec + 1);
+      }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [session?.status]);
+  }, [session?.id, session?.status, deadlineMs]);
 
   useEffect(() => {
     if (session?.status === "in_progress" && resumeFocusPending.current) {
@@ -359,38 +426,40 @@ export function Study({
     }
   }, [session?.status]);
 
-  const timeLimit =
-    paperMeta?.time_limit_seconds ?? session?.time_limit_seconds ?? null;
-
   useEffect(() => {
     if (
       !session ||
       session.mode !== "exam" ||
-      session.status !== "in_progress" ||
-      !timeLimit ||
+      session.status === "completed" ||
+      deadlineMs === null ||
       autoSubmitted.current
-    )
+    ) {
       return;
-
-    const elapsedMsSinceStart =
-      Date.now() -
-      new Date(session.start_time).getTime() -
-      session.paused_duration_seconds * 1000;
-    if (elapsedMsSinceStart >= timeLimit * 1000 || elapsed >= timeLimit) {
-      autoSubmitted.current = true;
-      void submitExam();
     }
-  }, [elapsed, session, timeLimit]);
+    const checkDeadline = () => {
+      if (autoSubmitted.current) return;
+      if (Date.now() >= deadlineMs) {
+        autoSubmitted.current = true;
+        void submitExam();
+      }
+    };
+    checkDeadline();
+    if (!autoSubmitted.current) {
+      const waitMs = Math.max(0, deadlineMs - Date.now());
+      const handle = window.setTimeout(checkDeadline, waitMs);
+      return () => window.clearTimeout(handle);
+    }
+  }, [nowMs, session?.id, session?.mode, session?.status, deadlineMs]);
 
   useEffect(() => {
     const onHide = () => {
-      if (session?.mode === "exam" && session.status === "in_progress") {
-        void client.sessions.pause(session.id).catch(() => {});
+      if (sessionRef.current?.status === "in_progress") {
+        void client.sessions.pause(sessionRef.current.id).catch(() => {});
       }
     };
     window.addEventListener("pagehide", onHide);
     return () => window.removeEventListener("pagehide", onHide);
-  }, [session?.id, session?.mode, session?.status]);
+  }, []);
 
   function queueDraft(
     nextIndex: number,
@@ -400,6 +469,10 @@ export function Study({
     if (!sessionRef.current || sessionRef.current.status !== "in_progress")
       return;
     const sessionId = sessionRef.current.id;
+    lastDraftRef.current = {
+      index: nextIndex,
+      ...(questionId && userAnswer ? { questionId, userAnswer } : {}),
+    };
     saveChain.current = saveChain.current.then(() => {
       if (sessionRef.current?.status !== "in_progress") return undefined;
       return client.sessions
@@ -409,9 +482,45 @@ export function Study({
             ? { question_id: questionId, user_answer: userAnswer }
             : {}),
         })
-        .then(() => undefined)
-        .catch(() => undefined);
+        .then(() => {
+          draftFailedRef.current = null;
+          setDraftError("");
+        })
+        .catch((err) => {
+          const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+          draftFailedRef.current = errObj;
+          setDraftError(errorMessage(err));
+        });
     });
+  }
+
+  async function retryDraft() {
+    if (!sessionRef.current || sessionRef.current.status !== "in_progress")
+      return;
+    const sessionId = sessionRef.current.id;
+    const payload = lastDraftRef.current;
+    saveChain.current = saveChain.current.then(() =>
+      client.sessions
+        .saveDraft(sessionId, {
+          current_index: payload.index,
+          ...(payload.questionId && payload.userAnswer
+            ? {
+                question_id: payload.questionId,
+                user_answer: payload.userAnswer,
+              }
+            : {}),
+        })
+        .then(() => {
+          draftFailedRef.current = null;
+          setDraftError("");
+        })
+        .catch((err) => {
+          const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+          draftFailedRef.current = errObj;
+          setDraftError(errorMessage(err));
+        }),
+    );
+    await saveChain.current;
   }
 
   function updateAnswer(question: QuestionView, nextAnswer: StudyAnswer) {
@@ -468,11 +577,12 @@ export function Study({
           score: graded ? result.score : null,
           recordId: result.id,
           correct: graded ? (result.score ?? 0) >= maxScore : null,
+          answer,
         },
       }));
       onSubmitted?.();
     } catch (e) {
-      setMessage((e as Error).message);
+      setMessage(errorMessage(e));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -498,67 +608,81 @@ export function Study({
       setMessage("已主动收入错题本。");
       onSubmitted?.();
     } catch (e) {
-      setMessage((e as Error).message);
+      setMessage(errorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
   async function finishPractice() {
-    if (!session) return;
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       await saveChain.current;
+      if (draftFailedRef.current) throw draftFailedRef.current;
       sessionRef.current = { ...session, status: "completed" };
       await client.sessions.finishPractice(session.id);
       onSubmitted?.();
       navigate({ page: "result", id: session.id });
     } catch (e) {
       sessionRef.current = session;
-      setMessage((e as Error).message);
+      setMessage(errorMessage(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   async function submitExam() {
-    if (!session) return;
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       await saveChain.current;
+      if (sessionRef.current?.status === "paused") {
+        await client.sessions.resume(session.id);
+      }
       sessionRef.current = { ...session, status: "completed" };
+      const currentDrafts = draftsRef.current;
       const answers = session.items.map((item) => ({
         question_id: item.question.id,
-        answer: drafts[item.question.id] ?? emptyAnswer(item.question),
+        answer: currentDrafts[item.question.id] ?? emptyAnswer(item.question),
       }));
       await client.sessions.submitExam(session.id, answers);
       onSubmitted?.();
       navigate({ page: "result", id: session.id });
     } catch (e) {
       sessionRef.current = session;
-      setMessage((e as Error).message);
+      autoSubmitted.current = false;
+      setMessage(errorMessage(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
-  async function pauseExam() {
-    if (!session) return;
+  async function pauseSession() {
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
+    setMessage("");
     try {
       await saveChain.current;
+      if (draftFailedRef.current) throw draftFailedRef.current;
       sessionRef.current = { ...session, status: "paused" };
       const updated = await client.sessions.pause(session.id);
       setSession(updated);
     } catch (e) {
       sessionRef.current = session;
-      setMessage((e as Error).message);
+      setMessage(errorMessage(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
-  async function resumeExam() {
+  async function resumeSession() {
     if (!session || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
@@ -569,7 +693,7 @@ export function Study({
       setSession(updated);
     } catch (e) {
       resumeFocusPending.current = false;
-      setMessage((e as Error).message);
+      setMessage(errorMessage(e));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -589,11 +713,9 @@ export function Study({
       if (busyRef.current || document.querySelector('[role="dialog"]')) return;
       const target = event.target as HTMLElement | null;
       if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
+        target?.closest(
+          "input, textarea, select, [contenteditable='true']",
+        )
       ) {
         return;
       }
@@ -620,6 +742,13 @@ export function Study({
           });
         }
       } else if (event.key === "Enter" && !locked) {
+        if (
+          target?.closest(
+            "button, a, summary, [role='button'], [role='radio'], [role='checkbox'], [role='tab'], [role='menuitem']",
+          )
+        ) {
+          return;
+        }
         event.preventDefault();
         void checkCurrent();
       }
@@ -638,8 +767,11 @@ export function Study({
       if (session.mode === "practice") return !!checked[item.question.id];
       return hasAnswer(drafts[item.question.id]);
     }).length;
-    const remaining = timeLimit ? Math.max(0, timeLimit - elapsed) : elapsed;
-    const paperTitle = paperMeta?.name ?? session.paper_name ?? "试卷作答";
+    const displayedSeconds =
+      deadlineMs !== null
+        ? Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000))
+        : elapsed;
+    const paperTitle = session.paper_name ?? paperMeta?.name ?? "试卷作答";
 
     onRail(
       <div className="space-y-5 px-0.5 text-[13px]">
@@ -652,7 +784,7 @@ export function Study({
               className="font-mono text-[13px] font-semibold text-foreground tabular-nums"
               data-dynamic-date="duration"
             >
-              {formatTime(remaining)}
+              {formatTime(displayedSeconds)}
             </span>
           </div>
           <div className="truncate font-serif text-[14.5px] font-semibold text-foreground">
@@ -712,18 +844,16 @@ export function Study({
         </div>
 
         <div className="flex flex-col gap-2 pt-2">
-          {session.mode === "exam" && (
-            <Button
-              ref={pauseButtonRef}
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={busy || session.status !== "in_progress"}
-              onClick={() => void pauseExam()}
-            >
-              暂停
-            </Button>
-          )}
+          <Button
+            ref={pauseButtonRef}
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={busy || session.status !== "in_progress"}
+            onClick={() => void pauseSession()}
+          >
+            暂停
+          </Button>
           <Button
             variant="default"
             size="sm"
@@ -755,7 +885,7 @@ export function Study({
       </div>,
     );
     return () => onRail(null);
-  }, [session, paperMeta, drafts, checked, index, elapsed, busy, timeLimit]);
+  }, [session, paperMeta, drafts, checked, index, elapsed, nowMs, busy, deadlineMs]);
 
   if (error || !session) {
     return (
@@ -771,8 +901,20 @@ export function Study({
   }
 
   if (session.status === "paused") {
-    return <PauseScreen onResume={() => void resumeExam()} />;
+    return (
+      <PauseScreen
+        mode={session.mode}
+        error={message}
+        busy={busy}
+        onResume={() => void resumeSession()}
+        onExit={() => navigate({ page: "records" })}
+      />
+    );
   }
+
+  const canManualMistake =
+    currentQuestion &&
+    ["subjective", "free_fill_in_blank"].includes(currentQuestion.type);
 
   const reference =
     currentQuestion &&
@@ -788,6 +930,21 @@ export function Study({
   return (
     <div className="space-y-6">
       <Notice error={message} loading={false} />
+      {draftError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3.5 py-2.5 text-[13px] text-[var(--error-fg)]"
+        >
+          <span>草稿保存失败：{draftError}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void retryDraft()}
+          >
+            重试保存草稿
+          </Button>
+        </div>
+      )}
 
       {session.mode === "practice" && currentQuestion ? (
         /* Practice Mode: Reimagined Left-Right Split */
@@ -825,7 +982,11 @@ export function Study({
           <div className="min-w-0 space-y-5">
             <Answer
               q={currentQuestion}
-              answer={drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion)}
+              answer={
+                currentCheck
+                  ? currentCheck.answer
+                  : (drafts[currentQuestion.id] ?? emptyAnswer(currentQuestion))
+              }
               locked={!!currentCheck}
               reveal={!!currentCheck}
               onChange={(val) => updateAnswer(currentQuestion, val)}
@@ -849,14 +1010,16 @@ export function Study({
                         ? `回答正确 · +${currentCheck.score ?? 0} 分`
                         : `本题得分 ${currentCheck.score ?? 0} / ${currentQuestion.max_score} 分`}
                   </StatusPill>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void addMistake(currentCheck.recordId)}
-                  >
-                    加入错题本
-                  </Button>
+                  {canManualMistake && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void addMistake(currentCheck.recordId)}
+                    >
+                      加入错题本
+                    </Button>
+                  )}
                 </div>
                 <div>
                   <span className="font-semibold text-primary">参考答案：</span>
@@ -949,39 +1112,29 @@ export function Result({
   navigation?: NavigationProps;
   onBack?: () => void;
 }) {
-  const { data, error } = useLoad(
-    () =>
-      Promise.all([
-        client.sessions.get(id),
-        client.papers.list().catch(() => [] as Paper[]),
-      ]),
-    [id],
-  );
+  const { data, error } = useLoad(() => client.sessions.get(id), [id]);
   const [filter, setFilter] = useState<"all" | "missed" | "unanswered">("all");
-
-  const session = data?.[0];
-  const papers = data?.[1] ?? [];
-  const paper = papers.find((p) => p.id === session?.paper_id);
 
   const records = useMemo(() => {
     const map = new Map<string, RecordView>();
-    for (const r of session?.records ?? []) {
+    for (const r of data?.records ?? []) {
       const prev = map.get(r.question_id);
       if (!prev || r.attempt_index >= prev.attempt_index) {
         map.set(r.question_id, r);
       }
     }
     return map;
-  }, [session?.records]);
+  }, [data?.records]);
 
-  const items = session?.items ?? [];
+  const items = data?.items ?? [];
   const obtained = items.reduce(
     (sum, item) => sum + (records.get(item.question.id)?.score ?? 0),
     0,
   );
-  const totalScore =
-    paper?.full_score ||
-    items.reduce((sum, item) => sum + (item.question.max_score ?? 0), 0);
+  const totalScore = items.reduce(
+    (sum, item) => sum + (item.question.max_score ?? 0),
+    0,
+  );
 
   const rows = items.filter((item) => {
     const r = records.get(item.question.id);
@@ -1008,21 +1161,21 @@ export function Result({
 
       <Notice error={error} loading={!data && !error} />
 
-      {session && (
+      {data && (
         <>
           <Card className="result-hero p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
-                <Badge variant={session.mode === "exam" ? "warning" : "info"}>
-                  {session.mode === "exam" ? "考试成绩报告" : "练习完成报告"}
+                <Badge variant={data.mode === "exam" ? "warning" : "info"}>
+                  {data.mode === "exam" ? "考试成绩报告" : "练习完成报告"}
                 </Badge>
                 <h1 className="m-0 font-serif text-[26px] font-semibold text-foreground">
-                  {paper?.name ?? session.paper_name ?? "成绩报告"}
+                  {data.paper_name ?? "成绩报告"}
                 </h1>
                 <p className="m-0 text-[13px] text-muted-foreground tabular-nums">
                   总用时{" "}
                   <span data-dynamic-date="duration">
-                    {formatTime(session.effective_duration_seconds)}
+                    {formatTime(data.effective_duration_seconds)}
                   </span>{" "}
                   · 共 {items.length} 题
                 </p>

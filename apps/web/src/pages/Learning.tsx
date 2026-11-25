@@ -121,7 +121,9 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
   const sessionTitle = (s: Session) =>
     paperNames.get(s.paper_id) ?? s.paper_name ?? "未命名套题";
 
-  const pending = sessions.filter((s) => s.status !== "completed");
+  const pending = [...sessions]
+    .filter((s) => s.status !== "completed")
+    .sort((a, b) => Date.parse(b.start_time) - Date.parse(a.start_time));
   const leadSession = pending[0];
   const otherPending = pending.slice(1, 5);
 
@@ -435,14 +437,16 @@ export function Records({ navigate }: { navigate: (route: Route) => void }) {
   const [sessions = [], papers = []] = data ?? [];
   const paperMap = new Map(papers.map((p) => [p.id, p]));
 
-  const rows = sessions.filter((s) => {
-    const title = paperMap.get(s.paper_id)?.name ?? s.paper_name ?? "";
-    const matchStatus = status === "all" || s.status === status;
-    const matchMode = modeFilter === undefined || modeFilter.includes(s.mode);
-    const matchSearch =
-      !search || title.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchMode && matchSearch;
-  });
+  const rows = [...sessions]
+    .sort((a, b) => Date.parse(b.start_time) - Date.parse(a.start_time))
+    .filter((s) => {
+      const title = paperMap.get(s.paper_id)?.name ?? s.paper_name ?? "";
+      const matchStatus = status === "all" || s.status === status;
+      const matchMode = modeFilter === undefined || modeFilter.includes(s.mode);
+      const matchSearch =
+        !search || title.toLowerCase().includes(search.toLowerCase());
+      return matchStatus && matchMode && matchSearch;
+    });
 
   return (
     <div className="space-y-5">
@@ -819,9 +823,18 @@ export function Mistakes({
                           </span>
                         )}
                       </div>
-                      <div className="line-clamp-2 font-serif text-[15.5px] leading-relaxed font-normal text-foreground">
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        aria-label={`预览错题 ${q.content}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInspectId(m.id);
+                        }}
+                        className="line-clamp-2 block w-full text-left font-serif text-[15.5px] leading-relaxed font-normal text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+                      >
                         {q.content}
-                      </div>
+                      </button>
                       <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground tabular-nums">
                         <span>错误 {m.wrong_count} 次</span>
                         <span data-dynamic-date="date">
@@ -832,18 +845,15 @@ export function Mistakes({
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label={
-                        m.mastery_status === "reviewing"
-                          ? "标记已掌握"
-                          : "标记待复习"
-                      }
                       disabled={busy}
                       onClick={(e) => {
                         e.stopPropagation();
                         void toggleMastery(m);
                       }}
                     >
-                      {m.mastery_status === "reviewing" ? "斩" : "复"}
+                      {m.mastery_status === "reviewing"
+                        ? "标记已掌握"
+                        : "标记待复习"}
                     </Button>
                   </div>
                 </Card>

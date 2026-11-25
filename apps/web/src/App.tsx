@@ -520,7 +520,10 @@ export function App() {
             className="min-w-0 flex-1 bg-background"
             aria-labelledby={`tab-${current.id}`}
           >
-            <ViewContext.Provider value={current.id + ":" + currentView}>
+            <ViewContext.Provider
+              key={current.id + ":" + currentView}
+              value={current.id + ":" + currentView}
+            >
               <div className="mx-auto max-w-[1260px] px-7 py-6 max-[960px]:px-5 max-[960px]:py-5">
                 {route.page === "home" && <Home navigate={navigate} />}
                 {route.page === "library" && (
