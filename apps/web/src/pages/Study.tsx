@@ -29,6 +29,7 @@ import { Badge } from "../components/ui/badge.js";
 import { Card } from "../components/ui/card.js";
 import { Input, Textarea } from "../components/ui/input.js";
 import { cn } from "../lib/utils.js";
+import { usePreferences } from "../lib/preferences.js";
 
 export function emptyAnswer(q: QuestionView): StudyAnswer {
   if (
@@ -354,6 +355,7 @@ export function Study({
   onSubmitted?: () => void;
   onTitle?: (title: string) => void;
 }) {
+  const { confirmExamSubmit, showShortcutHints } = usePreferences();
   const { data, error, reload } = useLoad(
     () =>
       Promise.all([
@@ -1159,7 +1161,11 @@ export function Study({
             size="sm"
             className="w-full"
             disabled={busy}
-            onClick={() =>
+            onClick={() => {
+              if (session.mode === "exam" && !confirmExamSubmit) {
+                void submitExam();
+                return;
+              }
               confirm.ask(
                 session.mode === "exam"
                   ? "确认交卷？"
@@ -1168,8 +1174,8 @@ export function Study({
                   void (session.mode === "exam"
                     ? submitExam()
                     : finishPractice()),
-              )
-            }
+              );
+            }}
           >
             {session.mode === "exam" ? "交卷" : "结束练习"}
           </Button>
@@ -1186,7 +1192,7 @@ export function Study({
       </div>,
     );
     return () => onRail(null);
-  }, [session, paperMeta, drafts, checked, index, nowMs, busy, deadlineMs]);
+  }, [session, paperMeta, drafts, checked, index, nowMs, busy, deadlineMs, confirmExamSubmit]);
 
   if (error || !session || session.status === "completed") {
     return (
@@ -1268,7 +1274,7 @@ export function Study({
               </div>
             )}
 
-            <div className="question-stem font-serif text-[19px] leading-[1.82] font-normal text-foreground">
+            <div className="question-stem font-serif leading-[1.82] font-normal text-foreground">
               <Markdown text={currentQuestion.content} />
             </div>
           </div>
@@ -1359,6 +1365,12 @@ export function Study({
                 下一题
               </Button>
             </div>
+            {showShortcutHints && !currentCheck && (
+              <p className="text-xs text-muted-foreground">
+                {!!currentQuestion.options?.length && <><kbd>1–9</kbd> 选择选项 · </>}
+                <kbd>Enter</kbd> 查看答案
+              </p>
+            )}
           </div>
         </div>
       ) : (
@@ -1382,7 +1394,7 @@ export function Study({
                     <Markdown text={q.material} />
                   </div>
                 )}
-                <div className="question-stem mb-4 font-serif text-[18px] leading-[1.78] font-normal text-foreground">
+                <div className="question-stem mb-4 [--question-size-offset:-1px] font-serif leading-[1.78] font-normal text-foreground">
                   <Markdown text={q.content} />
                 </div>
                 <Answer
@@ -1540,7 +1552,7 @@ export function Result({
                           : `得分 ${score} / ${maxScore}`}
                     </StatusPill>
                   </div>
-                  <div className="mb-3 font-serif text-[17px] leading-[1.75] font-normal text-foreground">
+                  <div className="question-stem mb-3 [--question-size-offset:-2px] font-serif leading-[1.75] font-normal text-foreground">
                     <Markdown text={q.content} />
                   </div>
                   {r && (

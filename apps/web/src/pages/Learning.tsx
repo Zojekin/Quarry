@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, Calendar, Play, Sparkles, Trash2, Upload } from "lucide-react";
 import logoUrl from "../assets/logo.svg";
 import { client } from "../api/client.js";
-import type { Dashboard, Mistake, Paper, Session, Tag } from "../api/client.js";
+import type { Dashboard, Mistake, Paper, Session } from "../api/client.js";
 import { formatTime, type Route } from "../state.js";
 import { QuestionPreview } from "../components/QuestionPreview.js";
+import { CliGuideCard } from "../components/CliGuideCard.js";
+import { DiagnosticsCard } from "../components/DiagnosticsCard.js";
+import { PreferencesSettingsCard } from "../components/PreferencesSettingsCard.js";
+import { TagManagerCard } from "../components/TagManagerCard.js";
 import {
   Button,
   EmptyState,
@@ -14,7 +18,6 @@ import {
   SearchField,
   Segmented,
   StatusPill,
-  tagColorStyle,
   types,
   useConfirmation,
   useLoad,
@@ -39,7 +42,6 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table.js";
-import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.js";
 import { cn } from "../lib/utils.js";
 import { download } from "./Library.js";
 
@@ -921,112 +923,11 @@ export function Mistakes({
   );
 }
 
-const colorSwatches = [
-  "#2d5c48",
-  "#4d7c5f",
-  "#2b5c86",
-  "#8c5c16",
-  "#b23a31",
-  "#7a5377",
-  "#e4eade",
-  "#eee7da",
-];
-
-function ColorRow({
-  tag,
-  onSaved,
-}: {
-  tag: Tag;
-  onSaved: (tag: Tag) => void;
-}) {
-  const [color, setColor] = useState(tag.color ?? "#e4eade");
-  const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
-  const chain = useRef(Promise.resolve());
-
-  function saveColor(next: string) {
-    setColor(next);
-    setStatus("saving");
-    chain.current = chain.current.then(() =>
-      client.tags
-        .updateColor(tag.id, next)
-        .then((updated) => {
-          onSaved(updated);
-          setStatus("saved");
-        })
-        .catch(() => setStatus("error")),
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <span
-          className="tag-color inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium"
-          style={tagColorStyle(color, tag.name)}
-        >
-          {tag.name}
-        </span>
-        {status === "saving" && (
-          <span className="text-[12px] text-muted-foreground">保存中…</span>
-        )}
-        {status === "saved" && (
-          <span className="text-[12px] text-[var(--success-fg)]">已保存</span>
-        )}
-        {status === "error" && (
-          <Button
-            size="sm"
-            variant="destructiveGhost"
-            onClick={() => saveColor(color)}
-          >
-            重试
-          </Button>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {colorSwatches.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            aria-label={`${tag.name} 设为 ${hex}`}
-            onClick={() => saveColor(hex)}
-            className={cn(
-              "size-5 rounded-full border border-black/15 transition-transform hover:scale-110",
-              color.toLowerCase() === hex.toLowerCase() &&
-                "ring-2 ring-primary ring-offset-1",
-            )}
-            style={{ backgroundColor: hex }}
-          />
-        ))}
-        <input
-          type="color"
-          aria-label={`${tag.name}颜色`}
-          value={color}
-          onChange={(e) => saveColor(e.target.value)}
-          className="ml-1 h-7 w-9 cursor-pointer rounded border border-border bg-card p-0.5"
-        />
-      </div>
-    </div>
-  );
-}
-
 export function Settings() {
-  const [targetType, setTargetType] = useState<"file" | "question">("file");
-  const { data, error, reload } = useLoad(
-    () => client.tags.list(targetType),
-    [targetType],
-  );
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [restoreRevision, setRestoreRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const confirm = useConfirmation();
-
-  useEffect(() => {
-    if (data) setTags(data);
-  }, [data]);
-
-  function replaceTag(updated: Tag) {
-    setTags((list) => list.map((t) => (t.id === updated.id ? updated : t)));
-  }
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -1036,41 +937,8 @@ export function Settings() {
         </h1>
       </div>
 
-      <Notice error={error || message} loading={!data && !error} />
-
-      {/* Tag Colors Card */}
-      <Card>
-        <CardHeader>
-          <div className="space-y-1">
-            <CardTitle>标签颜色</CardTitle>
-            <CardDescription>
-              为文件夹、题库与题目标签自定义识别配色，修改后自动保存
-            </CardDescription>
-          </div>
-          <Tabs
-            value={targetType}
-            onValueChange={(v) => setTargetType(v as "file" | "question")}
-          >
-            <TabsList aria-label="标签类型">
-              <TabsTrigger value="file">文件标签</TabsTrigger>
-              <TabsTrigger value="question">题目标签</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardHeader>
-        <CardContent>
-          {tags.length === 0 ? (
-            <p className="m-0 py-3 text-[13px] text-muted-foreground">
-              当前分类下还没有标签。
-            </p>
-          ) : (
-            <div className="divide-y divide-border">
-              {tags.map((tag) => (
-                <ColorRow key={tag.id} tag={tag} onSaved={replaceTag} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Notice error={message} loading={false} />
+      <TagManagerCard key={restoreRevision} />
 
       {/* Backup & About Card */}
       <Card>
@@ -1127,7 +995,7 @@ export function Settings() {
                       .backupRestore(file)
                       .then(() => {
                         setMessage("恢复完成，请刷新页面");
-                        reload();
+                        setRestoreRevision((revision) => revision + 1);
                       })
                       .catch((e) => setMessage((e as Error).message))
                       .finally(() => setBusy(false));
@@ -1138,6 +1006,9 @@ export function Settings() {
           </label>
         </CardContent>
       </Card>
+      <PreferencesSettingsCard />
+      <CliGuideCard />
+      <DiagnosticsCard />
       {confirm.dialog}
     </div>
   );

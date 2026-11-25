@@ -3,6 +3,8 @@ import { ImagePlus } from "lucide-react";
 import { QuestionSchema } from "@quarry/shared";
 import { client } from "../api/client.js";
 import type { QuestionView, Tag } from "../api/client.js";
+import { saveWithTags } from "../lib/tags.js";
+import { TagInput, type DraftTag } from "./TagInput.js";
 import { Button, IconButton, Modal, tagColorStyle, types } from "./ui.js";
 import { Badge } from "./ui/badge.js";
 import { Checkbox } from "./ui/checkbox.js";
@@ -47,11 +49,8 @@ export function QuestionEditor({
       "",
   );
   const [score, setScore] = useState(question?.max_score ?? 1);
-  const [tags, setTags] = useState(
-    availableTags
-      .filter((t) => question?.tag_ids.includes(t.id))
-      .map((t) => t.name)
-      .join(", "),
+  const [tags, setTags] = useState<DraftTag[]>(() =>
+    availableTags.filter((tag) => question?.tag_ids.includes(tag.id)),
   );
   const [material, setMaterial] = useState(question?.material ?? "");
   const [fixed, setFixed] = useState(question?.options_order_fixed ?? false);
@@ -64,24 +63,12 @@ export function QuestionEditor({
   async function save() {
     setBusy(true);
     try {
-      const all = await client.tags.list("question");
-      const ids: string[] = [];
-      for (const name of tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)) {
-        const tag =
-          all.find((t) => t.name === name) ??
-          (await client.tags.create({ name, target_type: "question" }));
-        if (!ids.includes(tag.id)) ids.push(tag.id);
-      }
       const base = {
         owner_id: ownerId,
         owner_type: paper ? "paper" : "question_bank",
         type,
         content,
         explanation,
-        tag_ids: ids,
       };
       const value = {
         ...base,
@@ -103,18 +90,17 @@ export function QuestionEditor({
               }
             : { reference_answer: reference }),
       };
-      const parsed = {
-        ...QuestionSchema.parse({
-          ...value,
-          id: question?.id ?? crypto.randomUUID(),
-          version: question?.version ?? 1,
-        }),
-        material: material || null,
-      };
-      if (question) await client.questions.update(question.id, parsed);
-      else if (paper)
-        await client.papers.addItem(ownerId, { question: parsed });
-      else await client.questions.create(parsed);
+      const validated = QuestionSchema.parse({
+        ...value,
+        id: question?.id ?? crypto.randomUUID(),
+        version: question?.version ?? 1,
+      });
+      await saveWithTags(tags, "question", async (tag_ids) => {
+        const parsed = { ...validated, tag_ids, material: material || null };
+        if (question) await client.questions.update(question.id, parsed);
+        else if (paper) await client.papers.addItem(ownerId, { question: parsed });
+        else await client.questions.create(parsed);
+      });
       onSaved();
       onClose();
     } catch (e) {
@@ -127,11 +113,11 @@ export function QuestionEditor({
   return (
     <Modal
       title={question ? "编辑题目" : "新增题目"}
-      onClose={onClose}
+      onClose={() => { if (!busy) onClose(); }}
       className="w-[min(680px,calc(100vw-2rem))]"
       actions={
         <>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             取消
           </Button>
           <Button variant="default" disabled={busy} onClick={() => void save()}>
@@ -335,10 +321,7 @@ export function QuestionEditor({
           />
         </label>
 
-        <label className="block space-y-1.5 text-[13px] font-medium">
-          <span>题目标签（英文逗号分隔）</span>
-          <Input value={tags} onChange={(e) => setTags(e.target.value)} />
-        </label>
+        <TagInput label="题目标签" tags={availableTags} value={tags} onChange={setTags} disabled={busy} />
 
         {error && (
           <p role="alert" className="text-[13px] text-destructive">
@@ -368,7 +351,7 @@ export function TagPills({
           key={tag.id}
           variant="outline"
           className={`${chips ? "tag-chip" : "pill"} tag-color`}
-          style={tagColorStyle(tag.color, tag.name)}
+          style={tagColorStyle(tag.color)}
         >
           {tag.name}
         </Badge>

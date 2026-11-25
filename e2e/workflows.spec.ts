@@ -17,7 +17,11 @@ async function saveDocument(page: Page, name: string, tag?: string) {
     name: /新建(?:文件夹|题库|套题)|编辑属性/,
   });
   await dialog.getByLabel('名称').fill(name);
-  if (tag) await dialog.getByLabel(/文件标签/).fill(tag);
+  if (tag) {
+    const tags = dialog.getByRole('combobox', { name: '文件标签' });
+    await tags.fill(tag);
+    await tags.press('Enter');
+  }
   await dialog.getByRole('button', { name: '保存', exact: true }).click();
   await expect(dialog).toBeHidden();
 }
@@ -80,7 +84,9 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await editor.getByLabel('选项 1', { exact: true }).fill('玄武岩');
     await editor.getByLabel('选项 2', { exact: true }).fill('石灰岩');
     await editor.getByRole('checkbox', { name: '正确选项 1' }).check();
-    await editor.getByLabel(/题目标签/).fill('岩石');
+    const tags = editor.getByRole('combobox', { name: '题目标签' });
+    await tags.fill('岩石');
+    await tags.press('Enter');
     await editor.locator('input[type=file]').setInputFiles({
       name: 'rock.png',
       mimeType: 'image/png',

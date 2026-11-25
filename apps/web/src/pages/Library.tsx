@@ -22,6 +22,7 @@ import { Icon } from "../components/Icons.js";
 import { ComposerEditor, DocumentEditor } from "../components/DocumentEditor.js";
 import { QuestionEditor } from "../components/QuestionEditor.js";
 import { QuestionPreview } from "../components/QuestionPreview.js";
+import { usePreferences } from "../lib/preferences.js";
 import { FollowDialog, ImportDialog, QuestionPicker } from "../components/Workflows.js";
 import {
   Button,
@@ -86,7 +87,7 @@ function TagPills({ tags, ids }: { tags: Tag[]; ids: string[] }) {
         <span
           className="tag-color inline-flex h-5 items-center rounded-full px-2 text-[11.5px] font-medium"
           key={tag.id}
-          style={tagColorStyle(tag.color, tag.name)}
+          style={tagColorStyle(tag.color)}
         >
           {tag.name}
         </span>
@@ -128,7 +129,9 @@ export function Library({
   search: string;
   setSearch: (s: string) => void;
 }) {
-  const [view, setView] = useViewState<"list" | "grid">("library-view", "list");
+  const preferences = usePreferences();
+  const [viewOverride, setView] = useViewState<"list" | "grid" | undefined>("library-view", undefined);
+  const view = viewOverride ?? preferences.libraryView;
   const [kindFilter, setKindFilter] = useViewState<string[] | undefined>(
     "library-kind",
     undefined,

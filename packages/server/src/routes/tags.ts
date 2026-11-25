@@ -10,9 +10,12 @@ const inputSchema = z.strictObject({ name: nameSchema, target_type: z.enum(['fil
 export function createTagRoutes() {
   return new Hono<QuarryServerEnv>()
     .get('/', async c => {
-      const namespace = c.req.query('target_type');
-      if (namespace) parse(z.enum(['file', 'question']), namespace);
-      const data = (await c.get('repositories').tags.list()).filter(t => !namespace || t.target_type === namespace);
+      const namespace = parse(z.enum(['file', 'question']).optional(), c.req.query('target_type') || undefined);
+      const includeUsage = parse(z.enum(['true', 'false']).optional(), c.req.query('include_usage'));
+      const tags = c.get('repositories').tags;
+      const data = includeUsage === 'true'
+        ? await tags.listWithUsage(namespace)
+        : (await tags.list()).filter(t => !namespace || t.target_type === namespace);
       return c.json({ success: true, data });
     })
     .post('/', async c => {
@@ -33,6 +36,18 @@ export function createTagRoutes() {
         return found(await r.tags.update(old.id, input));
       });
       return c.json({ success: true, data });
+    })
+    .delete('/:id', async c => {
+      const id = c.req.param('id');
+      const unusedOnly = parse(z.enum(['true', 'false']).optional(), c.req.query('unused_only')) === 'true';
+      await c.get('withTransaction')(async r => {
+        if (unusedOnly && (await r.tags.listRelations(id)).length)
+          throw new AppError(ErrorCode.Conflict, 'Tag is in use');
+        // The tag foreign key removes its relations in the same transaction.
+        if (!await r.tags.delete(id))
+          throw new AppError(ErrorCode.NotFound, 'Tag not found');
+      });
+      return c.json({ success: true, data: null });
     })
     .post('/:id/relations', async c => {
       const input = parse(TagRelationSchema, { ...await body(c), tag_id: c.req.param('id') });

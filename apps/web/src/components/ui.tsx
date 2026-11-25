@@ -290,7 +290,7 @@ export function useLoad<T>(loader: () => Promise<T>, dependencies: unknown[]) {
       live = false;
     };
   }, [...dependencies, revision]);
-  return { data, error, reload: () => refresh((n) => n + 1) };
+  return { data, setData, error, reload: () => refresh((n) => n + 1) };
 }
 
 export function Notice({
@@ -332,6 +332,10 @@ export function Facet({
   onChange: (value: string[] | undefined) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const matchingOptions = options.filter((option) =>
+    option.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  );
   const filtered = value !== undefined;
   const summary = !filtered
     ? label
@@ -343,7 +347,10 @@ export function Facet({
       : "未选择";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setQuery("");
+    }}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -362,16 +369,31 @@ export function Facet({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" aria-label={label} className="w-56 p-1.5">
-        <label className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 text-[13px] font-medium hover:bg-accent/70">
-          <Checkbox
-            aria-label="全选"
-            checked={value === undefined}
-            onCheckedChange={(checked) => onChange(checked ? undefined : [])}
-          />
-          <span>全选</span>
-        </label>
+        <Input
+          type="search"
+          aria-label={`搜索${label}`}
+          placeholder="搜索选项"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <label className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 text-[13px] font-medium hover:bg-accent/70">
+            <Checkbox
+              aria-label="全选"
+              checked={value === undefined}
+              onCheckedChange={(checked) => onChange(checked ? undefined : [])}
+            />
+            <span>全选</span>
+          </label>
+          <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+            清空
+          </Button>
+        </div>
         <div className="mt-1 max-h-60 space-y-0.5 overflow-y-auto">
-          {options.map((option) => {
+          {matchingOptions.length === 0 && (
+            <p className="px-2 py-2 text-[13px] text-muted-foreground">没有匹配的选项</p>
+          )}
+          {matchingOptions.map((option) => {
             const isChecked = value === undefined || value.includes(option.id);
             return (
               <label
@@ -386,7 +408,7 @@ export function Facet({
                     const next = checked
                       ? Array.from(new Set([...current, option.id]))
                       : current.filter((id) => id !== option.id);
-                    onChange(next.length === options.length ? undefined : next);
+                    onChange(options.every((entry) => next.includes(entry.id)) ? undefined : next);
                   }}
                 />
                 <span className="truncate">{option.name}</span>
@@ -399,23 +421,14 @@ export function Facet({
   );
 }
 
-const tagPalette = ["#E4EADE", "#EEE7DA", "#EBE6EE"];
+const defaultTagBackground = "#E4EADE";
 
-export function tagBackground(color: string | null, name: string) {
-  const index = Array.from(name).reduce(
-    (sum, character) => sum + character.codePointAt(0)!,
-    0,
-  );
-  return color && /^#[0-9a-f]{6}$/i.test(color)
-    ? color
-    : tagPalette[index % tagPalette.length]!;
+export function tagBackground(color: string | null) {
+  return color && /^#[0-9a-f]{6}$/i.test(color) ? color : defaultTagBackground;
 }
 
-export function tagColorStyle(
-  color: string | null,
-  name: string,
-): CSSProperties {
-  const background = tagBackground(color, name);
+export function tagColorStyle(color: string | null): CSSProperties {
+  const background = tagBackground(color);
   const rgb = background
     .slice(1)
     .match(/../g)!

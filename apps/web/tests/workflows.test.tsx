@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+/// <reference types="vitest/jsdom" />
 import { useState, type ReactNode } from "react";
-import { afterEach, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -16,11 +17,17 @@ import { Detail, Library } from "../src/pages/Library.js";
 import { Mistakes, Records, Settings } from "../src/pages/Learning.js";
 import { Result, Study } from "../src/pages/Study.js";
 import { PromptDialog } from "../src/components/ui.js";
+import { updatePreferences } from "../src/lib/preferences.js";
+beforeEach(() => {
+  vi.stubGlobal("localStorage", jsdom.window.localStorage);
+});
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
   sessionStorage.clear();
+  window.localStorage.clear();
+  vi.unstubAllGlobals();
 });
 it("opens a production create form and saves the current folder ownership", async () => {
   vi.spyOn(client.folders, "list").mockResolvedValue([]);
@@ -63,10 +70,11 @@ it("serializes color saves and acknowledges only the final persisted color", asy
     target_type: "question",
     color: null,
   };
-  vi.spyOn(client.tags, "list").mockResolvedValue([tag]);
+  vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([{ ...tag, usage_count: 0 }]);
+  vi.spyOn(client, "health").mockResolvedValue({ status: "ok", database: "connected", version: "0.3.0", timestamp: 0 });
   let release: (t: Tag) => void = () => {};
   const save = vi
-    .spyOn(client.tags, "updateColor")
+    .spyOn(client.tags, "update")
     .mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -84,11 +92,12 @@ it("serializes color saves and acknowledges only the final persisted color", asy
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   release({ ...tag, color: "#111111" });
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-  expect(save.mock.calls.map((c) => c[1])).toEqual(["#111111", "#222222"]);
+  expect(save.mock.calls.map((c) => c[1])).toEqual([{ color: "#111111" }, { color: "#222222" }]);
   await screen.findByText("已保存");
 });
 it("runs a backup restore only after confirmation and allows retrying the same file", async () => {
-  vi.spyOn(client.tags, "list").mockResolvedValue([]);
+  vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([]);
+  vi.spyOn(client, "health").mockResolvedValue({ status: "ok", database: "connected", version: "0.3.0", timestamp: 0 });
   const restore = vi.spyOn(client.backup, "backupRestore").mockResolvedValue({ recovery_point_id: "recovery" });
   const { container } = render(<Settings />);
   const file = new File(["archive"], "quarry.quarry-backup");
@@ -1098,6 +1107,28 @@ it("recovers a committed exam submission and redirects to Result when submit res
   await waitFor(() =>
     expect(navigate).toHaveBeenCalledWith({ page: "result", id: "s" }),
   );
+});
+
+it("uses study preferences for manual exam submission and shortcut hints", async () => {
+  updatePreferences({ confirmExamSubmit: false, showShortcutHints: true });
+  const get = vi.spyOn(client.sessions, "get").mockResolvedValue(session);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  const submit = vi.spyOn(client.sessions, "submitExam").mockResolvedValue({ score: 0 });
+  const navigate = vi.fn();
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return <>{rail}<Study id="s" navigate={navigate} onRail={setRail} /></>;
+  }
+  const practice = render(<Harness />);
+  expect((await screen.findByText("Enter")).parentElement?.textContent).toContain("查看答案");
+  practice.unmount();
+
+  get.mockResolvedValue({ ...session, mode: "exam", time_limit_seconds: null });
+  render(<Harness />);
+  fireEvent.click(await screen.findByRole("button", { name: "交卷" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  expect(navigate).toHaveBeenCalledWith({ page: "result", id: "s" });
 });
 
 it("filters bank questions by search, type, and tag and paper questions by search", async () => {

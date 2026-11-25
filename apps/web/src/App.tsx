@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   BookOpen,
@@ -43,6 +43,7 @@ import {
   TooltipTrigger,
 } from "./components/ui/tooltip.js";
 import { cn } from "./lib/utils.js";
+import { questionSizes, usePreferences } from "./lib/preferences.js";
 import { Detail, Library } from "./pages/Library.js";
 import { Home, Mistakes, Records, Settings, Trash } from "./pages/Learning.js";
 import { Result, Study } from "./pages/Study.js";
@@ -95,13 +96,20 @@ const secondaryNav = [
 ] as const;
 
 export function App() {
+  const preferences = usePreferences();
+  const questionSize = questionSizes[preferences.questionSize];
   const initial = useRef(loadTabs());
   const [tabs, setTabs] = useState<WorkspaceTab[]>(initial.current.tabs);
   const [active, setActive] = useState<string>(initial.current.active);
-  const [compact, setCompact] = useState(false);
+  const [compact, setCompact] = useState(preferences.sidebarCollapsed);
   const [rail, setRail] = useState<ReactNode>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [reviewCount, setReviewCount] = useState(0);
+  useLayoutEffect(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--question-size", `${questionSize}px`);
+    return () => { style.removeProperty("--question-size"); };
+  }, [questionSize]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [quickItems, setQuickItems] = useState<{
     banks: Bank[];

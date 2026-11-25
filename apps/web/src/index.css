@@ -164,6 +164,10 @@
   -webkit-app-region: no-drag;
 }
 
+.question-stem {
+  font-size: calc(var(--question-size) + var(--question-size-offset, 0px));
+}
+
 /* 53x7 Activity Heatmap */
 .quarry-heat-months {
   display: grid;

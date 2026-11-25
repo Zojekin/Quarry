@@ -36,15 +36,15 @@
 - `apps/web/src/main.tsx` 挂载 React，加载 `index.css`（Tailwind CSS v4、`@theme inline` 令牌与标题栏/热力图样式）和 `production.css`（Markdown/KaTeX 与文件输入按钮适配）。
 - `apps/web/src/App.tsx` 负责一体化 `42px` 标题栏工作区标签、`224px/58px` 可折叠侧栏、全局 `Ctrl+K` 快速命令面板、前进后退与视图滚动恢复。
 - `apps/web/src/components/ui/` 存放 `shadcn/ui` 与 Radix 基础原语（`button`、`card`、`badge`、`table`、`input`、`select`、`dialog`、`popover`、`dropdown-menu`、`tabs`、`checkbox`、`switch`、`progress`、`tooltip`、`command`）；`apps/web/src/lib/utils.ts` 提供 `cn`。
-- `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供弹窗、多选 `Facet`、搜索框、状态药丸与 `useConfirmation`。
+- `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供弹窗、可搜索的多选 `Facet`、搜索框、状态药丸与 `useConfirmation`。
 - `apps/web/src/api/client.ts` 包装 HTTP、错误与文件处理。API 地址优先使用 preload，其次使用 `VITE_API_URL`。
 - `pages/Library.tsx` 实现 Master-Detail 题库工作台（列表/网格 + 右侧概览 Inspector + 多选浮栏）与两层紧凑详情页，`components/DocumentEditor.tsx` 编辑资料属性与套题编排。
-- `components/QuestionEditor.tsx` 编辑六种题型、题目标签与上传图片。
+- `components/QuestionEditor.tsx` 编辑六种题型和上传图片。资料与题目编辑器经 `components/TagInput.tsx` 管理标签草稿，在保存时调用 `lib/tags.ts` 获取或创建标签 ID。
 - `components/Icons.tsx` 基于 `lucide-react` 提供共用的导航与操作图标。
 - `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
 - `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
 - `pages/Study.tsx` 实现练习左右分栏（常规字重题干、无方框 `A/B/C/D` 选项、无底座三操作按钮与数字键/回车快捷键）、考试整卷作答、防并发 409 草稿队列、暂停遮罩与焦点返回以及成绩报告。
-- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。
+- `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `TagManagerCard`、`PreferencesSettingsCard`、`DiagnosticsCard` 和 `CliGuideCard`，以及备份恢复区。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
 - `components/Markdown.tsx` 懒加载 `MarkdownContent.tsx`，离线渲染 Markdown 与 KaTeX。
 - `assets/logo.svg` / `assets/serif.woff2` 由 Vite 解析和打包，字体授权保留在 `public/assets/LICENSE.txt`。
 
@@ -52,6 +52,7 @@
 
 - `packages/server/src/app.ts` 装配 `/api` 路由、CORS、统一错误和事务回调。
 - `routes/health.ts` 经仓储探测数据库连接并返回 server 包版本。
+- `routes/tags.ts` 负责标签 CRUD、关联和可选使用次数。SQLite 仓储汇总 `tag_relations`，删除标签时由外键级联清理关联。
 - `services/question.service.ts` 校验题目归属、材料关系与标签。
 - `services/paper.service.ts` 保存分区与套题快照，预览及应用来源更新。
 - `services/session.service.ts` 固定答题快照与顺序，提交作答、统计时间并写入错题。

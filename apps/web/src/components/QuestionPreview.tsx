@@ -25,7 +25,7 @@ export function QuestionPreview({
           <Markdown text={question.material} />
         </div>
       )}
-      <div className="font-serif text-[16px] leading-[1.7] font-normal text-foreground">
+      <div className="question-stem [--question-size-offset:-3px] font-serif leading-[1.7] font-normal text-foreground">
         <Markdown text={question.content} />
       </div>
       {question.options && (
