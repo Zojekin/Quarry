@@ -18,6 +18,7 @@ import { Result, Study } from "../src/pages/Study.js";
 import { PromptDialog } from "../src/components/ui.js";
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   sessionStorage.clear();
 });
@@ -574,4 +575,135 @@ it("sorts records newest-first and uses explicit keyboard-accessible controls in
   expect(previewSecond.getAttribute("aria-pressed")).toBe("true");
   expect(screen.getByRole("button", { name: "标记已掌握" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "标记待复习" })).toBeTruthy();
+});
+
+it("triggers exam auto-submit after an overlapping pause finishes past deadline and commits resume state on submit failure", async () => {
+  let now = Date.parse("2026-11-25T10:00:00.000Z");
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  const exam: Session = {
+    ...session,
+    mode: "exam",
+    status: "in_progress",
+    time_limit_seconds: 1,
+    start_time: new Date(now).toISOString(),
+    draft_answers: { q: { kind: "choice", option_ids: ["a"] } },
+  };
+  vi.spyOn(client.sessions, "get").mockResolvedValue(exam);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  let releasePause!: (s: Session) => void;
+  const pause = vi.spyOn(client.sessions, "pause").mockImplementation(
+    () =>
+      new Promise<Session>((resolve) => {
+        releasePause = resolve;
+      }),
+  );
+  const resume = vi
+    .spyOn(client.sessions, "resume")
+    .mockResolvedValue({ ...exam, status: "in_progress" });
+  const submitExam = vi
+    .spyOn(client.sessions, "submitExam")
+    .mockRejectedValue(new Error("交卷服务暂不可用"));
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={() => {}} onRail={setRail} />
+      </div>
+    );
+  }
+  render(<Harness />);
+  const pauseBtn = await screen.findByRole("button", { name: "暂停" });
+
+  fireEvent.click(pauseBtn);
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(1));
+
+  now += 2000;
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  expect(submitExam).not.toHaveBeenCalled();
+
+  releasePause({ ...exam, status: "paused" });
+  await waitFor(() => expect(resume).toHaveBeenCalledWith("s"));
+  await waitFor(() =>
+    expect(submitExam).toHaveBeenCalledWith("s", [
+      { question_id: "q", answer: { kind: "choice", option_ids: ["a"] } },
+    ]),
+  );
+  expect(screen.queryByRole("dialog", { name: "答题已暂停" })).toBeNull();
+  expect(await screen.findByText("交卷服务暂不可用")).toBeTruthy();
+});
+
+it("keeps an earlier failed question draft alert visible across index saves and replays it on retry", async () => {
+  const twoQuestionSession: Session = {
+    ...session,
+    items: [
+      session.items[0]!,
+      {
+        id: "i2",
+        source_question_id: null,
+        question: {
+          ...session.items[0]!.question,
+          id: "q2",
+          content: "Second question",
+        },
+      },
+    ],
+  };
+  vi.spyOn(client.sessions, "get").mockResolvedValue(twoQuestionSession);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  const saveDraft = vi
+    .spyOn(client.sessions, "saveDraft")
+    .mockRejectedValueOnce(new Error("Q1保存失败"))
+    .mockResolvedValueOnce(twoQuestionSession)
+    .mockResolvedValueOnce(twoQuestionSession);
+
+  render(<Study id="s" navigate={() => {}} onRail={() => {}} />);
+  fireEvent.click(await screen.findByRole("radio", { name: /Alpha/ }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Q1保存失败");
+
+  fireEvent.click(screen.getByRole("button", { name: /下一题/ }));
+  await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("alert").textContent).toContain("Q1保存失败");
+
+  fireEvent.click(screen.getByRole("button", { name: "重试保存草稿" }));
+  await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(3));
+  expect(saveDraft).toHaveBeenLastCalledWith("s", {
+    current_index: 1,
+    question_id: "q",
+    user_answer: { kind: "choice", option_ids: ["a"] },
+  });
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});
+
+it("drains pending saves and pauses an in-progress session on exit and on unmount", async () => {
+  vi.spyOn(client.sessions, "get").mockResolvedValue(session);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  const pause = vi
+    .spyOn(client.sessions, "pause")
+    .mockResolvedValue({ ...session, status: "paused" });
+  const navigate = vi.fn();
+
+  function Harness() {
+    const [rail, setRail] = useState<ReactNode>(null);
+    return (
+      <div>
+        {rail}
+        <Study id="s" navigate={navigate} onRail={setRail} />
+      </div>
+    );
+  }
+
+  const first = render(<Harness />);
+  fireEvent.click(await screen.findByRole("button", { name: "退出答题" }));
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(1));
+  expect(navigate).toHaveBeenCalledWith({ page: "records" });
+  first.unmount();
+  expect(pause).toHaveBeenCalledTimes(1);
+
+  const second = render(<Study id="s" navigate={navigate} onRail={() => {}} />);
+  await screen.findByText("Pick one");
+  second.unmount();
+  await waitFor(() => expect(pause).toHaveBeenCalledTimes(2));
 });

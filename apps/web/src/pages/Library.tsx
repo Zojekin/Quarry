@@ -498,11 +498,10 @@ export function Library({
                         <TableCell className="text-[13px] text-muted-foreground tabular-nums">
                           {itemCountLabel(entry)}
                         </TableCell>
-                        <TableCell
-                          className="text-[13px] text-muted-foreground tabular-nums"
-                          data-dynamic-date="date"
-                        >
-                          {dateText(item.updated_at)}
+                        <TableCell className="text-[13px] text-muted-foreground tabular-nums">
+                          <span data-dynamic-date="date">
+                            {dateText(item.updated_at)}
+                          </span>
                         </TableCell>
                         <TableCell
                           className="text-right"
@@ -664,11 +663,10 @@ export function Library({
                     </>
                   )}
                   <dt className="text-muted-foreground">最近更新</dt>
-                  <dd
-                    className="text-right font-medium text-foreground tabular-nums"
-                    data-dynamic-date="date"
-                  >
-                    {dateText(inspected.item.updated_at)}
+                  <dd className="text-right font-medium text-foreground tabular-nums">
+                    <span data-dynamic-date="date">
+                      {dateText(inspected.item.updated_at)}
+                    </span>
                   </dd>
                 </dl>
 

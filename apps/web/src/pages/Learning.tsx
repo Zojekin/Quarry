@@ -182,11 +182,11 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
                     <Badge variant="outline">
                       {leadSession.mode === "exam" ? "考试模式" : "练习模式"}
                     </Badge>
-                    <span
-                      className="text-[12.5px] text-muted-foreground tabular-nums"
-                      data-dynamic-date="duration"
-                    >
-                      已用时 {formatTime(leadSession.effective_duration_seconds)}
+                    <span className="text-[12.5px] text-muted-foreground tabular-nums">
+                      已用时{" "}
+                      <span data-dynamic-date="duration">
+                        {formatTime(leadSession.effective_duration_seconds)}
+                      </span>
                     </span>
                   </div>
                   <h2 className="m-0 truncate font-serif text-[20px] font-semibold text-foreground">
@@ -535,14 +535,15 @@ export function Records({ navigate }: { navigate: (route: Route) => void }) {
                     {new Set(s.records.map((r) => r.question_id)).size} /{" "}
                     {s.items.length}
                   </TableCell>
-                  <TableCell className="tabular-nums" data-dynamic-date="duration">
-                    {formatTime(s.effective_duration_seconds)}
+                  <TableCell className="tabular-nums">
+                    <span data-dynamic-date="duration">
+                      {formatTime(s.effective_duration_seconds)}
+                    </span>
                   </TableCell>
-                  <TableCell
-                    className="text-muted-foreground tabular-nums"
-                    data-dynamic-date="date"
-                  >
-                    {dateText(s.start_time)}
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    <span data-dynamic-date="date">
+                      {dateText(s.start_time)}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -837,8 +838,11 @@ export function Mistakes({
                       </button>
                       <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground tabular-nums">
                         <span>错误 {m.wrong_count} 次</span>
-                        <span data-dynamic-date="date">
-                          加入 {dateText(m.created_at)}
+                        <span>
+                          加入{" "}
+                          <span data-dynamic-date="date">
+                            {dateText(m.created_at)}
+                          </span>
                         </span>
                       </div>
                     </div>

@@ -305,6 +305,8 @@ export function Study({
   const [session, setSession] = useState<Session>();
   const [paperMeta, setPaperMeta] = useState<Paper>();
   const [index, setIndex] = useState(0);
+  const indexRef = useRef(0);
+  indexRef.current = index;
   const [drafts, setDrafts] = useState<Record<string, StudyAnswer>>({});
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
   const [checked, setChecked] = useState<Record<string, CheckedState>>({});
@@ -312,7 +314,6 @@ export function Study({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  busyRef.current = busy;
   const [message, setMessage] = useState("");
   const [draftError, setDraftError] = useState("");
   const confirm = useConfirmation();
@@ -320,16 +321,18 @@ export function Study({
   const resumeFocusPending = useRef(false);
   const saveChain = useRef(Promise.resolve());
   const draftFailedRef = useRef<Error | null>(null);
-  const lastDraftRef = useRef<{
-    index: number;
-    questionId?: string;
-    userAnswer?: StudyAnswer;
-  }>({ index: 0 });
+  const failedDraftsRef = useRef<Map<string, StudyAnswer>>(new Map());
+  const failedIndexRef = useRef<number | null>(null);
   const autoSubmitted = useRef(false);
+  const pauseSentForRef = useRef<string | null>(null);
   const sessionRef = useRef(session);
-  sessionRef.current = session;
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
+
+  function commitSession(next: Session) {
+    sessionRef.current = next;
+    setSession(next);
+  }
 
   const onTitleRef = useRef(onTitle);
   onTitleRef.current = onTitle;
@@ -338,10 +341,14 @@ export function Study({
     if (!data) return;
     const [loadedSession, papers] = data;
     const foundPaper = papers.find((p) => p.id === loadedSession.paper_id);
-    setSession(loadedSession);
+    commitSession(loadedSession);
     setPaperMeta(foundPaper);
     autoSubmitted.current = false;
+    pauseSentForRef.current =
+      loadedSession.status === "in_progress" ? null : loadedSession.id;
     draftFailedRef.current = null;
+    failedDraftsRef.current.clear();
+    failedIndexRef.current = null;
     setDraftError("");
 
     const title = loadedSession.paper_name ?? foundPaper?.name ?? "作答";
@@ -372,7 +379,6 @@ export function Study({
         ? firstUnchecked
         : Math.min(loadedSession.current_index, Math.max(0, items.length - 1));
     setIndex(initialIndex);
-    lastDraftRef.current = { index: initialIndex };
 
     const initDrafts: Record<string, StudyAnswer> = {};
     for (const item of items) {
@@ -437,10 +443,9 @@ export function Study({
       return;
     }
     const checkDeadline = () => {
-      if (autoSubmitted.current) return;
+      if (autoSubmitted.current || busyRef.current) return;
       if (Date.now() >= deadlineMs) {
-        autoSubmitted.current = true;
-        void submitExam();
+        void submitExam(true);
       }
     };
     checkDeadline();
@@ -449,16 +454,29 @@ export function Study({
       const handle = window.setTimeout(checkDeadline, waitMs);
       return () => window.clearTimeout(handle);
     }
-  }, [nowMs, session?.id, session?.mode, session?.status, deadlineMs]);
+  }, [nowMs, busy, session?.id, session?.mode, session?.status, deadlineMs]);
 
   useEffect(() => {
-    const onHide = () => {
-      if (sessionRef.current?.status === "in_progress") {
-        void client.sessions.pause(sessionRef.current.id).catch(() => {});
+    const pauseOnLeave = () => {
+      const active = sessionRef.current;
+      if (
+        !active ||
+        active.status !== "in_progress" ||
+        pauseSentForRef.current === active.id
+      ) {
+        return;
       }
+      pauseSentForRef.current = active.id;
+      sessionRef.current = { ...active, status: "paused" };
+      void saveChain.current
+        .catch(() => {})
+        .then(() => client.sessions.pause(active.id).catch(() => {}));
     };
-    window.addEventListener("pagehide", onHide);
-    return () => window.removeEventListener("pagehide", onHide);
+    window.addEventListener("pagehide", pauseOnLeave);
+    return () => {
+      window.removeEventListener("pagehide", pauseOnLeave);
+      pauseOnLeave();
+    };
   }, []);
 
   function queueDraft(
@@ -469,28 +487,39 @@ export function Study({
     if (!sessionRef.current || sessionRef.current.status !== "in_progress")
       return;
     const sessionId = sessionRef.current.id;
-    lastDraftRef.current = {
-      index: nextIndex,
-      ...(questionId && userAnswer ? { questionId, userAnswer } : {}),
-    };
-    saveChain.current = saveChain.current.then(() => {
-      if (sessionRef.current?.status !== "in_progress") return undefined;
-      return client.sessions
-        .saveDraft(sessionId, {
+    saveChain.current = saveChain.current.then(async () => {
+      if (sessionRef.current?.status !== "in_progress") return;
+      try {
+        await client.sessions.saveDraft(sessionId, {
           current_index: nextIndex,
           ...(questionId && userAnswer
             ? { question_id: questionId, user_answer: userAnswer }
             : {}),
-        })
-        .then(() => {
+        });
+        if (questionId && userAnswer) {
+          if (draftsRef.current[questionId] === userAnswer) {
+            failedDraftsRef.current.delete(questionId);
+          }
+        } else {
+          failedIndexRef.current = null;
+        }
+        if (
+          failedDraftsRef.current.size === 0 &&
+          failedIndexRef.current === null
+        ) {
           draftFailedRef.current = null;
           setDraftError("");
-        })
-        .catch((err) => {
-          const errObj = err instanceof Error ? err : new Error(errorMessage(err));
-          draftFailedRef.current = errObj;
-          setDraftError(errorMessage(err));
-        });
+        }
+      } catch (err) {
+        if (questionId && userAnswer) {
+          failedDraftsRef.current.set(questionId, userAnswer);
+        } else {
+          failedIndexRef.current = nextIndex;
+        }
+        const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+        draftFailedRef.current = errObj;
+        setDraftError(errorMessage(err));
+      }
     });
   }
 
@@ -498,28 +527,44 @@ export function Study({
     if (!sessionRef.current || sessionRef.current.status !== "in_progress")
       return;
     const sessionId = sessionRef.current.id;
-    const payload = lastDraftRef.current;
-    saveChain.current = saveChain.current.then(() =>
-      client.sessions
-        .saveDraft(sessionId, {
-          current_index: payload.index,
-          ...(payload.questionId && payload.userAnswer
-            ? {
-                question_id: payload.questionId,
-                user_answer: payload.userAnswer,
-              }
-            : {}),
-        })
-        .then(() => {
+    saveChain.current = saveChain.current.then(async () => {
+      if (sessionRef.current?.status !== "in_progress") return;
+      try {
+        const pendingEntries = Array.from(failedDraftsRef.current.entries());
+        for (const [qid, ans] of pendingEntries) {
+          const latestAns = draftsRef.current[qid] ?? ans;
+          await client.sessions.saveDraft(sessionId, {
+            current_index: indexRef.current,
+            question_id: qid,
+            user_answer: latestAns,
+          });
+          if (
+            draftsRef.current[qid] === latestAns ||
+            draftsRef.current[qid] === ans
+          ) {
+            failedDraftsRef.current.delete(qid);
+          }
+        }
+        if (failedIndexRef.current !== null || pendingEntries.length === 0) {
+          const targetIndex = failedIndexRef.current ?? indexRef.current;
+          await client.sessions.saveDraft(sessionId, {
+            current_index: targetIndex,
+          });
+          failedIndexRef.current = null;
+        }
+        if (
+          failedDraftsRef.current.size === 0 &&
+          failedIndexRef.current === null
+        ) {
           draftFailedRef.current = null;
           setDraftError("");
-        })
-        .catch((err) => {
-          const errObj = err instanceof Error ? err : new Error(errorMessage(err));
-          draftFailedRef.current = errObj;
-          setDraftError(errorMessage(err));
-        }),
-    );
+        }
+      } catch (err) {
+        const errObj = err instanceof Error ? err : new Error(errorMessage(err));
+        draftFailedRef.current = errObj;
+        setDraftError(errorMessage(err));
+      }
+    });
     await saveChain.current;
   }
 
@@ -571,6 +616,14 @@ export function Study({
       const maxScore = currentQuestion.max_score;
       const graded = maxScore !== undefined && result.score !== null;
       setAttemptCounts((prev) => ({ ...prev, [currentQuestion.id]: attempt }));
+      failedDraftsRef.current.delete(currentQuestion.id);
+      if (
+        failedDraftsRef.current.size === 0 &&
+        failedIndexRef.current === null
+      ) {
+        draftFailedRef.current = null;
+        setDraftError("");
+      }
       setChecked((prev) => ({
         ...prev,
         [currentQuestion.id]: {
@@ -634,27 +687,31 @@ export function Study({
     }
   }
 
-  async function submitExam() {
-    if (!session || busyRef.current) return;
+  async function submitExam(isAuto = false) {
+    let currentSession = sessionRef.current ?? session;
+    if (!currentSession || busyRef.current) return;
+    if (isAuto) autoSubmitted.current = true;
     busyRef.current = true;
     setBusy(true);
     try {
       await saveChain.current;
-      if (sessionRef.current?.status === "paused") {
-        await client.sessions.resume(session.id);
+      if (currentSession.status === "paused") {
+        currentSession = await client.sessions.resume(currentSession.id);
+        pauseSentForRef.current = null;
+        commitSession(currentSession);
       }
-      sessionRef.current = { ...session, status: "completed" };
+      sessionRef.current = { ...currentSession, status: "completed" };
       const currentDrafts = draftsRef.current;
-      const answers = session.items.map((item) => ({
+      const answers = currentSession.items.map((item) => ({
         question_id: item.question.id,
         answer: currentDrafts[item.question.id] ?? emptyAnswer(item.question),
       }));
-      await client.sessions.submitExam(session.id, answers);
+      await client.sessions.submitExam(currentSession.id, answers);
       onSubmitted?.();
-      navigate({ page: "result", id: session.id });
+      navigate({ page: "result", id: currentSession.id });
     } catch (e) {
-      sessionRef.current = session;
-      autoSubmitted.current = false;
+      sessionRef.current = currentSession;
+      if (!isAuto) autoSubmitted.current = false;
       setMessage(errorMessage(e));
     } finally {
       busyRef.current = false;
@@ -670,16 +727,37 @@ export function Study({
     try {
       await saveChain.current;
       if (draftFailedRef.current) throw draftFailedRef.current;
+      pauseSentForRef.current = session.id;
       sessionRef.current = { ...session, status: "paused" };
       const updated = await client.sessions.pause(session.id);
-      setSession(updated);
+      commitSession(updated);
     } catch (e) {
+      pauseSentForRef.current = null;
       sessionRef.current = session;
       setMessage(errorMessage(e));
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
+  }
+
+  async function exitStudy() {
+    const active = sessionRef.current ?? session;
+    if (active && active.status === "in_progress") {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        await saveChain.current.catch(() => {});
+        pauseSentForRef.current = active.id;
+        sessionRef.current = { ...active, status: "paused" };
+        await client.sessions.pause(active.id).catch(() => {});
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    }
+    navigate({ page: "records" });
   }
 
   async function resumeSession() {
@@ -690,7 +768,8 @@ export function Study({
     resumeFocusPending.current = true;
     try {
       const updated = await client.sessions.resume(session.id);
-      setSession(updated);
+      pauseSentForRef.current = null;
+      commitSession(updated);
     } catch (e) {
       resumeFocusPending.current = false;
       setMessage(errorMessage(e));
@@ -877,7 +956,7 @@ export function Study({
             variant="ghost"
             size="sm"
             className="w-full"
-            onClick={() => navigate({ page: "records" })}
+            onClick={() => void exitStudy()}
           >
             退出答题
           </Button>
