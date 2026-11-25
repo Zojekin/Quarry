@@ -103,8 +103,14 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
         app.on('web-contents-created', (_event, contents) => monitor(contents));
       });
       const page = await current.firstWindow();
+      // firstWindow can resolve on about:blank while the main process is still loading the renderer.
+      await page.waitForURL(url => url.protocol === 'file:' && url.pathname.endsWith('/index.html'));
       await page.setViewportSize({ width: 1440, height: 900 });
-      await page.waitForLoadState('networkidle');
+      const waitForRenderer = async () => {
+        await page.locator('#root > *').first().waitFor({ state: 'attached' });
+        await page.waitForLoadState('networkidle');
+      };
+      await waitForRenderer();
       const observe = (target: Page) => {
         target.on('console', message => {
           if (message.type() === 'error') errors.push('console.error: ' + message.text());
@@ -120,7 +126,8 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
       monitors.set(page, async () => [...errors,
         ...await current.evaluate(() => Reflect.get(globalThis, '__quarryPreloadErrors') as string[])]);
       active = page;
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'commit' });
+      await waitForRenderer();
       return page;
     }
     try {
