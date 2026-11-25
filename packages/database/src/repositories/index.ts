@@ -19,6 +19,7 @@ export interface IPaperRepository extends IRepository<'papers'> {
 }
 export interface IQuestionRepository extends IRepository<'questions'> {}
 export interface ITagRepository extends IRepository<'tags'> {
+  listWithUsage(namespace?: Row<'tags'>['target_type']): Promise<(Row<'tags'> & { usage_count: number })[]>;
   addRelation(input: NewRow<'tag_relations'>): Promise<Row<'tag_relations'>>;
   listRelations(tagId: string): Promise<Row<'tag_relations'>[]>;
   removeRelation(id: string): Promise<boolean>;

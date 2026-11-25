@@ -142,6 +142,16 @@ export class SqliteTagRepository implements ITagRepository {
     return this.db.selectFrom('tags').selectAll().orderBy('id').execute();
   }
 
+  async listWithUsage(namespace?: Row<'tags'>['target_type']) {
+    const query = this.db.selectFrom('tags')
+      .leftJoin('tag_relations', 'tag_relations.tag_id', 'tags.id')
+      .selectAll('tags')
+      .select(eb => eb.fn.count<number>('tag_relations.id').as('usage_count'))
+      .groupBy('tags.id')
+      .orderBy('tags.id');
+    return (namespace ? query.where('tags.target_type', '=', namespace) : query).execute();
+  }
+
   async update(id: string, patch: RowPatch<'tags'>): Promise<Row<'tags'> | undefined> {
     if (Object.keys(patch).length === 0) return this.findById(id);
     return this.db.updateTable('tags').set(patch).where('id', '=', id).returningAll().executeTakeFirst();

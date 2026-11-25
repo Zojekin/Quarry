@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { client } from "../api/client.js";
 import type { Document, Paper, Tag } from "../api/client.js";
+import { saveWithTags } from "../lib/tags.js";
+import { TagInput, type DraftTag } from "./TagInput.js";
 import { Button, Modal, Notice, types } from "./ui.js";
 import { Input, Textarea } from "./ui/input.js";
 import { Switch } from "./ui/switch.js";
@@ -22,11 +24,8 @@ export function DocumentEditor({
 }) {
   const [name, setName] = useState(document?.name ?? "");
   const [description, setDescription] = useState(document?.description ?? "");
-  const [names, setNames] = useState(
-    tags
-      .filter((t) => document?.tag_ids.includes(t.id))
-      .map((t) => t.name)
-      .join(", "),
+  const [selectedTags, setSelectedTags] = useState<DraftTag[]>(() =>
+    tags.filter((tag) => document?.tag_ids.includes(tag.id)),
   );
   const [minutes, setMinutes] = useState(
     (document as Paper | undefined)?.time_limit_seconds
@@ -45,19 +44,8 @@ export function DocumentEditor({
   async function save() {
     setBusy(true);
     try {
-      const tag_ids: string[] = [];
-      for (const tagName of names
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)) {
-        const tag =
-          tags.find((t) => t.name === tagName) ??
-          (await client.tags.create({ name: tagName, target_type: "file" }));
-        if (!tag_ids.includes(tag.id)) tag_ids.push(tag.id);
-      }
       const input = {
         name,
-        tag_ids,
         ...(kind === "folders"
           ? { parent_id: document?.parent_id ?? parent ?? null }
           : { description, folder_id: document?.folder_id ?? parent ?? null }),
@@ -69,8 +57,11 @@ export function DocumentEditor({
             }
           : {}),
       };
-      if (document) await client[kind].update(document.id, input);
-      else await client[kind].create(input);
+      await saveWithTags(selectedTags, "file", (tag_ids) =>
+        document
+          ? client[kind].update(document.id, { ...input, tag_ids })
+          : client[kind].create({ ...input, tag_ids }),
+      );
       onSaved();
       onClose();
     } catch (e) {
@@ -87,13 +78,13 @@ export function DocumentEditor({
           ? "编辑属性"
           : "新建" + { folders: "文件夹", banks: "题库", papers: "套题" }[kind]
       }
-      onClose={onClose}
+      onClose={() => { if (!busy) onClose(); }}
       onSubmit={() => {
         if (!busy && name.trim()) void save();
       }}
       actions={
         <>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             取消
           </Button>
           <Button
@@ -123,10 +114,7 @@ export function DocumentEditor({
           />
         </label>
       )}
-      <label className="block space-y-1.5 text-[13px] font-medium">
-        <span>文件标签（英文逗号分隔）</span>
-        <Input value={names} onChange={(e) => setNames(e.target.value)} />
-      </label>
+      <TagInput label="文件标签" tags={tags} value={selectedTags} onChange={setSelectedTags} disabled={busy} />
       {kind === "papers" && (
         <div className="space-y-3 pt-1">
           <label className="block space-y-1.5 text-[13px] font-medium">

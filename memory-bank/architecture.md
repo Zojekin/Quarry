@@ -109,7 +109,8 @@
 
 - **系统健康**：`GET /api/health`（Kysely 探针检测数据库连接）
 - **内容管理**：`/api/folders`（支持 `?tree=true`）、`/api/banks`、`/api/questions`、`/api/papers`（含 `/:id/items`、`/:id/follow-diff`、`/:id/apply-follow`）
-- **标签与附件**：`/api/tags`（支持 `target_type`、颜色读写及 `/:id/relations`）；`/api/attachments`（multipart SHA-256 去重上传与流式读取）
+- **标签**支持通过 `GET /api/tags?target_type=file|question` 按命名空间获取，只有 `include_usage=true` 时响应才附加 `usage_count`。计数包含回收站项目的现存关联。`PUT /api/tags/:id` 支持改名和修改颜色（`null` 为系统默认色）。`DELETE /api/tags/:id` 在仓储事务内利用 SQLite 外键级联删除标签关联，标签不存在时返回 404。
+- **附件**通过 `/api/attachments` 提供 multipart SHA-256 去重上传与流式读取。
 - **答题、错题与统计**：`/api/sessions`（`start`、`/:id/draft`、`/:id/submit-question`、`/:id/submit-exam`、`/:id/pause`、`/:id/resume`、`/:id/complete`）；`/api/mistakes`（多维 `types`/`source_paper_ids`/`folder_ids`/`tag_ids` 同维 OR 跨维 AND 过滤、掌握状态、`/create-paper`）；`/api/analytics/dashboard`
 - **回收站与迁移**：`/api/trash`（列表、批次恢复、物理清除）；`/api/import/{preview,commit}`、`/api/export/{bank|paper}/:id`、`/api/export/folder/:id`（子树 `.quarry` ZIP 导出）、`/api/backup/{create,restore}`
 
@@ -127,7 +128,9 @@
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史，整合于 `42px` 一体化标题栏并支持 `Ctrl+K` 快速命令跳转；一级栏目为首页（学习概览）、题库与套题、错题本、练习记录，另含回收站与系统设置。
+- **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 定义 Tailwind CSS v4 令牌与主题变量，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
+- **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载标签管理、显示与操作、运行诊断和 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---

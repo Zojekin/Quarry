@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSqliteDatabase } from '@quarry/database';
 import type { SqliteDatabase } from '@quarry/database';
 import { createQuarryServer } from '../src/app.js';
+import { TagListItemSchema, TagWithUsageSchema } from '@quarry/shared';
 
 let database: SqliteDatabase;
 let directory: string;
@@ -119,6 +120,37 @@ describe('folders and banks', () => {
 });
 
 describe('questions and dual tags', () => {
+  it('lists usage on request and removes only the deleted tag and its relations', async () => {
+    const fileTag = await tag('file', 'Shared name');
+    const questionTag = await tag('question', 'Shared name');
+    const unused = await tag('file');
+    const folder = await request('/folders', 'POST', { name: 'Folder', tag_ids: [fileTag.id] }, 201);
+    const b = await request('/banks', 'POST', { name: 'Bank', tag_ids: [fileTag.id] }, 201);
+    const q = await createQuestion(b.id, { tag_ids: [questionTag.id] });
+
+    const standard = TagListItemSchema.array().parse(await request('/tags?target_type=file'));
+    expect(standard.map(({ id }) => id)).toEqual(expect.arrayContaining([fileTag.id, unused.id]));
+    const getUsage = async (query = '') =>
+      TagWithUsageSchema.array().parse(await request('/tags?include_usage=true' + query));
+    expect(await getUsage('&target_type=file')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: fileTag.id, usage_count: 2 }),
+      expect.objectContaining({ id: unused.id, usage_count: 0 }),
+    ]));
+    expect(await getUsage('&target_type=question')).toEqual([
+      expect.objectContaining({ id: questionTag.id, usage_count: 1 }),
+    ]);
+    await request('/tags?include_usage=yes', 'GET', undefined, 400);
+
+    await request(`/folders/${folder.id}`, 'DELETE', undefined, 200);
+    expect(await getUsage('&target_type=file')).toContainEqual(expect.objectContaining({ id: fileTag.id, usage_count: 2 }));
+    await request(`/tags/${fileTag.id}?unused_only=true`, 'DELETE', undefined, 409);
+    expect(await request(`/tags/${fileTag.id}`, 'DELETE')).toBeNull();
+    await request(`/tags/${fileTag.id}`, 'DELETE', undefined, 404);
+    expect(await database.repositories.tags.listRelations(fileTag.id)).toEqual([]);
+    expect((await request(`/banks/${b.id}`)).tag_ids).toEqual([]);
+    expect((await request(`/questions/${q.id}`)).tag_ids).toEqual([questionTag.id]);
+    expect(await getUsage('&target_type=file')).toEqual([expect.objectContaining({ id: unused.id })]);
+  });
   it.each(['single_choice', 'multiple_choice', 'indefinite_choice', 'strict_fill_in_blank', 'free_fill_in_blank', 'subjective'])
     ('round trips %s with versioned edits, search and deletion', async type => {
       const b = await bank();

@@ -78,11 +78,10 @@ describe("Workspace and study interactions", () => {
     expect(screen.getByText("Explanation")).toBeTruthy();
   });
   it("uses readable ink over both persisted and fallback tag colors", () => {
-    expect(tagColorStyle("#386450", "地球科学")).toMatchObject({
+    expect(tagColorStyle("#386450")).toMatchObject({
       "--tag-bg": "#386450", "--tag-ink": "#FFFFFF", "--tag-outline": "#244134",
     });
-    expect(tagColorStyle(null, "地球科学")).toEqual(tagColorStyle(null, "地球科学"));
-    expect(tagColorStyle(null, "地球科学")).toMatchObject({ "--tag-ink": "#253128" });
+    expect(tagColorStyle(null)).toMatchObject({ "--tag-bg": "#E4EADE", "--tag-ink": "#253128" });
   });
   it("keeps a multi-select menu mounted and distinguishes all from none", async () => {
     function Example() {
@@ -110,5 +109,16 @@ describe("Workspace and study interactions", () => {
     expect(screen.getByRole("button", { name: "题型" }).textContent).toContain("题型");
     expect(screen.getByLabelText("全选")).toBe(all);
     expect(all.getAttribute("aria-checked")).toBe("true");
+
+    const search = screen.getByRole("searchbox", { name: "搜索题型" });
+    fireEvent.change(search, { target: { value: "甲" } });
+    expect(screen.queryByLabelText("乙")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "清空" }));
+    expect(screen.getByText("未选择")).toBeTruthy();
+    fireEvent.click(all);
+    fireEvent.change(search, { target: { value: "乙" } });
+    expect(screen.getByLabelText("乙").getAttribute("aria-checked")).toBe("true");
+    fireEvent.change(search, { target: { value: "丙" } });
+    expect(screen.getByText("没有匹配的选项")).toBeTruthy();
   });
 });

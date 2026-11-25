@@ -1,4 +1,4 @@
-import type { StudyAnswer, Question, QuestionDTO } from "@quarry/shared";
+import type { StudyAnswer, Question, QuestionDTO, TagWithUsage } from "@quarry/shared";
 export type { StudyAnswer };
 export interface Tag {
   id: string;
@@ -262,11 +262,27 @@ export class BackendClient {
   tags = {
     list: (target_type?: "file" | "question") =>
       this.request<Tag[]>("tags", "GET", undefined, { target_type }),
+    listWithUsage: (target_type?: Tag["target_type"]) =>
+      this.request<(Tag & Pick<TagWithUsage, "usage_count">)[]>("tags", "GET", undefined, {
+        target_type,
+        include_usage: true,
+      }),
     create: (input: Omit<Tag, "id" | "color"> & { color?: string | null }) =>
       this.request<Tag>("tags", "POST", input),
-    updateColor: (id: string, color: string) =>
-      this.request<Tag>(`tags/${id}`, "PUT", { color }),
+    update: (id: string, input: Partial<Pick<Tag, "name" | "color">>) =>
+      this.request<Tag>(`tags/${id}`, "PUT", input),
+    updateColor: (id: string, color: string) => this.tags.update(id, { color }),
+    delete: (id: string, query?: { unused_only: boolean }) =>
+      this.request<null>(`tags/${id}`, "DELETE", undefined, query),
   };
+  health() {
+    return this.request<{
+      status: "ok";
+      database: "connected";
+      version: string;
+      timestamp: number;
+    }>("health");
+  }
   sessions = {
     list: () => this.request<Session[]>("sessions"),
     get: (id: string) => this.request<Session>(`sessions/${id}`),
