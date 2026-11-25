@@ -512,15 +512,6 @@ export function Detail({
             ...(data ? [{ label: data.doc.name }] : []),
           ]}
         />
-        {paperDocument && (
-          <div className="actions">
-            <Button onClick={() => showPreview(data!.questions)}>
-              预览题目
-            </Button>
-            <Button onClick={() => setComposer(true)}>编排与打乱</Button>
-            <Button onClick={() => setFileEditor(true)}>编辑属性</Button>
-          </div>
-        )}
       </div>
       <Notice error={error || message} loading={!data} />
       {data &&
@@ -528,6 +519,13 @@ export function Detail({
           <section className="paper-detail">
             <div className="paper-title-row">
               <h1 className="detail-title">{data.doc.name}</h1>
+              <div className="actions">
+                <Button onClick={() => showPreview(data.questions)}>
+                  预览题目
+                </Button>
+                <Button onClick={() => setComposer(true)}>编排与打乱</Button>
+                <Button onClick={() => setFileEditor(true)}>编辑属性</Button>
+              </div>
             </div>
             <div className="description">
               <Markdown text={data.doc.description} />

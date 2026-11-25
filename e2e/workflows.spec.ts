@@ -133,10 +133,17 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await button(page, '开始考试').click();
     await expect(button(page, '交卷')).toHaveCSS('color', 'rgb(255, 255, 255)');
     await button(page, /玄武岩/).click();
-    await button(page, '暂停').click();
+    const pauseButton = button(page, '暂停');
+    await pauseButton.click();
     const pause = page.getByRole('dialog', { name: '答题已暂停' });
     await pause.getByRole('button', { name: '继续答题' }).click();
     await expect(pause).toBeHidden();
+    await expect(pauseButton).toBeFocused();
+    await pauseButton.press('Enter');
+    await expect(pause).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(pause).toBeHidden();
+    await expect(pauseButton).toBeFocused();
     await expect(button(page, /玄武岩/)).toHaveClass(/chosen/);
     await button(page, '交卷').click();
     await confirmAction(page, '确认交卷？');

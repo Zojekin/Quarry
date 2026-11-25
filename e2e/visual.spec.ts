@@ -97,6 +97,15 @@ for (const layout of layouts) {
 
     await page.getByLabel('年份').selectOption('2024');
     await expect(page.locator('.heat-grid > i')).toHaveCount(53 * 7);
+    const libraryNav = nav(page, '资料库');
+    await expect(libraryNav).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await libraryNav.hover();
+    await expect(libraryNav).toHaveCSS('background-color', 'rgb(229, 234, 224)');
+    await expect(nav(page, '首页')).toHaveAttribute('aria-current', 'page');
+    if (layout.name === 'narrow') {
+      await expect(page.locator('.home-middle .paper-card').first()).toBeInViewport({ ratio: 1 });
+      await expect(button(page, '继续作答').first()).toBeInViewport({ ratio: 1 });
+    }
     await capture('home');
     await nav(page, '资料库').click();
     await button(page, bankName).waitFor();
@@ -114,6 +123,9 @@ for (const layout of layouts) {
     await button(page, paperName).click();
     await expect(page.getByRole('heading', { name: paperName })).toBeVisible();
     await expect(button(page, '添加题目')).toBeVisible();
+    if (layout.name === 'narrow') {
+      await expect(page.locator('.paper-detail .question-item').first()).toBeInViewport({ ratio: 1 });
+    }
     await capture('paper-detail');
     await nav(page, '错题本').click();
     const mistake = page.locator('.mistake-row');

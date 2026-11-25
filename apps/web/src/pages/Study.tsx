@@ -173,6 +173,7 @@ export function Study({
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const queue = useRef(Promise.resolve());
+  const pauseButtonRef = useRef<HTMLButtonElement>(null);
   const submitRef = useRef(false);
   const latestSession = useRef(session);
   latestSession.current = session;
@@ -340,6 +341,7 @@ export function Study({
             </span>
             <div className="actions">
               <Button
+                ref={pauseButtonRef}
                 size="compact"
                 disabled={busy}
                 onClick={() =>
@@ -592,6 +594,7 @@ export function Study({
           resume={() =>
             void act(async () => setSession(await client.sessions.resume(id)))
           }
+          restoreFocus={() => pauseButtonRef.current?.focus()}
           exit={() => navigate({ page: "records" })}
           busy={busy}
         />
@@ -602,10 +605,12 @@ export function Study({
 
 function PauseScreen({
   resume,
+  restoreFocus,
   exit,
   busy,
 }: {
   resume: () => void;
+  restoreFocus: () => void;
   exit: () => void;
   busy: boolean;
 }) {
@@ -613,7 +618,14 @@ function PauseScreen({
     <Dialog open>
       <DialogContent
         className="pause-screen inset-0 translate-none rounded-none border-0"
-        onEscapeKeyDown={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault();
+          resume();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreFocus();
+        }}
         onInteractOutside={(event) => event.preventDefault()}
       >
         <div>

@@ -235,17 +235,19 @@ export function Home({ navigate }: { navigate: (r: Route) => void }) {
                           {session.status === "paused" ? "已暂停" : "进行中"}
                         </StatusPill>
                       </div>
-                      <h3>
-                        {session.paper_name ??
-                          data[2].find((paper) => paper.id === session.paper_id)
-                            ?.name ??
-                          "历史套题"}
-                      </h3>
-                      <div className="paper-progress">
-                        <span>
-                          <strong>{count}</strong> / {session.items.length} 题
-                        </span>
-                        <span>已答 {progress}%</span>
+                      <div className="paper-card-heading">
+                        <h3>
+                          {session.paper_name ??
+                            data[2].find((paper) => paper.id === session.paper_id)
+                              ?.name ??
+                            "历史套题"}
+                        </h3>
+                        <div className="paper-progress">
+                          <span>
+                            <strong>{count}</strong> / {session.items.length} 题
+                          </span>
+                          <span>已答 {progress}%</span>
+                        </div>
                       </div>
                       <Progress value={progress} aria-label="答题进度" />
                       <div className="card-bottom">
