@@ -71,6 +71,7 @@
     "nsis": {
       "artifactName": "Quarry-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
+      "include": "resources/installer.nsh",
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "selectPerMachineByDefault": true,
@@ -83,7 +84,8 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
-      "language": "2052"
+      "language": "2052",
+      "installerLanguages": ["zh_CN"]
     },
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
