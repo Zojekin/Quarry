@@ -9,6 +9,12 @@ interface ElectronFixture {
   userDataDir: string;
   restart(): Promise<Page>;
   download(path: string, trigger: () => Promise<void>): Promise<void>;
+  windowChrome(): Promise<{
+    hasAppMenu: boolean;
+    menuBarVisible: boolean;
+    overlayVisible: boolean;
+    titlebarHeight: number;
+  }>;
 }
 
 const monitors = new WeakMap<Page, () => Promise<string[]>>();
@@ -138,6 +144,25 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
           await trigger();
           await expect.poll(() => current.evaluate(() => Reflect.get(globalThis, '__quarryDownload')),
             { message: 'Electron download completion', timeout: 10_000 }).toBe('completed');
+        },
+        async windowChrome() {
+          const current = app!;
+          const win = await current.evaluate(({ BrowserWindow, Menu }) => {
+            const target = BrowserWindow.getAllWindows()[0]!;
+            return {
+              hasAppMenu: Menu.getApplicationMenu() !== null,
+              menuBarVisible: target.isMenuBarVisible(),
+            };
+          });
+          const dom = await fixture.page.evaluate(() => {
+            const bar = document.querySelector('.quarry-titlebar');
+            const wco = (navigator as Navigator & { windowControlsOverlay?: { visible: boolean } }).windowControlsOverlay;
+            return {
+              overlayVisible: Boolean(wco?.visible),
+              titlebarHeight: bar ? Math.round(bar.getBoundingClientRect().height) : 0,
+            };
+          });
+          return { ...win, ...dom };
         },
       };
       await use(fixture);

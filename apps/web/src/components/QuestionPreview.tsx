@@ -17,30 +17,45 @@ export function QuestionPreview({
     question.blanks
       ?.map((blank) => blank.valid_answers?.join(" / "))
       .join("；");
+
   return (
-    <>
-      {question.material && <Markdown text={question.material} />}
-      <div className="question-text">
+    <div className="space-y-3">
+      {question.material && (
+        <div className="rounded-lg bg-muted/60 px-3.5 py-2.5 text-[13.5px] leading-relaxed text-foreground/90">
+          <Markdown text={question.material} />
+        </div>
+      )}
+      <div className="font-serif text-[16px] leading-[1.7] font-normal text-foreground">
         <Markdown text={question.content} />
       </div>
       {question.options && (
-        <div className="preview-options">
+        <div className="space-y-1.5 text-[13.5px]">
           {question.options.map((option, index) => (
-            <div key={option.id}>
-              <span>{String.fromCharCode(65 + index)}</span>
+            <div key={option.id} className="flex items-baseline gap-2.5 text-foreground/90">
+              <span className="min-w-4 font-bold text-foreground/75">
+                {String.fromCharCode(65 + index)}
+              </span>
               <Markdown text={option.content} />
             </div>
           ))}
         </div>
       )}
       {reveal && (
-        <div className="analysis">
-          <b>参考答案</b>
-          <Markdown text={reference || "暂无参考答案。"} />
-          <b>解析</b>
-          <Markdown text={question.explanation || "暂无解析。"} />
+        <div className="space-y-2 rounded-lg bg-[#f3f5ef] px-3.5 py-3 text-[13px] leading-relaxed">
+          <div>
+            <div className="font-semibold text-primary">参考答案</div>
+            <div className="mt-0.5 text-foreground/90">
+              <Markdown text={reference || "暂无参考答案。"} />
+            </div>
+          </div>
+          <div className="pt-1">
+            <div className="font-semibold text-foreground/80">解析</div>
+            <div className="mt-0.5 text-muted-foreground">
+              <Markdown text={question.explanation || "暂无解析。"} />
+            </div>
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

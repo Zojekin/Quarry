@@ -139,12 +139,12 @@ Windows 安装向导在选择安装目录后提供桌面和开始菜单两项快
 
 ### 6. Electron 端到端与视觉回归
 
-桌面工作区沿用题匣视觉系统，覆盖展开侧栏、收起侧栏和窄屏布局。资料库支持列表和卡片视图，设置中的文件标签与题目标签可分开选色并自动保存。
+桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统与统一 `42px` 无菜单栏整合标题栏（Windows `titleBarOverlay` + 全局 `Ctrl+K` 快速命令），覆盖展开侧栏、收起侧栏和窄屏布局。题库与套题支持 Master-Detail 列表/网格双视图与批量浮栏，设置中的文件标签与题目标签通过标签页分开选色并自动保存。
 
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
-* `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用。
-* `pnpm exec playwright test --project=visual` 在 Windows 比对 33 张截图基线，日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
-* 在 Windows 用 `pnpm run test:e2e:update-snapshots all` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
+* `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用（含桌面无菜单栏、Pause Esc 焦点恢复等交互）。
+* `pnpm exec playwright test --project=visual` 在 Windows 比对 36 张截图基线（12 视图 × 3 种布局），日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
+* 在 Windows 用 `pnpm run test:e2e:update-snapshots` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
 * GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流和重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
 
 ---

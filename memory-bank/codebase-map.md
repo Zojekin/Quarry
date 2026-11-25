@@ -33,16 +33,17 @@
 
 ## 渲染器
 
-- `apps/web/src/main.tsx` 挂载 React，加载 `visual.css` 的令牌、组件原语和页面布局，以及 `production.css` 的 Markdown 与控件适配。
-- `apps/web/src/App.tsx` 负责导航、工作区标签、前进后退和每个视图的滚动恢复。
-- `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供基础组件与可访问弹窗。
+- `apps/web/src/main.tsx` 挂载 React，加载 `index.css`（Tailwind CSS v4、`@theme inline` 令牌与标题栏/热力图样式）和 `production.css`（Markdown/KaTeX 与文件输入按钮适配）。
+- `apps/web/src/App.tsx` 负责一体化 `42px` 标题栏工作区标签、`224px/58px` 可折叠侧栏、全局 `Ctrl+K` 快速命令面板、前进后退与视图滚动恢复。
+- `apps/web/src/components/ui/` 存放 `shadcn/ui` 与 Radix 基础原语（`button`、`card`、`badge`、`table`、`input`、`select`、`dialog`、`popover`、`dropdown-menu`、`tabs`、`checkbox`、`switch`、`progress`、`tooltip`、`command`）；`apps/web/src/lib/utils.ts` 提供 `cn`。
+- `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供弹窗、多选 `Facet`、搜索框、状态药丸与 `useConfirmation`。
 - `apps/web/src/api/client.ts` 包装 HTTP、错误与文件处理。API 地址优先使用 preload，其次使用 `VITE_API_URL`。
-- `pages/Library.tsx` 管理文件夹、题库和套题，`components/DocumentEditor.tsx` 编辑资料属性与套题编排。
-- `components/QuestionEditor.tsx` 编辑六种题型、题目标记与上传图片。
-- `components/Icons.tsx` 提供共用的导航和操作图标。
+- `pages/Library.tsx` 实现 Master-Detail 题库工作台（列表/网格 + 右侧概览 Inspector + 多选浮栏）与两层紧凑详情页，`components/DocumentEditor.tsx` 编辑资料属性与套题编排。
+- `components/QuestionEditor.tsx` 编辑六种题型、题目标签与上传图片。
+- `components/Icons.tsx` 基于 `lucide-react` 提供共用的导航与操作图标。
 - `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
 - `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
-- `pages/Study.tsx` 管理草稿、练习锁定、重做、暂停、考试交卷及结果展示。
+- `pages/Study.tsx` 实现练习左右分栏（常规字重题干、无方框 `A/B/C/D` 选项、无底座三操作按钮与数字键/回车快捷键）、考试整卷作答、防并发 409 草稿队列、暂停遮罩与焦点返回以及成绩报告。
 - `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。
 - `components/Markdown.tsx` 懒加载 `MarkdownContent.tsx`，离线渲染 Markdown 与 KaTeX。
 - `assets/logo.svg` / `assets/serif.woff2` 由 Vite 解析和打包，字体授权保留在 `public/assets/LICENSE.txt`。
@@ -77,12 +78,12 @@
 | 全仓构建 | `pnpm run build` |
 | Electron 开发运行时冒烟及工作流 | `pnpm run test:e2e` |
 | 解包产物及同套 E2E | `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged` |
-| 视觉对比 / 更新全部 Windows 基线 | `pnpm exec playwright test --project=visual` / `pnpm run test:e2e:update-snapshots all` |
+| 视觉对比 / 更新全部 Windows 基线 | `pnpm exec playwright test --project=visual` / `pnpm run test:e2e:update-snapshots` |
 | PNG 审阅图 | 设置 `QUARRY_CAPTURE_REVIEW=1` 后运行视觉项目 |
 
 - `e2e/setup.ts` 为开发运行时构建 Web 并打包主进程。打包测试直接加载当前解包目录。
-- `e2e/fixtures/electron.ts` 管理临时目录与重启，监控预加载、控制台、网络和渲染错误。
-- `e2e/visual.spec.ts` 写入固定题目、打乱种子和有序会话，检查 11 个页面的 3 种布局。Windows 对比 `e2e/snapshots/win32/` 中的基线，其他平台检查页面健康。
+- `e2e/fixtures/electron.ts` 管理临时目录与重启，监控预加载、控制台、网络和渲染错误，并提供 `windowChrome()` 检查无菜单栏与 `titleBarOverlay` 状态。
+- `e2e/visual.spec.ts` 写入固定题目、打乱种子和有序会话，检查 12 个页面视图（含 `result`）的 3 种布局。Windows 对比 `e2e/snapshots/win32/` 中的 36 张基线，其他平台检查页面健康。
 - `[data-dynamic-date]` 标记界面中的日期和计时，`e2e/visual-screenshot.css` 固定遮罩日期的占位宽度。保留真实时间的审阅 PNG 输出到 Git 忽略的 `e2e/review-screenshots/`。
 - `e2e-windows` 在 Windows 上构建并验证解包 `Quarry.exe`，随后对比视觉基线。失败时上传 `playwright-report/` 和 `test-results/`，保留 7 天。
 

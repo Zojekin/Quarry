@@ -1,4 +1,5 @@
-/* React content inside the shared visual system. */
+/* Markdown, KaTeX, and file-input bridge styles for Quarry. */
+
 .markdown {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -12,7 +13,49 @@
   margin-bottom: 0;
 }
 
-.markdown pre,
+.markdown p + p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre {
+  margin-top: 0.65em;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown code {
+  border-radius: 4px;
+  background: var(--muted);
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.markdown pre {
+  max-width: 100%;
+  overflow: auto hidden;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f5f5f0;
+  padding: 0.85em 1em;
+}
+
+.markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
 .markdown .katex-display {
   max-width: 100%;
   overflow: auto hidden;
@@ -22,121 +65,68 @@
   display: block;
   max-width: 100%;
   overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 0.4em 0.65em;
 }
 
 .markdown img {
   max-width: 100%;
   height: auto;
+  border-radius: 6px;
 }
 
-.brand,
-.breadcrumb button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-}
-
-.review-action {
-  width: 100%;
-  border-inline: 0;
-  border-bottom: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.review-action svg,
-.study-exit svg {
-  width: var(--icon-small);
-  height: var(--icon-small);
-}
-
-.breadcrumb > span {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.breadcrumb button:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
-.facet-options {
-  position: absolute;
-  inset: calc(100% + var(--space-2)) auto auto 0;
-  z-index: 10;
-  min-width: 100%;
-  width: max-content;
-  max-width: 260px;
-}
-
-.facet-options label,
-.picker-question {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2);
-}
-
-.facet-options label:hover {
-  background: var(--soft);
-}
-
-.tag-list {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+.tag-color {
+  background-color: var(--tag-bg);
+  color: var(--tag-ink);
+  border-color: color-mix(in srgb, var(--tag-outline) 28%, transparent);
 }
 
 .file-input-button {
   position: relative;
+  display: inline-flex;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  overflow: hidden;
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background-color: var(--card);
+  padding: 0 0.75rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(23, 27, 25, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: background-color 150ms ease, border-color 150ms ease;
   cursor: pointer;
 }
 
-.file-input-button > input {
+.file-input-button:hover {
+  background-color: color-mix(in srgb, var(--muted) 70%, transparent);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.file-input-button > svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+}
+
+.file-input-button > input[type="file"] {
   position: absolute;
   inset: 0;
   width: 100%;
+  height: 100%;
   opacity: 0;
   cursor: pointer;
 }
 
 .file-input-button:focus-within {
-  box-shadow: var(--focus-ring);
-}
-
-.modal-backdrop {
-  display: contents;
-}
-
-.modal .diff-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-
-.composer-item-title {
-  flex: 1;
-}
-
-.preview-question + .preview-question {
-  margin-top: var(--space-6);
-}
-
-dialog.pause-screen {
-  border: 0;
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  color: var(--ink);
-}
-
-.pause-mark svg {
-  width: var(--control-compact);
-  height: var(--control-compact);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
 }

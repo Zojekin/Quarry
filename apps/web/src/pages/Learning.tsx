@@ -1,612 +1,688 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { client } from "../api/client.js";
-import type {
-  Query,
-  QuestionView,
-  Session,
-  StudyAnswer,
-  Tag,
-} from "../api/client.js";
-import type { Route } from "../state.js";
-import { formatTime } from "../state.js";
+import { useMemo, useRef, useState } from "react";
+import { ArrowRight, Calendar, Play, Sparkles, Trash2, Upload } from "lucide-react";
 import logoUrl from "../assets/logo.svg";
+import { client } from "../api/client.js";
+import type { Dashboard, Mistake, Paper, Session, Tag } from "../api/client.js";
+import { formatTime, type Route } from "../state.js";
+import { QuestionPreview } from "../components/QuestionPreview.js";
 import {
   Button,
   EmptyState,
-  SearchField,
-  StatusPill,
-  tagBackground,
-  tagColorStyle,
   Facet,
   Notice,
   PromptDialog,
+  SearchField,
+  Segmented,
+  StatusPill,
+  tagColorStyle,
   types,
+  useConfirmation,
   useLoad,
   useViewState,
-  useConfirmation,
 } from "../components/ui.js";
-import { Markdown } from "../components/Markdown.js";
-import { hasAnswer } from "./Study.js";
-import { QuestionPreview } from "../components/QuestionPreview.js";
-import { TagPills } from "../components/QuestionEditor.js";
-import { Icon } from "../components/Icons.js";
+import { Badge } from "../components/ui/badge.js";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card.js";
+import { Checkbox } from "../components/ui/checkbox.js";
+import { Input } from "../components/ui/input.js";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover.js";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table.js";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs.js";
+import { cn } from "../lib/utils.js";
 import { download } from "./Library.js";
 
-function compareSessions(a: Session, b: Session) {
-  return (
-    b.start_time.localeCompare(a.start_time) ||
-    a.mode.localeCompare(b.mode) ||
-    a.id.localeCompare(b.id)
-  );
+function dateText(iso: string) {
+  return new Date(iso).toLocaleDateString("zh-CN");
 }
 
-function sessionProgress(session: Session) {
-  return new Set([
-    ...session.records.map((record) => record.question_id),
-    ...Object.entries(session.draft_answers)
-      .filter(([, answer]) => hasAnswer(answer))
-      .map(([id]) => id),
-  ]).size;
+function buildHeatmapCells(
+  year: number,
+  metric: "answers" | "duration",
+  days: Dashboard["daily_heatmap"],
+) {
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const start = new Date(Date.UTC(year, 0, 1));
+  const firstOffset = start.getUTCDay();
+  const gridStart = new Date(Date.UTC(year, 0, 1 - firstOffset));
+  const today = new Date().toISOString().slice(0, 10);
+
+  const cells: {
+    date: string;
+    value: number;
+    level: number;
+    future: boolean;
+    outsideYear: boolean;
+  }[] = [];
+
+  for (let i = 0; i < 371; i++) {
+    const dt = new Date(gridStart.getTime() + i * 86400000);
+    const iso = dt.toISOString().slice(0, 10);
+    const item = byDate.get(iso);
+    const value = item
+      ? metric === "answers"
+        ? item.count
+        : Math.round(item.duration_seconds / 60)
+      : 0;
+    const level =
+      value === 0
+        ? 0
+        : value <= (metric === "answers" ? 2 : 5)
+          ? 1
+          : value <= (metric === "answers" ? 6 : 15)
+            ? 2
+            : value <= (metric === "answers" ? 12 : 30)
+              ? 3
+              : 4;
+    cells.push({
+      date: iso,
+      value,
+      level,
+      future: iso > today,
+      outsideYear: dt.getUTCFullYear() !== year,
+    });
+  }
+  return cells;
 }
 
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly (readonly [string, string])[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="tabs segmented" role="group" aria-label={label}>
-      {options.map(([key, name]) => (
-        <button
-          type="button"
-          className={`button tab ${key === value ? "active" : ""}`}
-          key={key}
-          aria-pressed={key === value}
-          onClick={() => onChange(key)}
-        >
-          {name}
-        </button>
-      ))}
-    </div>
-  );
-}
+export function Home({ navigate }: { navigate: (route: Route) => void }) {
+  const [metric, setMetric] = useState<"answers" | "duration">("answers");
+  const [year, setYear] = useState(String(new Date().getUTCFullYear()));
+  const [hoveredCell, setHoveredCell] = useState<{
+    date: string;
+    value: number;
+  }>();
 
-export function Home({ navigate }: { navigate: (r: Route) => void }) {
   const { data, error } = useLoad(
     () =>
       Promise.all([
         client.analytics.getDashboard(),
         client.sessions.list(),
-        client.papers.list(),
-        client.mistakes.list(),
+        client.mistakes.list({ mastery_status: "reviewing" }),
+        client.papers.list().catch(() => [] as Paper[]),
       ]),
     [],
   );
-  const [metric, setMetric] = useViewState("metric", "count");
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useViewState("year", currentYear);
-  const seconds = data?.[0].total_duration_seconds ?? 0;
-  const pending =
-    data?.[1]
-      .filter((session) => session.status !== "completed")
-      .sort(compareSessions) ?? [];
-  const reviewing =
-    data?.[3].filter((mistake) => mistake.mastery_status === "reviewing") ?? [];
-  const entries = new Map(
-    data?.[0].daily_heatmap.map((entry) => [entry.date, entry]),
+
+  const [dashboard, sessions = [], reviewingMistakes = [], papers = []] =
+    data ?? [];
+  const paperNames = new Map(papers.map((p) => [p.id, p.name]));
+  const sessionTitle = (s: Session) =>
+    paperNames.get(s.paper_id) ?? s.paper_name ?? "未命名套题";
+
+  const pending = sessions.filter((s) => s.status !== "completed");
+  const leadSession = pending[0];
+  const otherPending = pending.slice(1, 5);
+
+  const years = useMemo(() => {
+    const set = new Set<number>([new Date().getUTCFullYear()]);
+    for (const d of dashboard?.daily_heatmap ?? []) {
+      set.add(Number(d.date.slice(0, 4)));
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [dashboard?.daily_heatmap]);
+
+  const cells = useMemo(
+    () =>
+      buildHeatmapCells(Number(year), metric, dashboard?.daily_heatmap ?? []),
+    [year, metric, dashboard?.daily_heatmap],
   );
-  const metricKey =
-    metric === "duration_seconds" ? "duration_seconds" : "count";
-  const peak = Math.max(
-    1,
-    ...(data?.[0].daily_heatmap
-      .filter((entry) => entry.date.startsWith(`${year}-`))
-      .map((entry) => entry[metricKey]) ?? []),
-  );
-  const today = new Date();
-  const todayLabel = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const firstDay = (new Date(Date.UTC(year, 0, 1)).getUTCDay() + 6) % 7;
-  const yearLength =
-    (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1)) / 86_400_000;
-  const offset = Math.min(firstDay, 371 - yearLength);
+
   return (
-    <>
-      <div className="home-title-row">
-        <h1 className="home-heading">学习概览</h1>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="m-0 font-serif text-[28px] font-semibold tracking-[-0.02em] text-foreground">
+            学习概览
+          </h1>
+          <p className="m-0 mt-1 text-[13.5px] text-muted-foreground">
+            把刷题记录、专注续答与错题巩固收敛在同一张平静工作台上
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate({ page: "library" })}
+        >
+          进入题库与套题
+          <ArrowRight className="size-3.5" />
+        </Button>
       </div>
-      <Notice error={error} loading={!data} />
+
+      <Notice error={error} loading={!data && !error} />
+
       {data && (
         <>
-          <div className="metric-row">
-            <div className="metric">
-              <span className="label">累计用时</span>
-              <div className="big-number" data-dynamic-date="duration">
-                {Math.floor(seconds / 3600)}
-                <span className="unit">时</span>
-                {Math.floor((seconds % 3600) / 60)}
-                <span className="unit">分</span>
-              </div>
-            </div>
-            <div className="metric">
-              <span className="label">累计答题</span>
-              <div className="big-number">
-                {data[0].total_questions_answered.toLocaleString()}
-                <span className="unit">次</span>
-              </div>
-            </div>
-            <div className="metric">
-              <span className="label">去重题数</span>
-              <div className="big-number">
-                {data[0].deduplicated_questions_count.toLocaleString()}
-                <span className="unit">题</span>
-              </div>
-            </div>
-          </div>
-          <div className="home-middle">
-            <section>
-              <div className="section-head">
-                <h2>接着上次的学习</h2>
-                <span className="muted small">
-                  {pending.length} 份未完成套题
-                </span>
-              </div>
-              <div className="paper-grid">
-                {pending.map((session) => {
-                  const count = sessionProgress(session);
-                  const progress = session.items.length
-                    ? Math.round((count / session.items.length) * 100)
-                    : 0;
-                  return (
-                    <article className="card paper-card" key={session.id}>
-                      <div className="card-meta">
-                        <span>{session.mode === "exam" ? "考试" : "练习"}</span>
-                        <span>
-                          {session.status === "paused" ? "已暂停" : "进行中"}
-                        </span>
-                      </div>
-                      <h3>
-                        {session.paper_name ??
-                          data[2].find((paper) => paper.id === session.paper_id)
-                            ?.name ??
-                          "历史套题"}
-                      </h3>
-                      <div className="paper-progress">
-                        <span>
-                          <strong>{count}</strong> / {session.items.length} 题
-                        </span>
-                        <span>已答 {progress}%</span>
-                      </div>
-                      <div className="progress" aria-hidden="true">
-                        <i
-                          style={
-                            { "--progress": progress + "%" } as CSSProperties
-                          }
-                        />
-                      </div>
-                      <div className="card-bottom">
-                        <span data-dynamic-date="duration">
-                          已用时{" "}
-                          {formatTime(session.effective_duration_seconds)}
-                        </span>
-                        <Button
-                          primary
-                          onClick={() =>
-                            navigate({ page: "study", id: session.id })
-                          }
-                        >
-                          继续作答
-                        </Button>
-                      </div>
-                    </article>
-                  );
-                })}
-                {!pending.length && (
-                  <article className="card">
-                    <h3>准备好新的练习</h3>
-                    <p className="muted space-y-6">
-                      从资料库挑选一份套题，开始学习。
-                    </p>
-                    <Button
-                      primary
-                      onClick={() => navigate({ page: "library" })}
+          {/* Focus-First Resume Hero Bar (Above the fold at 960×760) */}
+          {leadSession && (
+            <Card className="border-primary/25 bg-card p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusPill
+                      state={
+                        leadSession.status === "paused" ? "paused" : "in_progress"
+                      }
                     >
-                      打开资料库
-                    </Button>
-                  </article>
-                )}
-              </div>
-            </section>
-            <section className="home-review">
-              <h2>复习错题</h2>
-              <div className="big-number">
-                {reviewing.length}
-                <span className="unit">题待复习</span>
-              </div>
-              {types.map(({ id, name }) => {
-                const count = reviewing.filter(
-                  (mistake) => mistake.question_snapshot.type === id,
-                ).length;
-                return count ? (
-                  <div className="subject-row" key={id}>
-                    <span>{name}</span>
-                    <span className="serif">{count}</span>
+                      {leadSession.status === "paused" ? "已暂停" : "进行中"}
+                    </StatusPill>
+                    <Badge variant="outline">
+                      {leadSession.mode === "exam" ? "考试模式" : "练习模式"}
+                    </Badge>
+                    <span
+                      className="text-[12.5px] text-muted-foreground tabular-nums"
+                      data-dynamic-date="duration"
+                    >
+                      已用时 {formatTime(leadSession.effective_duration_seconds)}
+                    </span>
                   </div>
-                ) : null;
-              })}
-              <button
-                type="button"
-                className="review-action"
-                onClick={() => navigate({ page: "mistakes" })}
-              >
-                去错题本选题 <Icon name="forward" />
-              </button>
-            </section>
-          </div>
-          <section className="activity">
-            <div className="section-head">
-              <div className="activity-title">
-                <h2>日积月累</h2>
-                <select
-                  className="filter"
-                  aria-label="年份"
-                  value={year}
-                  onChange={(event) => setYear(Number(event.target.value))}
+                  <h2 className="m-0 truncate font-serif text-[20px] font-semibold text-foreground">
+                    {sessionTitle(leadSession)}
+                  </h2>
+                </div>
+                <Button
+                  variant="default"
+                  onClick={() => navigate({ page: "study", id: leadSession.id })}
                 >
-                  {Array.from(
-                    new Set([
-                      year,
-                      ...Array.from(
-                        { length: 8 },
-                        (_, index) => currentYear - index,
-                      ),
-                    ]),
-                  )
-                    .sort((a, b) => b - a)
-                    .map((value) => (
-                      <option key={value} value={value}>
-                        {value}
+                  <Play className="size-3.5" />
+                  继续作答
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* Unified KPI + Heatmap Composite Card */}
+          <Card className="p-5">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <div>
+                <div className="text-[12.5px] font-medium text-muted-foreground">
+                  累计作答次数
+                </div>
+                <div className="mt-1 font-serif text-[32px] leading-tight font-normal text-foreground tabular-nums">
+                  {dashboard?.total_questions_answered ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[12.5px] font-medium text-muted-foreground">
+                  去重覆盖题数
+                </div>
+                <div className="mt-1 font-serif text-[32px] leading-tight font-normal text-primary tabular-nums">
+                  {dashboard?.deduplicated_questions_count ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[12.5px] font-medium text-muted-foreground">
+                  累计专注时长
+                </div>
+                <div
+                  className="mt-1 font-serif text-[32px] leading-tight font-normal text-foreground tabular-nums"
+                  data-dynamic-date="duration"
+                >
+                  {formatTime(dashboard?.total_duration_seconds ?? 0)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="m-0 text-[14.5px] font-semibold text-foreground">
+                    学习热力图
+                  </h2>
+                  {hoveredCell && (
+                    <span className="text-[12px] text-muted-foreground tabular-nums">
+                      {hoveredCell.date}：{hoveredCell.value}{" "}
+                      {metric === "answers" ? "题" : "分钟"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="年份"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-card px-2.5 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.04)] outline-none focus-visible:border-primary"
+                  >
+                    {years.map((y) => (
+                      <option key={y} value={String(y)}>
+                        {y} 年
                       </option>
                     ))}
-                </select>
-              </div>
-              <Segmented
-                label="活动统计口径"
-                options={[
-                  ["count", "作答量"],
-                  ["duration_seconds", "用时"],
-                ]}
-                value={metric}
-                onChange={setMetric}
-              />
-            </div>
-            <div className="heat-months">
-              {Array.from({ length: 12 }, (_, index) => (
-                <span key={index}>{index + 1}月</span>
-              ))}
-            </div>
-            <div className="heat-grid" aria-label="全年学习活动">
-              {Array.from({ length: 371 }, (_, index) => {
-                const day = new Date(Date.UTC(year, 0, 1 - offset + index));
-                const date = day.toISOString().slice(0, 10);
-                const entry = entries.get(date);
-                const future = date > todayLabel;
-                const outside = day.getUTCFullYear() !== year;
-                const level = Math.min(
-                  4,
-                  Math.ceil(((entry?.[metricKey] ?? 0) / peak) * 4),
-                );
-                return (
-                  <i
-                    key={date}
-                    className={future ? "future" : `lv${level}`}
-                    data-outside-year={outside ? "" : undefined}
-                    title={
-                      future
-                        ? `${date} · 尚未到来`
-                        : `${date} · ${entry?.count ?? 0} 题 · ${formatTime(entry?.duration_seconds ?? 0)}`
-                    }
+                  </select>
+                  <Segmented
+                    label="统计维度"
+                    options={[
+                      ["answers", "作答量"],
+                      ["duration", "用时"],
+                    ]}
+                    value={metric}
+                    onChange={(v) => setMetric(v as "answers" | "duration")}
                   />
-                );
-              })}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto pb-1">
+                <div className="w-full">
+                  <div className="quarry-heat-months">
+                    {[
+                      "1月",
+                      "2月",
+                      "3月",
+                      "4月",
+                      "5月",
+                      "6月",
+                      "7月",
+                      "8月",
+                      "9月",
+                      "10月",
+                      "11月",
+                      "12月",
+                    ].map((m) => (
+                      <span key={m}>{m}</span>
+                    ))}
+                  </div>
+                  <div
+                    className="quarry-heat-grid heat-grid"
+                    role="grid"
+                    aria-label="年度学习热力图"
+                  >
+                    {cells.map((cell) => (
+                      <i
+                        key={cell.date}
+                        title={`${cell.date}: ${cell.value}`}
+                        data-outside-year={cell.outsideYear ? "true" : undefined}
+                        className={cn(
+                          cell.future
+                            ? "future"
+                            : cell.level > 0
+                              ? `lv${cell.level}`
+                              : "",
+                        )}
+                        onMouseEnter={() =>
+                          setHoveredCell({ date: cell.date, value: cell.value })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="legend">
-              <span>少</span>
-              <i className="legend-level-1" />
-              <i className="legend-level-2" />
-              <i className="legend-level-3" />
-              <i />
-              <span>
-                多　{metric === "count" ? "按作答量着色" : "按用时着色"}
-                　未到日期为空心格
-              </span>
-            </div>
-            <div className="align-end space-top-6">
-              <Button
-                className="quiet"
-                onClick={() => navigate({ page: "records" })}
-              >
-                学习记录 ↗
-              </Button>
-            </div>
-          </section>
+          </Card>
+
+          {/* Lower Two-Column Summary on Canvas */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="m-0 text-[15px] font-semibold text-foreground">
+                  待续会话
+                </h2>
+                <span className="text-[12px] text-muted-foreground tabular-nums">
+                  {pending.length} 条
+                </span>
+              </div>
+              {pending.length === 0 ? (
+                <p className="m-0 py-4 text-[13px] text-muted-foreground">
+                  当前没有未完成的练习或考试。前往题库与套题挑选一套开始吧。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {(otherPending.length > 0 ? otherPending : pending.slice(0, 3)).map(
+                    (s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between gap-3 rounded-lg bg-muted/45 px-3.5 py-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13.5px] font-medium text-foreground">
+                            {sessionTitle(s)}
+                          </div>
+                          <div className="mt-0.5 text-[12px] text-muted-foreground tabular-nums">
+                            {s.mode === "exam" ? "考试" : "练习"} ·{" "}
+                            <span data-dynamic-date="duration">
+                              {formatTime(s.effective_duration_seconds)}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate({ page: "study", id: s.id })}
+                        >
+                          继续
+                        </Button>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="m-0 text-[15px] font-semibold text-foreground">
+                  待复习错题
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate({ page: "mistakes" })}
+                >
+                  前往错题本
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+              {reviewingMistakes.length === 0 ? (
+                <p className="m-0 py-4 text-[13px] text-muted-foreground">
+                  所有错题均已掌握，继续保持好状态。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {reviewingMistakes.slice(0, 4).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => navigate({ page: "mistakes" })}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg bg-muted/45 px-3.5 py-2.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[13.5px] text-foreground">
+                        {m.question_snapshot.content}
+                      </span>
+                      <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">
+                        错 {m.wrong_count} 次
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
         </>
       )}
-    </>
+    </div>
   );
 }
 
-export function Records({ navigate }: { navigate: (r: Route) => void }) {
+export function Records({ navigate }: { navigate: (route: Route) => void }) {
+  const [status, setStatus] = useViewState<
+    "all" | "completed" | "in_progress" | "paused"
+  >("records-status", "all");
+  const [modeFilter, setModeFilter] = useViewState<string[] | undefined>(
+    "records-mode",
+    undefined,
+  );
+  const [search, setSearch] = useViewState("records-search", "");
+
   const { data, error } = useLoad(
-    () => Promise.all([client.sessions.list(), client.papers.list()]),
+    () =>
+      Promise.all([
+        client.sessions.list(),
+        client.papers.list().catch(() => [] as Paper[]),
+      ]),
     [],
   );
-  const [status, setStatus] = useViewState("status", "all");
-  const [mode, setMode] = useViewState<string[] | undefined>("mode", undefined);
-  const [search, setSearch] = useViewState("search", "");
-  const rows =
-    data?.[0]
-      .map((session) => ({
-        session,
-        name:
-          session.paper_name ??
-          data[1].find((paper) => paper.id === session.paper_id)?.name ??
-          "历史套题",
-      }))
-      .filter(
-        ({ session, name }) =>
-          (status === "all" ||
-            (status === "completed"
-              ? session.status === "completed"
-              : session.status !== "completed")) &&
-          (mode === undefined || mode.includes(session.mode)) &&
-          name.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-      )
-      .sort((a, b) => compareSessions(a.session, b.session)) ?? [];
+
+  const [sessions = [], papers = []] = data ?? [];
+  const paperMap = new Map(papers.map((p) => [p.id, p]));
+
+  const rows = sessions.filter((s) => {
+    const title = paperMap.get(s.paper_id)?.name ?? s.paper_name ?? "";
+    const matchStatus = status === "all" || s.status === status;
+    const matchMode = modeFilter === undefined || modeFilter.includes(s.mode);
+    const matchSearch =
+      !search || title.toLowerCase().includes(search.toLowerCase());
+    return matchStatus && matchMode && matchSearch;
+  });
+
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <h1>学习记录</h1>
-          <p>每一次作答，都留下清晰的记录。</p>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <h1 className="m-0 font-serif text-[26px] font-semibold tracking-[-0.02em]">
+          练习记录
+        </h1>
       </div>
-      <div className="toolbar learning-toolbar">
-        <Segmented
-          label="记录筛选"
-          options={[
-            ["all", "全部记录"],
-            ["pending", "未完成"],
-            ["completed", "已完成"],
-          ]}
-          value={status}
-          onChange={setStatus}
-        />
-        <div className="actions">
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            label="状态筛选"
+            options={[
+              ["all", "全部"],
+              ["completed", "已完成"],
+              ["in_progress", "进行中"],
+              ["paused", "已暂停"],
+            ]}
+            value={status}
+            onChange={(v) => setStatus(v as typeof status)}
+          />
           <Facet
-            label="答题模式"
+            label="作答模式"
             options={[
               { id: "practice", name: "练习" },
               { id: "exam", name: "考试" },
             ]}
-            value={mode}
-            onChange={setMode}
-          />
-          <SearchField
-            label="搜索记录"
-            placeholder="搜索套题名称"
-            value={search}
-            onChange={setSearch}
+            value={modeFilter}
+            onChange={setModeFilter}
           />
         </div>
+        <SearchField
+          label="搜索套题名称"
+          value={search}
+          onChange={setSearch}
+        />
       </div>
-      <Notice error={error} loading={!data} />
-      {data &&
-        (rows.length ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>套题</th>
-                <th>模式</th>
-                <th>作答进度</th>
-                <th>状态</th>
-                <th className="optional">用时</th>
-                <th className="optional">开始日期</th>
-                <th className="file-action-column">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ session, name }) => (
-                <tr key={session.id}>
-                  <td className="text-medium">{name}</td>
-                  <td>
-                    <span className="pill mode-pill">
-                      {session.mode === "exam" ? "考试" : "练习"}
-                    </span>
-                  </td>
-                  <td>
-                    {sessionProgress(session)} / {session.items.length}
-                  </td>
-                  <td>
-                    <StatusPill state={session.status}>
-                      {session.status === "completed"
+
+      <Notice error={error} loading={!data && !error} />
+
+      {data && rows.length === 0 && (
+        <EmptyState
+          title="没有符合条件的作答记录"
+          detail="尝试切换筛选条件，或到题库与套题中开始一次新的练习。"
+        />
+      )}
+
+      {data && rows.length > 0 && (
+        <Table aria-label="作答记录列表">
+          <TableHeader>
+            <TableRow>
+              <TableHead>套题名称</TableHead>
+              <TableHead className="w-24">模式</TableHead>
+              <TableHead className="w-28">状态</TableHead>
+              <TableHead className="w-24">已答 / 总题</TableHead>
+              <TableHead className="w-24">用时</TableHead>
+              <TableHead className="w-28">开始时间</TableHead>
+              <TableHead className="w-28 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((s) => {
+              const completed = s.status === "completed";
+              const title = paperMap.get(s.paper_id)?.name ?? s.paper_name ?? "套题作答";
+              return (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium text-foreground">
+                    {title}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {s.mode === "exam" ? "考试" : "练习"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <StatusPill state={s.status}>
+                      {completed
                         ? "已完成"
-                        : session.status === "paused"
+                        : s.status === "paused"
                           ? "已暂停"
                           : "进行中"}
                     </StatusPill>
-                  </td>
-                  <td className="optional muted">
-                    <span data-dynamic-date="duration">
-                      {formatTime(session.effective_duration_seconds)}
-                    </span>
-                  </td>
-                  <td className="optional muted">
-                    <time dateTime={session.start_time} data-dynamic-date="date">
-                      {new Date(session.start_time).toLocaleDateString("zh-CN")}
-                    </time>
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <Button
-                        className="quiet"
-                        onClick={() =>
-                          navigate({
-                            page:
-                              session.status === "completed" ? "result" : "study",
-                            id: session.id,
-                          })
-                        }
-                      >
-                        {session.status === "completed" ? "查看结果" : "继续作答"}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState
-            title="暂无符合条件的记录"
-            detail="从资料库选择套题开始一次练习。"
-          />
-        ))}
-    </>
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {s.records.length} / {s.items.length}
+                  </TableCell>
+                  <TableCell className="tabular-nums" data-dynamic-date="duration">
+                    {formatTime(s.effective_duration_seconds)}
+                  </TableCell>
+                  <TableCell
+                    className="text-muted-foreground tabular-nums"
+                    data-dynamic-date="date"
+                  >
+                    {dateText(s.start_time)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        navigate({
+                          page: completed ? "result" : "study",
+                          id: s.id,
+                        })
+                      }
+                    >
+                      {completed ? "查看报告" : "继续作答"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   );
-}
-function answerLabel(answer: StudyAnswer, question: QuestionView) {
-  if (answer.kind === "choice") {
-    return question.options
-      ?.filter((option) => answer.option_ids.includes(option.id))
-      .map((option) => option.content)
-      .join("；");
-  }
-  return answer.kind === "blanks" ? answer.values.join("；") : answer.value;
 }
 
 export function Mistakes({
   navigate,
-  onMasteryChanged,
+  onChanged,
 }: {
-  navigate: (r: Route) => void;
-  onMasteryChanged?: () => void;
+  navigate: (route: Route) => void;
+  onChanged: () => void;
 }) {
-  const [namingPaper, setNamingPaper] = useState(false);
-  const [query, setQuery] = useViewState<Query>("query", {
-    mastery_status: "reviewing",
-  });
-  const {
-    data: visible,
-    error,
-    reload,
-  } = useLoad(() => client.mistakes.list(query), [JSON.stringify(query)]);
-  const catalog = useLoad(
+  const [mastery, setMastery] = useViewState<"reviewing" | "mastered" | "all">(
+    "mistakes-mastery",
+    "reviewing",
+  );
+  const [paperFilter, setPaperFilter] = useViewState<string[] | undefined>(
+    "mistakes-paper",
+    undefined,
+  );
+  const [folderFilter, setFolderFilter] = useViewState<string[] | undefined>(
+    "mistakes-folder",
+    undefined,
+  );
+  const [tagFilter, setTagFilter] = useViewState<string[] | undefined>(
+    "mistakes-tag",
+    undefined,
+  );
+  const [typeFilter, setTypeFilter] = useViewState<string[] | undefined>(
+    "mistakes-type",
+    undefined,
+  );
+  const [dateFrom, setDateFrom] = useViewState("mistakes-from", "");
+  const [dateTo, setDateTo] = useViewState("mistakes-to", "");
+  const [search, setSearch] = useViewState("mistakes-search", "");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [inspectId, setInspectId] = useState<string>();
+  const [reveal, setReveal] = useState(true);
+  const [naming, setNaming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const { data, error, reload } = useLoad(
     () =>
       Promise.all([
+        client.mistakes.list({
+          mastery_status: mastery,
+          source_paper_ids: paperFilter,
+          folder_ids: folderFilter,
+          tag_ids: tagFilter,
+          types: typeFilter,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          search: search || undefined,
+        }),
         client.papers.list(),
         client.folders.list(),
         client.tags.list("question"),
-        client.mistakes.list(),
       ]),
-    [],
+    [
+      mastery,
+      JSON.stringify(paperFilter),
+      JSON.stringify(folderFilter),
+      JSON.stringify(tagFilter),
+      JSON.stringify(typeFilter),
+      dateFrom,
+      dateTo,
+      search,
+    ],
   );
-  const [selected, setSelected] = useViewState<string[]>("selected", []);
-  const [inspectId, setInspectId] = useViewState<string | undefined>(
-    "inspected-mistake",
-    undefined,
+
+  const [mistakes = [], papers = [], folders = [], qTags = []] = data ?? [];
+  const inspected = mistakes.find((m) => m.id === inspectId) ?? mistakes[0];
+  const validSelected = selected.filter((id) =>
+    mistakes.some((m) => m.id === id),
   );
-  const [message, setMessage] = useState("");
-  const [dateFrom, setDateFrom] = useState(String(query.date_from ?? ""));
-  const [dateTo, setDateTo] = useState(String(query.date_to ?? ""));
-  const [dateError, setDateError] = useState("");
-  const dateFilter = useRef<HTMLDetailsElement>(null);
-  const inspect =
-    visible?.find((item) => item.id === inspectId) ?? visible?.[0];
-  useEffect(() => {
-    if (visible)
-      setSelected((ids) =>
-        ids.filter((id) => visible.some((item) => item.id === id)),
-      );
-  }, [visible]);
-  function facet(
-    key: string,
-    label: string,
-    options: { id: string; name: string }[],
-  ) {
-    return (
-      <Facet
-        label={label}
-        options={options}
-        value={query[key] as string[] | undefined}
-        onChange={(value) => setQuery({ ...query, [key]: value })}
-      />
-    );
-  }
-  function applyDate(start: string, end: string) {
-    if (start && end && start > end) {
-      setDateError("开始日期不能晚于结束日期。");
-      return;
-    }
-    setQuery({
-      ...query,
-      date_from: start || undefined,
-      date_to: end || undefined,
-    });
-    setDateFrom(start);
-    setDateTo(end);
-    setDateError("");
-    if (dateFilter.current) dateFilter.current.open = false;
-  }
-  async function act(task: () => Promise<unknown>) {
+
+  async function toggleMastery(m: Mistake) {
+    setBusy(true);
     try {
-      await task();
+      await client.mistakes.mastery(
+        m.id,
+        m.mastery_status === "reviewing" ? "mastered" : "reviewing",
+      );
+      onChanged();
       reload();
-    } catch (error) {
-      setMessage((error as Error).message);
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
-  const [papers = [], folders = [], tags = [], all = []] = catalog.data ?? [];
+
+  async function createReviewPaper(name: string) {
+    setBusy(true);
+    try {
+      const created = await client.mistakes.createPaper(validSelected, name);
+      setNaming(false);
+      setSelected([]);
+      navigate({ page: "paper", id: created.id });
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <>
-      <div className="mistake-page-heading">
-        <div>
-          <h1>错题本</h1>
-          <p className="muted small">查看错题、错误历史与掌握状态。</p>
-        </div>
-        <div className="mistake-summary">
-          <span>
-            <b>
-              {all.filter((item) => item.mastery_status === "reviewing").length}
-            </b>
-            待复习
-          </span>
-          <span>
-            <b>
-              {all.filter((item) => item.mastery_status === "mastered").length}
-            </b>
-            已掌握
-          </span>
-          <span>
-            <b>{all.length}</b>累计收录
-          </span>
-        </div>
-        <div className="actions">
-          <Button
-            primary
-            disabled={!visible || !selected.length}
-            onClick={() => setNamingPaper(true)}
-          >
-            创建复习套题
-          </Button>
-        </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="m-0 font-serif text-[26px] font-semibold tracking-[-0.02em]">
+          错题本
+        </h1>
+        <Button
+          variant="default"
+          disabled={validSelected.length === 0 || busy}
+          onClick={() => setNaming(true)}
+        >
+          <Sparkles className="size-3.5" />
+          生成错题复习套题
+        </Button>
       </div>
-      <div className="mistake-mastery-row">
+
+      {/* Single-Row Facet Filters */}
+      <div className="mistake-filter-row flex flex-wrap items-center gap-2">
         <Segmented
           label="掌握状态"
           options={[
@@ -614,550 +690,539 @@ export function Mistakes({
             ["mastered", "已掌握"],
             ["all", "全部"],
           ]}
-          value={String(query.mastery_status ?? "all")}
-          onChange={(value) => setQuery({ ...query, mastery_status: value })}
+          value={mastery}
+          onChange={(v) => setMastery(v as typeof mastery)}
         />
-      </div>
-      <div className="mistake-filter-row">
-        <div className="filter-card-list">
-          {facet("source_paper_ids", "来源套题", [
-            ...new Map(
-              [
-                ...papers,
-                ...all
-                  .flatMap((item) => [item, ...item.history])
-                  .filter((item) => item.source_paper_id)
-                  .map((item) => ({
-                    id: item.source_paper_id!,
-                    name: item.source_paper_name ?? "历史套题",
-                  })),
-              ].map((paper) => [paper.id, paper]),
-            ).values(),
-          ])}
-          {facet("folder_ids", "文件夹", folders)}
-          {facet("tag_ids", "题目标签", tags)}
-          {facet("types", "题型", types)}
-          <details
-            ref={dateFilter}
-            className={`date-filter-card ${query.date_from || query.date_to ? "is-filtered" : ""}`}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-            }}
-          >
-            <summary className="select-trigger" aria-label="日期">
-              <span className="filter-value">
-                <span data-select-value>
-                  {query.date_from || query.date_to
-                    ? `${query.date_from ?? "不限"} 至 ${query.date_to ?? "不限"}`
-                    : "日期"}
-                </span>
-              </span>
-              <Icon name="chevron" />
-            </summary>
-            <div className="date-filter-popover">
-              <label className="field">
-                <span>开始日期</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(event) => setDateFrom(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>结束日期</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(event) => setDateTo(event.target.value)}
-                />
-              </label>
-              {dateError && (
-                <p className="date-filter-error" role="alert">
-                  {dateError}
-                </p>
-              )}
-              <div className="actions">
-                <Button className="quiet" onClick={() => applyDate("", "")}>
-                  清除
-                </Button>
-                <Button primary onClick={() => applyDate(dateFrom, dateTo)}>
-                  应用
-                </Button>
-              </div>
-            </div>
-          </details>
-        </div>
-        <SearchField
-          label="搜索题干或来源"
-          value={String(query.search ?? "")}
-          onChange={(search) => setQuery({ ...query, search })}
+        <Facet
+          label="来源套题"
+          options={papers.map((p) => ({ id: p.id, name: p.name }))}
+          value={paperFilter}
+          onChange={setPaperFilter}
         />
-      </div>
-      <Notice
-        error={error || catalog.error || message}
-        loading={!visible || !catalog.data}
-      />
-      {visible &&
-        (inspect ? (
-          <div className="mistake-layout">
-            <section className="mistake-list">
-              <div className="actions space-bottom-3">
-                <label className="small muted">
-                  <input
-                    type="checkbox"
-                    checked={selected.length === visible.length}
-                    onChange={(event) =>
-                      setSelected(
-                        event.target.checked
-                          ? visible.map((item) => item.id)
-                          : [],
-                      )
-                    }
-                  />
-                  全选当前筛选
-                </label>
-                <span className="small muted">共 {visible.length} 题</span>
-              </div>
-              {visible.map((item) => (
-                <article
-                  className={`card mistake-row ${item.id === inspect.id ? "active" : ""}`}
-                  key={item.id}
-                >
-                  <input
-                    aria-label="选择错题"
-                    type="checkbox"
-                    checked={selected.includes(item.id)}
-                    onChange={(event) =>
-                      setSelected(
-                        event.target.checked
-                          ? [...selected, item.id]
-                          : selected.filter((id) => id !== item.id),
-                      )
-                    }
-                  />
-                  <div>
-                    <div className="mistake-origin">
-                      <span>{item.source_paper_name ?? "历史套题"}</span>
-                      <span>
-                        {
-                          types.find(
-                            (type) => type.id === item.question_snapshot.type,
-                          )?.name
-                        }
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="mistake-question-title"
-                      aria-pressed={item.id === inspect.id}
-                      onClick={() => setInspectId(item.id)}
-                    >
-                      <Markdown text={item.question_snapshot.content} />
-                    </button>
-                    <TagPills
-                      ids={item.question_snapshot.tag_ids}
-                      tags={tags}
-                    />
-                    <p className="small muted">
-                      错误 {item.wrong_count} 次 ·{" "}
-                      <time dateTime={item.created_at} data-dynamic-date="date">
-                        {item.created_at.slice(0, 10)}
-                      </time>
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="button slay-button"
-                    aria-label={
-                      item.mastery_status === "mastered"
-                        ? "标记待复习"
-                        : "标记已掌握"
-                    }
-                    onClick={() =>
-                      void act(async () => {
-                        await client.mistakes.mastery(
-                          item.id,
-                          item.mastery_status === "mastered"
-                            ? "reviewing"
-                            : "mastered",
-                        );
-                        catalog.reload();
-                        onMasteryChanged?.();
-                      })
-                    }
-                  >
-                    {item.mastery_status === "mastered" ? "复" : "斩"}
-                  </button>
-                </article>
-              ))}
-              {selected.length > 0 && (
-                <div className="selection-bar">
-                  <span>已选 {selected.length} 道错题</span>
-                  <Button primary onClick={() => setNamingPaper(true)}>
-                    保存复习套题
-                  </Button>
-                </div>
+        <Facet
+          label="文件夹"
+          options={folders.map((f) => ({ id: f.id, name: f.name }))}
+          value={folderFilter}
+          onChange={setFolderFilter}
+        />
+        <Facet
+          label="题目标签"
+          options={qTags}
+          value={tagFilter}
+          onChange={setTagFilter}
+        />
+        <Facet
+          label="题型"
+          options={types}
+          value={typeFilter}
+          onChange={setTypeFilter}
+        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                (dateFrom || dateTo) && "border-primary/35 bg-accent/70",
               )}
-            </section>
-            <aside
-              className="card inspector mistake-preview"
-              aria-label="题目预览"
             >
-              <div className="section-head preview-heading">
-                <h2>
-                  <Icon name="eye" />
-                  题目预览
-                </h2>
-                <StatusPill state={inspect.mastery_status}>
-                  {inspect.mastery_status === "mastered" ? "已掌握" : "待复习"}
-                </StatusPill>
-              </div>
-              <div className="preview-source">{inspect.source_paper_name}</div>
-              <div className="preview-type">
-                {
-                  types.find(
-                    (type) => type.id === inspect.question_snapshot.type,
-                  )?.name
-                }
-              </div>
-              <QuestionPreview question={inspect.question_snapshot} reveal />
-              <h2 className="preview-history-heading">错误历史</h2>
-              {inspect.history.map((item, index) => (
-                <div className="history-item" key={index}>
-                  <time dateTime={item.answered_at} data-dynamic-date="timestamp">
-                    {new Date(item.answered_at).toLocaleString("zh-CN")}
-                  </time>
-                  <div>
-                    当时作答：
-                    {answerLabel(item.answer, inspect.question_snapshot) ||
-                      "未作答"}
+              <Calendar className="size-3.5" />
+              日期
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 space-y-3 p-3.5">
+            <label className="block space-y-1 text-[12.5px] font-medium">
+              <span>起始日期</span>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1 text-[12.5px] font-medium">
+              <span>结束日期</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </label>
+            {(dateFrom || dateTo) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                清除日期筛选
+              </Button>
+            )}
+          </PopoverContent>
+        </Popover>
+        <SearchField label="搜索错题" value={search} onChange={setSearch} />
+      </div>
+
+      <Notice error={error || message} loading={!data && !error} />
+
+      {data && mistakes.length === 0 && (
+        <EmptyState
+          title="没有匹配的错题"
+          detail="调整筛选条件，或完成套题作答后在错题本中回顾错题。"
+        />
+      )}
+
+      {data && mistakes.length > 0 && (
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="space-y-2.5">
+            {mistakes.map((m) => {
+              const active = inspected?.id === m.id;
+              const isChecked = validSelected.includes(m.id);
+              const q = m.question_snapshot;
+              const qType =
+                types.find((t) => t.id === q.type)?.name ?? q.type;
+              return (
+                <Card
+                  key={m.id}
+                  onClick={() => setInspectId(m.id)}
+                  className={cn(
+                    "mistake-row cursor-pointer p-4 transition-all hover:border-black/15",
+                    active && "border-primary/45 ring-1 ring-primary/20",
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        aria-label={`选择错题 ${q.content}`}
+                        checked={isChecked}
+                        onCheckedChange={(checked) =>
+                          setSelected((prev) =>
+                            checked
+                              ? Array.from(new Set([...prev, m.id]))
+                              : prev.filter((id) => id !== m.id),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                        <StatusPill state={m.mastery_status}>
+                          {m.mastery_status === "mastered" ? "已掌握" : "待复习"}
+                        </StatusPill>
+                        <Badge variant="outline">{qType}</Badge>
+                        {m.source_paper_name && (
+                          <span className="truncate text-muted-foreground">
+                            来自 {m.source_paper_name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="line-clamp-2 font-serif text-[15.5px] leading-relaxed font-normal text-foreground">
+                        {q.content}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground tabular-nums">
+                        <span>错误 {m.wrong_count} 次</span>
+                        <span data-dynamic-date="date">
+                          加入 {dateText(m.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={
+                        m.mastery_status === "reviewing"
+                          ? "标记已掌握"
+                          : "标记待复习"
+                      }
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void toggleMastery(m);
+                      }}
+                    >
+                      {m.mastery_status === "reviewing" ? "斩" : "复"}
+                    </Button>
                   </div>
-                  <div>
-                    来源：
-                    {item.source_paper_name ??
-                      inspect.source_paper_name ??
-                      "历史套题"}
-                  </div>
-                </div>
-              ))}
-            </aside>
+                </Card>
+              );
+            })}
           </div>
-        ) : (
-          <EmptyState
-            title="没有找到符合条件的错题"
-            detail="换一个筛选条件，或完成练习后再来看看。"
-          />
-        ))}
-      {namingPaper && (
+
+          {inspected && (
+            <Card className="p-5 lg:sticky lg:top-16">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="m-0 text-[15px] font-semibold">题目预览</h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setReveal((r) => !r)}
+                >
+                  {reveal ? "收起解析" : "展开解析"}
+                </Button>
+              </div>
+              <QuestionPreview
+                question={inspected.question_snapshot}
+                reveal={reveal}
+              />
+              <div className="mt-5 space-y-2 border-t border-border pt-4">
+                <div className="text-[12.5px] font-semibold text-muted-foreground">
+                  历史作答记录（{inspected.history.length} 次）
+                </div>
+                <div className="space-y-1.5">
+                  {inspected.history.map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-2 rounded-md bg-muted/45 px-3 py-1.5 text-[12px] tabular-nums"
+                    >
+                      <span data-dynamic-date="timestamp">
+                        {new Date(h.answered_at).toLocaleString("zh-CN")}
+                      </span>
+                      {h.source_paper_name && (
+                        <span className="truncate text-muted-foreground">
+                          {h.source_paper_name}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {naming && (
         <PromptDialog
           title="保存复习套题"
           label="复习套题名称"
-          initialValue="错题复习"
-          onClose={() => setNamingPaper(false)}
-          onAccept={(name) => {
-            setNamingPaper(false);
-            void act(async () => {
-              const paper = await client.mistakes.createPaper(selected, name);
-              navigate({ page: "paper", id: paper.id });
-            });
-          }}
+          initialValue={`错题巩固 ${new Date().toLocaleDateString("zh-CN")}`}
+          onClose={() => setNaming(false)}
+          onAccept={(name) => void createReviewPaper(name)}
         />
       )}
-    </>
-  );
-}
-
-function ColorRow({ tag }: { tag: Tag }) {
-  const [color, setColor] = useState(tagBackground(tag.color, tag.name));
-  const [message, setMessage] = useState("");
-  const chain = useRef(Promise.resolve());
-  const revision = useRef(0);
-  function save(value: string) {
-    setColor(value);
-    setMessage("保存中…");
-    const current = ++revision.current;
-    chain.current = chain.current.then(async () => {
-      try {
-        await client.tags.updateColor(tag.id, value);
-        if (current === revision.current) setMessage("已保存");
-      } catch (error) {
-        if (current === revision.current)
-          setMessage(`保存失败，请重试：${(error as Error).message}`);
-      }
-    });
-  }
-  return (
-    <div className="tag-color-row">
-      <span className="pill tag-color" style={tagColorStyle(color, tag.name)}>
-        {tag.name}
-      </span>
-      <span
-        className="color-save-status small"
-        role="status"
-        data-state={
-          message.startsWith("保存失败")
-            ? "error"
-            : message === "已保存"
-              ? "saved"
-              : undefined
-        }
-      >
-        {message}
-      </span>
-      {message.startsWith("保存失败") && (
-        <Button className="compact" onClick={() => save(color)}>
-          重试
-        </Button>
-      )}
-      <label className="tag-color-picker">
-        <span className="small muted">颜色</span>
-        <input
-          aria-label={`${tag.name}颜色`}
-          type="color"
-          value={color}
-          onChange={(event) => save(event.target.value)}
-        />
-      </label>
     </div>
   );
 }
 
-function safeLink(value: string) {
-  try {
-    const url = new URL(value);
-    return ["http:", "https:", "mailto:"].includes(url.protocol)
-      ? value
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
+const colorSwatches = [
+  "#2d5c48",
+  "#4d7c5f",
+  "#2b5c86",
+  "#8c5c16",
+  "#b23a31",
+  "#7a5377",
+  "#e4eade",
+  "#eee7da",
+];
 
-export function Settings() {
-  const confirmation = useConfirmation();
-  const { data, error, reload } = useLoad(() => client.tags.list(), []);
-  const [namespace, setNamespace] = useViewState("tag-namespace", "file");
-  const [message, setMessage] = useState("");
-  const linkNames: Record<string, string> = {
-    project: "项目主页",
-    contact: "联系作者",
-  };
-  const authorUrl = safeLink(__PRODUCT__.author.url);
+function ColorRow({
+  tag,
+  onSaved,
+}: {
+  tag: Tag;
+  onSaved: (tag: Tag) => void;
+}) {
+  const [color, setColor] = useState(tag.color ?? "#e4eade");
+  const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
+  const chain = useRef(Promise.resolve());
+
+  function saveColor(next: string) {
+    setColor(next);
+    setStatus("saving");
+    chain.current = chain.current.then(() =>
+      client.tags
+        .updateColor(tag.id, next)
+        .then((updated) => {
+          onSaved(updated);
+          setStatus("saved");
+        })
+        .catch(() => setStatus("error")),
+    );
+  }
+
   return (
-    <>
-      <div className="page-heading">
-        <h1>设置</h1>
-      </div>
-      <div className="settings-page">
-        <section
-          className="settings-section tag-color-settings"
-          aria-labelledby="settings-tags-heading"
+    <div className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="tag-color inline-flex h-6 items-center rounded-full px-2.5 text-[12px] font-medium"
+          style={tagColorStyle(color, tag.name)}
         >
-          <div className="section-head">
-            <div className="settings-section-heading">
-              <h2 id="settings-tags-heading">标签颜色</h2>
-              <p className="muted small">
-                文件标签与题目标签分别管理，修改后自动保存。
-              </p>
-            </div>
-            <select
-              className="filter"
-              aria-label="标签类型"
-              value={namespace}
-              onChange={(event) => setNamespace(event.target.value)}
-            >
-              <option value="file">文件标签</option>
-              <option value="question">题目标签</option>
-            </select>
-          </div>
-          <Notice error={error} loading={!data} />
-          {["file", "question"].map((kind) => (
-            <div key={kind} hidden={namespace !== kind}>
-              {data
-                ?.filter((tag) => tag.target_type === kind)
-                .map((tag) => (
-                  <ColorRow key={tag.id} tag={tag} />
-                ))}
-              {data && !data.some((tag) => tag.target_type === kind) && (
-                <EmptyState
-                  title="暂无标签"
-                  detail="在资料或题目属性中添加标签后，可在此设置颜色。"
-                />
-              )}
-            </div>
-          ))}
-        </section>
-        <section
-          className="settings-section about-product"
-          aria-labelledby="settings-about-heading"
-        >
-          <h2 id="settings-about-heading">关于</h2>
-          <div className="about-identity">
-            <img src={logoUrl} alt="题匣标志" />
-            <div>
-              <h3 className="about-name">
-                {__PRODUCT__.name}
-                <span>{__PRODUCT__.englishName}</span>
-              </h3>
-              <p className="about-version">版本 {__PRODUCT__.version}</p>
-            </div>
-          </div>
-          <p className="about-description">{__PRODUCT__.description}</p>
-          {__PRODUCT__.author.name && (
-            <dl className="about-details">
-              <div>
-                <dt>作者</dt>
-                <dd>
-                  {authorUrl ? (
-                    <a href={authorUrl} target="_blank" rel="noreferrer">
-                      {__PRODUCT__.author.name}
-                    </a>
-                  ) : (
-                    __PRODUCT__.author.name
-                  )}
-                </dd>
-              </div>
-            </dl>
-          )}
-          <div className="about-links">
-            {Object.entries(__PRODUCT__.links)
-              .filter(([, value]) => safeLink(value))
-              .map(([key, value]) => (
-                <a
-                  className="button quiet"
-                  key={key}
-                  href={safeLink(value)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {linkNames[key] ?? key}
-                  <Icon name="export" />
-                </a>
-              ))}
-          </div>
-          <div className="actions space-top-6">
-            <Button
-              onClick={() =>
-                void client.backup
-                  .backupCreate()
-                  .then((blob) => download(blob, "quarry.quarry-backup"))
-                  .catch((error) => setMessage(error.message))
-              }
-            >
-              完整备份
-            </Button>
-            <label className="button file-input-button">
-              恢复备份
-              <input
-                type="file"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file)
-                    confirmation.ask(
-                      "完整恢复将整体替换当前数据，后端会保留恢复点。继续？",
-                      () =>
-                        void client.backup
-                          .backupRestore(file)
-                          .then(() => {
-                            setMessage("恢复完成，请刷新页面");
-                            reload();
-                          })
-                          .catch((error) => setMessage(error.message)),
-                    );
-                }}
-              />
-            </label>
-          </div>
-          <p role="status">{message}</p>
-        </section>
+          {tag.name}
+        </span>
+        {status === "saving" && (
+          <span className="text-[12px] text-muted-foreground">保存中…</span>
+        )}
+        {status === "saved" && (
+          <span className="text-[12px] text-[var(--success-fg)]">已保存</span>
+        )}
+        {status === "error" && (
+          <Button
+            size="sm"
+            variant="destructiveGhost"
+            onClick={() => saveColor(color)}
+          >
+            重试
+          </Button>
+        )}
       </div>
-      {confirmation.dialog}
-    </>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {colorSwatches.map((hex) => (
+          <button
+            key={hex}
+            type="button"
+            aria-label={`${tag.name} 设为 ${hex}`}
+            onClick={() => saveColor(hex)}
+            className={cn(
+              "size-5 rounded-full border border-black/15 transition-transform hover:scale-110",
+              color.toLowerCase() === hex.toLowerCase() &&
+                "ring-2 ring-primary ring-offset-1",
+            )}
+            style={{ backgroundColor: hex }}
+          />
+        ))}
+        <input
+          type="color"
+          aria-label={`${tag.name}颜色`}
+          value={color}
+          onChange={(e) => saveColor(e.target.value)}
+          className="ml-1 h-7 w-9 cursor-pointer rounded border border-border bg-card p-0.5"
+        />
+      </div>
+    </div>
   );
 }
 
-const trashTypes = {
+export function Settings() {
+  const [targetType, setTargetType] = useState<"file" | "question">("file");
+  const { data, error, reload } = useLoad(
+    () => client.tags.list(targetType),
+    [targetType],
+  );
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const confirm = useConfirmation();
+
+  useMemo(() => {
+    if (data) setTags(data);
+  }, [data]);
+
+  function replaceTag(updated: Tag) {
+    setTags((list) => list.map((t) => (t.id === updated.id ? updated : t)));
+  }
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div>
+        <h1 className="m-0 font-serif text-[26px] font-semibold tracking-[-0.02em]">
+          系统设置
+        </h1>
+      </div>
+
+      <Notice error={error || message} loading={!data && !error} />
+
+      {/* Tag Colors Card */}
+      <Card>
+        <CardHeader>
+          <div className="space-y-1">
+            <CardTitle>标签颜色</CardTitle>
+            <CardDescription>
+              为文件夹、题库与题目标签自定义识别配色，修改后自动保存
+            </CardDescription>
+          </div>
+          <Tabs
+            value={targetType}
+            onValueChange={(v) => setTargetType(v as "file" | "question")}
+          >
+            <TabsList aria-label="标签类型">
+              <TabsTrigger value="file">文件标签</TabsTrigger>
+              <TabsTrigger value="question">题目标签</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </CardHeader>
+        <CardContent>
+          {tags.length === 0 ? (
+            <p className="m-0 py-3 text-[13px] text-muted-foreground">
+              当前分类下还没有标签。
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {tags.map((tag) => (
+                <ColorRow key={tag.id} tag={tag} onSaved={replaceTag} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Backup & About Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <img
+              src={logoUrl}
+              alt="题匣标志"
+              className="size-10 rounded-lg border border-border object-contain p-1"
+            />
+            <div>
+              <CardTitle>{__PRODUCT__.name}</CardTitle>
+              <CardDescription>
+                版本 {__PRODUCT__.version} · 本地隐私离线题库工作台
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2.5 pt-2">
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void client.backup
+                .backupCreate()
+                .then((blob) =>
+                  download(
+                    blob,
+                    `quarry-backup-${new Date().toISOString().slice(0, 10)}.quarry-backup`,
+                  ),
+                )
+                .catch((e) => setMessage((e as Error).message))
+                .finally(() => setBusy(false));
+            }}
+          >
+            完整备份
+          </Button>
+          <label className="file-input-button">
+            <Upload className="size-3.5" />
+            <span>恢复备份</span>
+            <input
+              type="file"
+              accept=".zip,.quarry-backup"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                confirm.ask(
+                  "完整恢复将用备份文件覆盖当前全部本地数据，确认继续吗？",
+                  () => {
+                    setBusy(true);
+                    void client.backup
+                      .backupRestore(file)
+                      .then(() => {
+                        setMessage("恢复完成，请刷新页面");
+                        reload();
+                      })
+                      .catch((e) => setMessage((e as Error).message))
+                      .finally(() => setBusy(false));
+                  },
+                );
+              }}
+            />
+          </label>
+        </CardContent>
+      </Card>
+      {confirm.dialog}
+    </div>
+  );
+}
+
+const trashLabels = {
   folders: "文件夹",
   question_banks: "题库",
   papers: "套题",
   questions: "题目",
-};
-export function Trash() {
-  const confirmation = useConfirmation();
+} as const;
+
+export function Trash({ onChanged }: { onChanged: () => void }) {
   const { data, error, reload } = useLoad(() => client.trash.list(), []);
   const [message, setMessage] = useState("");
-  async function action(task: () => Promise<unknown>) {
-    try {
-      await task();
-      reload();
-    } catch (error) {
-      setMessage((error as Error).message);
-    }
-  }
+  const confirm = useConfirmation();
+
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <h1>回收站</h1>
-          <p>已删除资料可以恢复，学习记录与错题快照独立保留。</p>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <h1 className="m-0 font-serif text-[26px] font-semibold tracking-[-0.02em]">
+          回收站
+        </h1>
       </div>
-      <Notice error={error || message} loading={!data} />
-      {data &&
-        (data.length ? (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>类型</th>
-                <th className="file-action-column">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.name ?? item.stem}</td>
-                  <td className="muted">{trashTypes[item.entity]}</td>
-                  <td>
-                    <div className="row-actions">
+
+      <Notice error={error || message} loading={!data && !error} />
+
+      {data && data.length === 0 && (
+        <EmptyState
+          title="回收站为空"
+          detail="被删除的文件夹、题库与套题会暂时存放在这里。"
+        />
+      )}
+
+      {data && data.length > 0 && (
+        <Table aria-label="回收站项目">
+          <TableHeader>
+            <TableRow>
+              <TableHead>名称</TableHead>
+              <TableHead className="w-24">类型</TableHead>
+              <TableHead className="w-40 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((item) => {
+              const title = item.name ?? item.stem ?? "未命名项目";
+              return (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">{title}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {trashLabels[item.entity]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center justify-end gap-1.5">
                       <Button
-                        className="quiet"
+                        size="sm"
+                        variant="outline"
                         onClick={() =>
-                          void action(() =>
-                            client.trash.restore(item.entity, item.id),
-                          )
+                          void client.trash
+                            .restore(item.entity, item.id)
+                            .then(() => {
+                              onChanged();
+                              reload();
+                            })
+                            .catch((e) => setMessage((e as Error).message))
                         }
                       >
                         恢复
                       </Button>
                       <Button
-                        className="quiet danger"
+                        size="sm"
+                        variant="destructiveGhost"
                         onClick={() =>
-                          confirmation.ask("永久删除？此操作不可撤销。", () =>
-                            void action(() =>
-                              client.trash.purge(item.entity, item.id),
-                            ),
+                          confirm.ask(
+                            `确认永久删除「${title}」吗？此操作不可撤销。`,
+                            () =>
+                              void client.trash
+                                .purge(item.entity, item.id)
+                                .then(() => {
+                                  onChanged();
+                                  reload();
+                                })
+                                .catch((e) => setMessage((e as Error).message)),
                           )
                         }
                       >
+                        <Trash2 className="size-3.5" />
                         永久删除
                       </Button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState
-            title="回收站为空"
-            detail="删除的资料与题目会出现在这里。"
-          />
-        ))}
-      {confirmation.dialog}
-    </>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+      {confirm.dialog}
+    </div>
   );
 }

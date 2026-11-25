@@ -37,8 +37,9 @@ it("opens a production create form and saves the current folder ownership", asyn
       setSearch={() => {}}
     />,
   );
-  fireEvent.click(screen.getByText("＋ 新建"));
-  fireEvent.click(screen.getByRole("button", { name: "新建文件夹" }));
+  const createBtn = screen.getByRole("button", { name: /新建/ });
+  fireEvent.keyDown(createBtn, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建文件夹" }));
   fireEvent.change(screen.getByLabelText("名称"), {
     target: { value: "New folder" },
   });
@@ -71,7 +72,9 @@ it("serializes color saves and acknowledges only the final persisted color", asy
     )
     .mockResolvedValue({ ...tag, color: "#222222" });
   render(<Settings />);
-  fireEvent.change(screen.getByLabelText("标签类型"), { target: { value: "question" } });
+  const qTab = screen.getByRole("tab", { name: "题目标签" });
+  fireEvent.mouseDown(qTab, { button: 0 });
+  fireEvent.click(qTab);
   const picker = await screen.findByLabelText("Math颜色");
   fireEvent.change(picker, { target: { value: "#111111" } });
   fireEvent.change(picker, { target: { value: "#222222" } });
