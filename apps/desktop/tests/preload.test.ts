@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { updaterChannels } from '../src/updater-channels.js';
+import { zoomChannels } from '../src/zoom-channels.js';
 
 const { expose, ipcRenderer } = vi.hoisted(() => ({
   expose: vi.fn(),
@@ -14,13 +15,16 @@ afterEach(() => {
   vi.resetModules();
 });
 
-it('exposes the backend URL and one desktop bridge for the titlebar and updater', async () => {
+it('exposes the backend URL and one desktop bridge for the titlebar, updater and zoom', async () => {
   process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
   await import('../src/preload.js');
   expect(expose.mock.calls).toEqual([
     ['__QUARRY_API_URL__', 'http://127.0.0.1:54321'],
     ['__QUARRY_DESKTOP__', {
       setTitleBarOverlay: expect.any(Function),
+      zoom: {
+        getLevel: expect.any(Function), setLevel: expect.any(Function), onLevelChange: expect.any(Function),
+      },
       updater: {
         getState: expect.any(Function), checkForUpdates: expect.any(Function),
         downloadUpdate: expect.any(Function), quitAndInstall: expect.any(Function),
@@ -28,6 +32,24 @@ it('exposes the backend URL and one desktop bridge for the titlebar and updater'
       },
     }],
   ]);
+});
+
+it('invokes zoom channels and forwards only the zoom level to subscribers', async () => {
+  process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
+  await import('../src/preload.js');
+  const { zoom } = expose.mock.calls[1]![1];
+  ipcRenderer.invoke.mockResolvedValueOnce(100);
+  await expect(zoom.getLevel()).resolves.toBe(100);
+  await zoom.setLevel(125);
+  expect(ipcRenderer.invoke.mock.calls).toEqual([[zoomChannels.getLevel], [zoomChannels.setLevel, 125]]);
+  const callback = vi.fn();
+  const unsubscribe = zoom.onLevelChange(callback);
+  const [channel, listener] = ipcRenderer.on.mock.calls[0]!;
+  expect(channel).toBe(zoomChannels.levelChange);
+  listener({ sender: 'private' }, 125);
+  expect(callback).toHaveBeenCalledExactlyOnceWith(125);
+  unsubscribe();
+  expect(ipcRenderer.removeListener).toHaveBeenCalledExactlyOnceWith(channel, listener);
 });
 
 it('preserves existing desktop properties and sends only validated #RRGGBB colors', async () => {

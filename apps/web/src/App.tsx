@@ -128,6 +128,9 @@ function Workspace() {
     papers: Paper[];
   }>({ banks: [], papers: [] });
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  useEffect(() => {
+    tabRefs.current[active]?.parentElement?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [active]);
 
   useEffect(() => {
     try {
@@ -363,8 +366,7 @@ function Workspace() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
-        {/* Integrated 42px Frameless Titlebar & Workspace Tabs */}
+      <div className="flex min-h-dvh w-full flex-col bg-background text-foreground">
         <header className="quarry-titlebar sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-sidebar">
           <div className="quarry-no-drag flex shrink-0 items-center gap-2 px-1.5">
             <img
@@ -377,69 +379,67 @@ function Workspace() {
             </span>
           </div>
 
-          <div
-            className="quarry-no-drag flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1"
-            role="tablist"
-            aria-label="工作标签页"
-          >
-            {tabs.map((tab, index) => {
-              const isSelected = tab.id === current.id;
-              const label = tabLabel(tab);
-              return (
-                <div
-                  key={tab.id}
-                  className={cn(
-                    "group/tab inline-flex h-7.5 max-w-[200px] min-w-[96px] items-center rounded-md border text-[12.5px] transition-all",
-                    isSelected
-                      ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.05)]"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-(--tab-hover) hover:text-foreground",
-                  )}
-                >
-                  <button
-                    ref={(node) => {
-                      tabRefs.current[tab.id] = node;
-                    }}
-                    type="button"
-                    role="tab"
-                    id={`tab-${tab.id}`}
-                    aria-selected={isSelected}
-                    tabIndex={isSelected ? 0 : -1}
-                    className="h-full min-w-0 flex-1 truncate px-2.5 text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
-                    onClick={() => {
-                      saveViewPatch({ scroll: window.scrollY });
-                      setActive(tab.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "ArrowRight") {
-                        event.preventDefault();
-                        focusTab((index + 1) % tabs.length);
-                      } else if (event.key === "ArrowLeft") {
-                        event.preventDefault();
-                        focusTab((index - 1 + tabs.length) % tabs.length);
-                      } else if (event.key === "Home") {
-                        event.preventDefault();
-                        focusTab(0);
-                      } else if (event.key === "End") {
-                        event.preventDefault();
-                        focusTab(tabs.length - 1);
-                      }
-                    }}
+          <div className="quarry-no-drag flex min-w-0 flex-1 items-center gap-1">
+            <div className="quarry-tabs flex min-w-0 items-center gap-1 overflow-x-auto py-1" role="tablist" aria-label="工作标签页">
+              {tabs.map((tab, index) => {
+                const isSelected = tab.id === current.id;
+                const label = tabLabel(tab);
+                return (
+                  <div
+                    key={tab.id}
+                    className={cn(
+                      "group/tab inline-flex h-7.5 max-w-[200px] min-w-[96px] items-center rounded-md border text-[12.5px] transition-all",
+                      isSelected
+                        ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.05)]"
+                        : "border-transparent bg-transparent text-muted-foreground hover:bg-(--tab-hover) hover:text-foreground",
+                    )}
                   >
-                    {label}
-                  </button>
-                  {tabs.length > 1 && (
                     <button
+                      ref={(node) => {
+                        tabRefs.current[tab.id] = node;
+                      }}
                       type="button"
-                      className="mr-1 inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-65 transition-colors hover:bg-muted hover:text-foreground group-hover/tab:opacity-100"
-                      aria-label={`关闭 ${label}`}
-                      onClick={() => removeTab(tab.id)}
+                      role="tab"
+                      id={`tab-${tab.id}`}
+                      aria-selected={isSelected}
+                      tabIndex={isSelected ? 0 : -1}
+                      className="h-full min-w-0 flex-1 truncate px-2.5 text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
+                      onClick={() => {
+                        saveViewPatch({ scroll: window.scrollY });
+                        setActive(tab.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowRight") {
+                          event.preventDefault();
+                          focusTab((index + 1) % tabs.length);
+                        } else if (event.key === "ArrowLeft") {
+                          event.preventDefault();
+                          focusTab((index - 1 + tabs.length) % tabs.length);
+                        } else if (event.key === "Home") {
+                          event.preventDefault();
+                          focusTab(0);
+                        } else if (event.key === "End") {
+                          event.preventDefault();
+                          focusTab(tabs.length - 1);
+                        }
+                      }}
                     >
-                      <X className="size-3" />
+                      {label}
                     </button>
-                  )}
-                </div>
-              );
-            })}
+                    {tabs.length > 1 && (
+                      <button
+                        type="button"
+                        className="mr-1 inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-65 transition-colors hover:bg-muted hover:text-foreground group-hover/tab:opacity-100"
+                        aria-label={`关闭 ${label}`}
+                        onClick={() => removeTab(tab.id)}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             <Button
               variant="ghost"
               size="iconSm"
@@ -474,11 +474,11 @@ function Workspace() {
           <aside
             aria-label="主导航"
             className={cn(
-              "sticky top-[42px] flex h-[calc(100vh-42px)] shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-2.5 transition-[width] duration-200",
+              "quarry-sidebar sticky flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-2.5 transition-[width] duration-200",
               compact
                 ? "w-[58px] items-center px-1.5"
                 : isStudyView
-                  ? "w-[224px]"
+                  ? "w-[224px] max-[959px]:w-[156px]"
                   : "w-[224px] max-[960px]:w-[58px] max-[960px]:items-center max-[960px]:px-1.5",
             )}
           >
@@ -526,7 +526,7 @@ function Workspace() {
                 {rail}
               </div>
             ) : (
-              <nav className="flex flex-1 flex-col gap-1 pt-1" aria-label="功能区">
+              <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-1" aria-label="功能区">
                 <div className="space-y-1">
                   {primaryNav.map((item) =>
                     renderNavButton(

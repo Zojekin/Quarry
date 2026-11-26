@@ -139,7 +139,8 @@
 ## 7. Electron 桌面宿主与 Windows 打包 (`apps/desktop`)
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
-- **安全边界 (`src/main.ts` & `src/preload.ts`)**：`1440×900`（最小 `900×600`），开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，并在同一个可选的 `window.__QUARRY_DESKTOP__` 接口提供 `setTitleBarOverlay({ color, symbolColor })` 和 `updater`。主进程仅接受应用窗口主帧发出的更新请求和标题栏颜色请求。Windows 标题栏使用两项 `#RRGGBB` 颜色更新固定 42px 的原生按钮区。Web 端使用 `packages/shared/src/desktop-updater.ts` 的平台无关类型获取更新状态，业务通信继续经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **安全边界 (`src/main.ts` & `src/preload.ts`)**：开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，在可选的 `window.__QUARRY_DESKTOP__` 接口提供标题栏配色、`updater` 和 `zoom`。主进程仅接受应用窗口主帧的对应请求，业务通信经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **窗口与界面缩放 (`src/main.ts` & `src/zoom.ts`)**：窗口初始 `1440×900`、最小 `900×600`，两者分别按主屏可用工作区的逻辑尺寸限幅。主进程通过 `webContents.setZoomFactor` 应用快捷键或设置选择的倍率，并保存于 `userData/zoom.json`。预加载通过 `packages/shared/src/desktop-zoom.ts` 的类型读取、设置及订阅倍率。Windows 原生标题栏以 42 为基准随应用倍率改变高度，前端通过 `env(titlebar-area-height, 42px)` 对齐标题栏和侧栏。独立 Web 版沿用浏览器缩放。
 - **版本更新 (`src/updater.ts`)**：带更新源配置的 Windows 发布构建启动 5 秒后默认检查公开的 `Zojekin/Quarry` GitHub Releases，`userData/updater-settings.json` 保存自动检查和下载偏好。`electron-updater` 后台下载完整 NSIS 安装包并校验 `latest.yml` 的 SHA-512。当前构建为无签名发布，关闭 Authenticode 发布者匹配。安装器在本地 HTTP 服务与 SQLite 关闭后启动，支持手动重启和正常退出时安装。纯 Web 设置页手动查询 GitHub Releases API 并显示下载链接。
 - **运行时打包与 N-API 原生绑定**：
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成包含 `electron-updater` 的 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
@@ -167,4 +168,4 @@
 - `apps/desktop/scripts/dev.mjs` 由 `pnpm run dev:desktop` 调用，等待 Vite 后用 esbuild 打包主进程和 preload，再启动 Electron。`QUARRY_USER_DATA_DIR` 可覆盖后端数据目录。HTTP(S) 与 mailto 的新窗口链接交给系统处理。
 - `e2e/fixtures/electron.ts` 使用 Playwright `_electron.launch()` 启动 Electron 45.2.3。开发运行时与解包应用都从磁盘加载渲染器，使用临时 SQLite 与 Chromium 配置目录，测试可重启并复用数据。
 - 视觉项目从真实 API 写入测试数据，以固定的 Electron 显示缩放验证展开、收起与窄屏三种布局。Windows 对比 36 张基线，统一遮罩服务端日期、时间戳和用时，允许每张图至多 1% 像素差异。其他平台执行同样的页面交互与健康检查。详细入口见 [代码库地图](codebase-map.md)。
-- `.github/workflows/ci.yml` 的 `e2e-windows` 作业构建解包应用，运行 `Quarry.exe` 冒烟、业务流程和重启持久化测试，再执行 Windows 视觉回归。Electron 自带 Chromium；失败时保留 Playwright HTML 报告与测试工件 7 天。
+- `.github/workflows/ci.yml` 的 `e2e-windows` 作业构建解包应用，运行 `Quarry.exe` 冒烟、业务流程、缩放与小窗口布局和重启持久化测试，再执行 Windows 视觉回归。Electron 自带 Chromium，失败时保留 Playwright HTML 报告与测试工件 7 天。

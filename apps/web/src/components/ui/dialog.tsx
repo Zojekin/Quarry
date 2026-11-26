@@ -35,7 +35,7 @@ export function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "quarry-panel-animate fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[0_22px_50px_-12px_rgba(var(--shadow-ink),0.22)] outline-none",
+          "quarry-panel-animate fixed top-1/2 left-1/2 z-50 max-h-(--dialog-max-height) w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[0_22px_50px_-12px_rgba(var(--shadow-ink),0.22)] outline-none",
           className,
         )}
         {...props}
@@ -60,7 +60,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn("flex items-center justify-end gap-2 pt-5", className)}
+      className={cn("flex flex-wrap items-center justify-end gap-2 pt-5", className)}
       {...props}
     />
   );

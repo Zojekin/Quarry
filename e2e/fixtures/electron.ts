@@ -8,6 +8,9 @@ interface ElectronFixture {
   page: Page;
   userDataDir: string;
   restart(): Promise<Page>;
+  zoomFactor(): Promise<number>;
+  resizeWindow(width: number, height: number): Promise<void>;
+  pressZoomShortcut(key: '=' | '+' | '-' | '0'): Promise<void>;
   download(path: string, trigger: () => Promise<void>): Promise<void>;
   observeTitleBarOverlay(): Promise<() => Promise<{ color: string; symbolColor: string; height: number } | null>>;
   windowChrome(): Promise<{
@@ -52,8 +55,9 @@ export async function api<T>(page: Page, route: string, body?: unknown, method =
   return result.data as T;
 }
 
-export const test = base.extend<{ quarry: ElectronFixture }>({
-  quarry: async ({}, use, testInfo) => {
+export const test = base.extend<{ quarry: ElectronFixture; nativeViewport: boolean }>({
+  nativeViewport: [false, { option: true }],
+  quarry: async ({ nativeViewport }, use, testInfo) => {
     const data = await mkdtemp(join(tmpdir(), 'quarry-e2e-'));
     const errors: string[] = [];
     let app: ElectronApplication | undefined;
@@ -105,7 +109,7 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
       const page = await current.firstWindow();
       // firstWindow can resolve on about:blank while the main process is still loading the renderer.
       await page.waitForURL(url => url.protocol === 'file:' && url.pathname.endsWith('/index.html'));
-      await page.setViewportSize({ width: 1440, height: 900 });
+      if (!nativeViewport) await page.setViewportSize({ width: 1440, height: 900 });
       const waitForRenderer = async () => {
         await page.locator('#root > *').first().waitFor({ state: 'attached' });
         await page.waitForLoadState('networkidle');
@@ -138,6 +142,25 @@ export const test = base.extend<{ quarry: ElectronFixture }>({
           await stop();
           fixture.page = await launch();
           return fixture.page;
+        },
+        zoomFactor() {
+          return app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor());
+        },
+        async resizeWindow(width, height) {
+          await app!.evaluate(({ BrowserWindow }, size) => {
+            const window = BrowserWindow.getAllWindows()[0]!;
+            // Exercise windows that can be reached on smaller display work areas.
+            window.setMinimumSize(1, 1);
+            window.setContentSize(...size);
+          }, [width, height] as const);
+        },
+        async pressZoomShortcut(key) {
+          await app!.evaluate(({ BrowserWindow }, keyCode) => {
+            const window = BrowserWindow.getAllWindows()[0]!;
+            window.focus();
+            window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers: ['control'] });
+            window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers: ['control'] });
+          }, key);
         },
         async download(path, trigger) {
           const current = app!;

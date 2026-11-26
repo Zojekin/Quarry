@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [
-    { name: 'electron', testMatch: /(?:smoke|workflows)\.spec\.ts/ },
+    { name: 'electron', testMatch: /(?:smoke|workflows|zoom)\.spec\.ts/ },
     { name: 'visual', testMatch: /visual\.spec\.ts/, timeout: 180_000,
       snapshotPathTemplate: '{testDir}/snapshots/{platform}/{arg}{ext}' },
   ],

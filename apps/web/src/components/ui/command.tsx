@@ -65,7 +65,7 @@ export function CommandList({
 }: ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
-      className={cn("max-h-[340px] overflow-y-auto p-1.5", className)}
+      className={cn("max-h-[min(340px,calc(var(--dialog-max-height)-2.75rem-2px))] overflow-y-auto p-1.5", className)}
       {...props}
     />
   );

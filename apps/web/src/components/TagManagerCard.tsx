@@ -201,7 +201,7 @@ export function TagManagerCard() {
         {error && <Button variant="outline" size="sm" onClick={reload}>重新加载标签</Button>}
         {tags?.length === 0 && <p className="text-sm text-muted-foreground">此分类暂无标签。</p>}
         {(["file", "question"] as const).map((type) => (
-          <div key={type} hidden={type !== namespace} className="max-h-72 divide-y divide-border overflow-y-auto px-0.5">
+          <div key={type} hidden={type !== namespace} className="max-h-[min(18rem,60dvh)] divide-y divide-border overflow-y-auto px-0.5">
             {data?.filter((tag) => tag.target_type === type).map((tag) => (
               <TagRow
                 key={tag.id}

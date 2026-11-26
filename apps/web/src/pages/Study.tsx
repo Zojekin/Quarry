@@ -1078,7 +1078,7 @@ export function Study({
     onRail(
       <div className="space-y-5 px-0.5 text-[13px]">
         <div className="space-y-2 rounded-lg bg-card/85 p-3 shadow-[0_1px_2px_rgba(var(--shadow-ink),0.04)]">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Badge variant={session.mode === "exam" ? "warning" : "info"}>
               {session.mode === "exam" ? "考试模式" : "练习模式"}
             </Badge>
@@ -1101,7 +1101,7 @@ export function Study({
           <div className="px-1 text-[11.5px] font-semibold text-muted-foreground">
             题目导航
           </div>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-5 gap-1.5 max-[959px]:grid-cols-4">
             {session.items.map((item, i) => {
               const check = checked[item.question.id];
               const isCurrent = session.mode === "practice" && i === index;

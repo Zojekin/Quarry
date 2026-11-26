@@ -153,7 +153,7 @@ export function QuestionPicker({
         />
         <span>全选当前结果</span>
       </label>
-      <div className="max-h-72 space-y-1.5 overflow-y-auto">
+      <div className="quarry-dialog-list max-h-72 space-y-1.5 overflow-y-auto">
         {rows.map((q) => (
           <label
             key={q.id}
@@ -360,7 +360,7 @@ export function ImportDialog({
                 个附件
               </p>
               {data.description && <Markdown text={data.description} preview />}
-              <div className="max-h-60 space-y-2 overflow-y-auto">
+              <div className="quarry-dialog-list max-h-60 space-y-2 overflow-y-auto">
                 {data.questions.map((q) => (
                   <article
                     key={q.id}
