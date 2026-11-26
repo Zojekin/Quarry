@@ -66,12 +66,12 @@ it("updates the root and Windows bridge on system changes only while following t
   vi.stubGlobal("__QUARRY_DESKTOP__", { setTitleBarOverlay });
   localStorage.setItem(themeStorageKey, JSON.stringify({ preset: "indigo-ink", mode: "system" }));
   render(<ThemeProvider><ThemeModeToggle /></ThemeProvider>);
-  expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#eef0f8", symbolColor: "#3e5287" });
+  expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#f7f8fc", symbolColor: "#3e5287" });
 
   system.set(true);
   expect(root.dataset.themeMode).toBe("dark");
   expect(root.style.getPropertyValue("--sidebar")).toBe("#1d2334");
-  expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#1d2334", symbolColor: "#e9edfa" });
+  expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#171b29", symbolColor: "#e9edfa" });
   expect(savedTheme()).toEqual({ preset: "indigo-ink", mode: "system" });
   fireEvent.click(screen.getByRole("button", { name: "外观模式：跟随系统，切换至日间" }));
   expect(root.dataset.themeMode).toBe("light");

@@ -136,7 +136,6 @@ export function QuestionPicker({
         />
         <SearchField
           label="搜索选题"
-          placeholder="搜索题目"
           value={search}
           onChange={setSearch}
           className="ml-auto"

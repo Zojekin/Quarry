@@ -143,8 +143,10 @@
 .quarry-titlebar {
   height: var(--titlebar-height);
   -webkit-app-region: drag;
-  padding-left: max(0.625rem, env(titlebar-area-x, 0px));
-  padding-right: max(0.625rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+}
+
+.quarry-titlebar-content {
+  padding-right: max(1.25rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
 }
 
 .quarry-no-drag {

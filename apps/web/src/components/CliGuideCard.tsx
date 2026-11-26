@@ -61,7 +61,7 @@ export function CliGuideCard() {
           {copyStatus && <p role="status" className="text-xs text-muted-foreground">{copyStatus}</p>}
         </div>
         <p className="text-muted-foreground">
-          将仓库中的 <code>skills/question-converter/SKILL.md</code> 和题目材料交给 AI 助手，让它按指南生成、校验并转换草稿。在题库与套题中导入生成的文件。
+          将仓库中的 <code>skills/question-converter/SKILL.md</code> 和题目材料交给 AI 助手，让它按指南生成、校验并转换草稿。在资料库中导入生成的文件。
         </p>
       </CardContent>
     </Card>

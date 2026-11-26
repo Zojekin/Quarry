@@ -71,7 +71,7 @@ async function createWindow(): Promise<void> {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const userData = app.getPath('userData');
   let zoomLevel = loadZoom(userData);
-  let titleBarColors: TitleBarColors = { color: '#f3f3ee', symbolColor: '#2d5c48' };
+  let titleBarColors: TitleBarColors = { color: '#fafaf7', symbolColor: '#2d5c48' };
   // Scale the native caption with the renderer so its CSS height stays close to 42px.
   const overlayOptions = () => ({ ...titleBarColors, height: Math.round(titleBarHeight * zoomLevel / 100) });
   const iconPath = app.isPackaged

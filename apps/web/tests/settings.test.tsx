@@ -131,7 +131,7 @@ it("applies the saved font size and uses preferences for workspace defaults afte
   app.unmount();
   render(<App />);
   expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "题库与套题" }));
+  fireEvent.click(screen.getByRole("button", { name: "资料库" }));
   const libraryView = await screen.findByRole("button", { name: "网格" });
   expect(libraryView.getAttribute("aria-pressed")).toBe("true");
   expect(screen.queryByRole("heading", { name: "题目转换 CLI 与 AI Skill" })).toBeNull();

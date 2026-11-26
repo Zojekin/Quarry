@@ -127,7 +127,7 @@
   1. 宿主注入的 `window.__QUARRY_API_URL__`
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
-- **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史，整合于 `42px` 一体化标题栏并支持 `Ctrl+K` 快速命令跳转；一级栏目为首页（学习概览）、题库与套题、错题本、练习记录，另含回收站与系统设置。
+- **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史。无边框侧栏贯通品牌区与导航区。标签栏以 `42px` 为基准高度，对齐主内容，留白可拖动窗口并为 Windows 原生按钮预留空间。支持 `Ctrl+K` 快速命令跳转。一级栏目为首页（学习概览）、资料库、错题本和练习记录，另含回收站与系统设置。资料库在视口达到 `1340px` 时显示粘性右侧文件概览，低于该宽度时只显示列表或网格。
 - **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。

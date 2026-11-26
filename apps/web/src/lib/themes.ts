@@ -185,13 +185,13 @@ export function resolveTheme(config: ThemeConfig, prefersDark: boolean) {
     contrastRatio(candidate, background) >= 3,
   );
   const sidebarForeground = pineLight ? "#2f3632" : foreground;
-  const titlebarSymbol = !dark && contrastRatio(primary, sidebar) >= minimumContrast
+  const titlebarSymbol = !dark && contrastRatio(primary, background) >= minimumContrast
     ? primary
-    : contrastInk(sidebar, foreground);
+    : contrastInk(background, foreground);
 
   return {
     mode,
-    overlay: { color: sidebar, symbolColor: titlebarSymbol },
+    overlay: { color: background, symbolColor: titlebarSymbol },
     tokens: {
       background, foreground, card, sidebar, primary,
       "card-foreground": foreground,

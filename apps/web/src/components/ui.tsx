@@ -480,13 +480,11 @@ export function StatusPill({
 
 export function SearchField({
   label,
-  placeholder = label,
   value,
   onChange,
   className,
 }: {
   label: string;
-  placeholder?: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
@@ -500,7 +498,7 @@ export function SearchField({
       <Input
         type="search"
         aria-label={label}
-        placeholder={placeholder}
+        placeholder="搜索"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-8 w-52 pl-8 text-[13px]"

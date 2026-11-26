@@ -54,7 +54,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
   const question = '哪一种是火山岩？';
 
   await test.step('create and rename folder, bank and paper with tags', async () => {
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await openCreateMenu(page, '新建文件夹');
     await saveDocument(page, '资料草稿', '地理');
     await row(page, '资料草稿').getByRole('button', { name: '重命名' }).click({ force: true });
@@ -104,7 +104,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
 
     const before = await page.getByRole('img', { name: '图片' }).getAttribute('src');
     page = await quarry.restart();
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await button(page, folder).click();
     await button(page, bank).click();
     await expect(page.getByText(question, { exact: true })).toBeVisible();
@@ -128,7 +128,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
   });
 
   await test.step('pick a question, save composer settings, practice and sit an exam with pause focus restoration', async () => {
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await button(page, folder).click();
     await button(page, paper).click();
     await button(page, '从题库选题').click();
@@ -163,7 +163,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await confirmAction(page, /结束本次练习/);
     await expect(page.getByRole('heading', { name: paper })).toBeVisible();
 
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await button(page, folder).click();
     await button(page, paper).click();
     await button(page, '开始考试').click();
@@ -190,9 +190,9 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
 
   await test.step('filter mistakes, change mastery, save a review paper and inspect records', async () => {
     await sidebar(page, '错题本').click();
-    await page.getByPlaceholder('搜索错题').fill('不存在的题目');
+    await page.getByRole('searchbox', { name: '搜索错题' }).fill('不存在的题目');
     await expect(page.locator('.mistake-row')).toHaveCount(0);
-    await page.getByPlaceholder('搜索错题').fill('火山岩');
+    await page.getByRole('searchbox', { name: '搜索错题' }).fill('火山岩');
     await button(page, '标记已掌握').click();
     await button(page, '已掌握').click();
     await button(page, '标记待复习').click();
@@ -211,7 +211,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
   });
 
   await test.step('round-trip bank and folder archives, then back up and restore', async () => {
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await button(page, folder).click();
     const bankFile = testInfo.outputPath('bank.quarry');
     await quarry.download(bankFile, () =>
@@ -219,7 +219,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     );
     await archiveImport(page, bankFile, /题库 · 1 道题目 · 1 个附件/);
 
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     const folderFile = testInfo.outputPath('folder.quarry');
     await quarry.download(folderFile, () =>
       row(page, folder).getByRole('button', { name: '导出' }).click({ force: true }),
@@ -230,7 +230,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await sidebar(page, '系统设置').click();
     const backupFile = testInfo.outputPath('quarry.quarry-backup');
     await quarry.download(backupFile, () => button(page, '完整备份').click());
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await openCreateMenu(page, '新建文件夹');
     await saveDocument(page, '备份之后');
     await expect(row(page, '备份之后')).toBeVisible();
@@ -239,7 +239,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await page.locator('input[type=file]').setInputFiles(backupFile);
     await confirmAction(page, /完整恢复/);
     await expect(page.getByText('恢复完成，请刷新页面')).toBeVisible();
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await expect(row(page, folder)).toHaveCount(2);
     await expect(row(page, '备份之后')).toHaveCount(0);
   });
@@ -251,7 +251,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await sidebar(page, '回收站').click();
     await page.getByRole('row').filter({ hasText: bank }).getByRole('button', { name: '恢复' }).click();
     await expect(page.getByRole('row').filter({ hasText: bank })).toHaveCount(0);
-    await sidebar(page, '题库与套题').click();
+    await sidebar(page, '资料库').click();
     await expect(row(page, bank)).toBeVisible();
 
     await row(page, '岩石复习').getByRole('button', { name: '删除' }).click({ force: true });

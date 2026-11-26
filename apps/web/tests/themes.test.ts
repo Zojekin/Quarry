@@ -18,7 +18,7 @@ describe("theme palettes", () => {
       "success-bg": "#e7f4ec", "error-bg": "#fbeceb", "heat-4": "#2d5c48",
       accent: "#e8f0ea", border: "rgba(23, 27, 25, 0.09)", "code-bg": "#f5f5f0",
     });
-    expect(theme.overlay).toEqual({ color: "#f3f3ee", symbolColor: "#2d5c48" });
+    expect(theme.overlay).toEqual({ color: "#fafaf7", symbolColor: "#2d5c48" });
   });
 
   it.each(presets)("keeps both %s palettes legible and distinct", (preset) => {
@@ -57,7 +57,7 @@ describe("theme palettes", () => {
     for (const key of ["primary-hover", "accent", "accent-foreground", "ring", "selection-bg", "heat-4"] as const) {
       expect(theme.tokens[key]).not.toBe(base.tokens[key]);
     }
-    expect(theme.overlay).toEqual({ color: custom.sidebar, symbolColor: theme.tokens.foreground });
+    expect(theme.overlay).toEqual({ color: custom.background, symbolColor: theme.tokens.foreground });
     expect(theme.tokens["success-bg"]).toBe(base.tokens["success-bg"]);
   });
 

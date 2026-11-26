@@ -115,7 +115,7 @@ for (const layout of layouts) {
     await expect(page.locator('.quarry-heat-grid > i')).toHaveCount(53 * 7);
     await capture('home');
 
-    await nav(page, '题库与套题').click();
+    await nav(page, '资料库').click();
     await button(page, bankName).waitFor();
     const tag = page.locator('.tag-color').first();
     await expect(tag).toHaveCSS('background-color', 'rgb(228, 234, 222)');
@@ -129,7 +129,7 @@ for (const layout of layouts) {
     await expect(page.getByText(stem, { exact: true })).toBeVisible();
     await capture('bank-detail');
 
-    await nav(page, '题库与套题').click();
+    await nav(page, '资料库').click();
     await button(page, paperName).click();
     await expect(page.getByRole('heading', { name: paperName })).toBeVisible();
     await capture('paper-detail');

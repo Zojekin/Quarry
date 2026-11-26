@@ -161,7 +161,7 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
           size="sm"
           onClick={() => navigate({ page: "library" })}
         >
-          进入题库与套题
+          进入资料库
           <ArrowRight className="size-3.5" />
         </Button>
       </div>
@@ -339,7 +339,7 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
               </div>
               {pending.length === 0 ? (
                 <p className="m-0 py-4 text-[13px] text-muted-foreground">
-                  当前没有未完成的练习或考试。前往题库与套题挑选一套开始吧。
+                  当前没有未完成的练习或考试。前往资料库挑选一套开始吧。
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -495,7 +495,7 @@ export function Records({ navigate }: { navigate: (route: Route) => void }) {
       {data && rows.length === 0 && (
         <EmptyState
           title="没有符合条件的作答记录"
-          detail="尝试切换筛选条件，或到题库与套题中开始一次新的练习。"
+          detail="尝试切换筛选条件，或到资料库中开始一次新的练习。"
         />
       )}
 
