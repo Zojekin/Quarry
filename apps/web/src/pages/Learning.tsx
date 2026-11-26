@@ -10,6 +10,7 @@ import { DiagnosticsCard } from "../components/DiagnosticsCard.js";
 import { PreferencesSettingsCard } from "../components/PreferencesSettingsCard.js";
 import { TagManagerCard } from "../components/TagManagerCard.js";
 import { ThemeSettingsCard } from "../components/ThemeSettingsCard.js";
+import { UpdateSettingsCard } from "../components/UpdateSettingsCard.js";
 import {
   Button,
   EmptyState,
@@ -941,6 +942,7 @@ export function Settings() {
       <Notice error={message} loading={false} />
       <ThemeSettingsCard />
       <TagManagerCard key={restoreRevision} />
+      <UpdateSettingsCard />
       <PreferencesSettingsCard />
       <DiagnosticsCard />
 
@@ -956,7 +958,7 @@ export function Settings() {
             <div>
               <CardTitle>{__PRODUCT__.name}</CardTitle>
               <CardDescription>
-                版本 {__PRODUCT__.version} · 本地隐私离线题库工作台
+                本地隐私离线题库工作台
               </CardDescription>
             </div>
           </div>

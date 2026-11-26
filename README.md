@@ -144,6 +144,10 @@ Windows x64 打包使用 `better-sqlite3` v13 随包提供的 N-API 预编译二
 
 Windows 安装向导在选择安装目录后提供桌面和开始菜单两项快捷方式设置，均默认勾选，可独立取消。首次使用 `/S` 静默安装时默认创建两种快捷方式。卸载会清理已创建的快捷方式，并保留本地题库数据。
 
+Windows 桌面版默认在启动后检查 GitHub Releases 并在后台下载更新。下载完成后，侧栏「系统设置」会显示提示，可在「应用更新」选择「立即重启并更新」，也可在正常退出时自动安装。关闭自动检查后，仍可在设置中手动检查和下载。网页版在手动检查时查询 GitHub Releases，并提供安装包或发布页链接。
+
+发布作业上传 `Quarry-Setup-<version>-x64.exe`、`Quarry-<version>-win-x64.zip` 与供自动更新使用的 `latest.yml`。自动更新使用 NSIS 安装包，ZIP 用户也可从 Releases 手动下载新版 ZIP。此前未内置自动更新的版本需要从 Releases 手动安装一次。
+
 ### 6. Electron 端到端与视觉回归
 
 桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统与统一 `42px` 无菜单栏整合标题栏（Windows `titleBarOverlay` + 全局 `Ctrl+K` 快速命令），覆盖展开侧栏、收起侧栏和窄屏布局。题库与套题支持 Master-Detail 列表/网格双视图与批量浮栏，设置中的文件标签与题目标签通过标签页分开选色并自动保存。

@@ -286,14 +286,6 @@ export function fixThemeContrast(config: ThemeConfig, prefersDark: boolean): The
   return normalizeThemeConfig({ ...config, custom });
 }
 
-declare global {
-  interface Window {
-    __QUARRY_DESKTOP__?: {
-      setTitleBarOverlay?: (colors: ResolvedTheme["overlay"]) => void;
-    };
-  }
-}
-
 export function applyTheme(view: Window, theme: ResolvedTheme) {
   const root = view.document.documentElement;
   for (const [token, value] of Object.entries(theme.tokens)) {

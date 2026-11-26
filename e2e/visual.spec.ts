@@ -153,6 +153,10 @@ for (const layout of layouts) {
     await page.getByRole('tab', { name: '题目标签' }).click();
     await expect(page.getByRole('heading', { name: '外观与主题' })).toBeInViewport();
     await expect(page.getByLabel('岩石分类颜色')).toBeInViewport();
+    await expect(page.getByRole('heading', { name: '应用更新', exact: true })).toBeInViewport();
+    if (process.env.QUARRY_E2E_PACKAGED !== '1') {
+      await expect(page.getByText('自动更新适用于 Windows 正式发布的桌面版。')).toBeVisible();
+    }
     await capture('settings');
 
     await nav(page, '回收站').click();

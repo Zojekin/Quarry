@@ -70,7 +70,7 @@ test('restores dark mode before the app mounts and syncs the Windows caption col
   const sidebar = page.getByRole('complementary', { name: '主导航' });
   await sidebar.getByRole('button', { name: '系统设置' }).click();
   const darkCard = 'rgb(32, 44, 37)';
-  for (const name of ['外观与主题', '标签管理', '显示与操作', '题目转换 CLI 与 AI Skill']) {
+  for (const name of ['外观与主题', '标签管理', '应用更新', '显示与操作', '题目转换 CLI 与 AI Skill']) {
     const card = page.locator('[data-slot="card"]').filter({
       has: page.getByRole('heading', { name, exact: true }),
     });
