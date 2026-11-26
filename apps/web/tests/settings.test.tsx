@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /// <reference types="vitest/jsdom" />
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { DesktopZoomBridge, DesktopZoomLevel } from "@quarry/shared";
+import type { DesktopCliToolsBridge, DesktopZoomBridge, DesktopZoomLevel } from "@quarry/shared";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
 import { client, type Tag } from "../src/api/client.js";
@@ -54,19 +54,87 @@ it("loads desktop zoom, sends the chosen level and follows desktop changes", asy
   expect(unsubscribe).toHaveBeenCalledOnce();
 });
 
-it("shows the CLI workflow and copies the exact displayed DSL example", async () => {
+it("toggles the Web CLI workflow and copies the prompt, Skill and displayed DSL example", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
   render(<CliGuideCard />);
-  expect(screen.getByText("quarry spec")).toBeTruthy();
-  expect(screen.getByText("quarry validate draft.md")).toBeTruthy();
-  expect(screen.getByText("quarry convert draft.md -o questions.json")).toBeTruthy();
-  expect(screen.getByText("skills/question-converter/SKILL.md")).toBeTruthy();
+  const toggle = screen.getByRole("switch", { name: "题目转换 CLI 与 AI Skill" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(screen.queryByText("pnpm quarry spec")).toBeNull();
+  expect(screen.queryByRole("button", { name: "复制 Agent 提示词" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "下载 SKILL.md" })).toBeNull();
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByText("pnpm quarry spec")).toBeTruthy();
+  expect(screen.getByText("pnpm quarry validate draft.md")).toBeTruthy();
+  expect(screen.getByText("pnpm quarry convert draft.md -o questions.json")).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "Skill 安装位置" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "复制 Agent 提示词" }));
+  await screen.findByText("已复制提示词");
+  const prompt = writeText.mock.calls[0]![0];
+  expect(prompt).toContain("question-converter");
+  expect(prompt).toContain("请勿解题");
+  expect(prompt).toContain("pnpm quarry validate draft.md");
+  expect(prompt).toContain("pnpm quarry convert draft.md -o questions.json");
+
+  const link = screen.getByRole<HTMLAnchorElement>("link", { name: "下载 SKILL.md" });
+  expect(link.download).toBe("SKILL.md");
+  fireEvent.click(screen.getByRole("button", { name: "复制 Skill 内容" }));
+  await screen.findByText("已复制Skill 内容");
+  const skill = writeText.mock.calls[1]![0];
+  expect(skill).toContain("name: question-converter");
+  expect(decodeURIComponent(link.href.split(",")[1]!)).toBe(skill);
+
   const example = document.querySelector("pre")!.textContent;
   expect(example).toContain("## [单选]");
   fireEvent.click(screen.getByRole("button", { name: "复制模板" }));
   expect(writeText).toHaveBeenCalledWith(example);
   await screen.findByText("已复制模板");
+  fireEvent.click(toggle);
+  expect(screen.queryByRole("heading", { name: "命令速查" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "复制模板" })).toBeNull();
+});
+
+it("uses desktop CLI info and reports Skill installation results", async () => {
+  const cliPath = "C:\\Program Files\\Quarry\\resources\\cli\\index.js";
+  const skillDirectory = "C:\\Users\\tester\\.codex\\skills\\question-converter";
+  const command = `node '${cliPath}'`;
+  const getInfo = vi.fn().mockResolvedValue({
+    cli: { path: cliPath, command },
+    targets: [{ id: "codex", label: "Codex", path: skillDirectory }],
+  });
+  const installSkill = vi.fn()
+    .mockResolvedValueOnce({ status: "installed", path: skillDirectory + "\\SKILL.md" })
+    .mockResolvedValueOnce({ status: "canceled" })
+    .mockRejectedValueOnce(new Error("目标已存在"));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const cliTools: DesktopCliToolsBridge = { getInfo, installSkill };
+  vi.stubGlobal("__QUARRY_DESKTOP__", { cliTools });
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  render(<CliGuideCard />);
+  expect(getInfo).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("switch", { name: "题目转换 CLI 与 AI Skill" }));
+  expect(await screen.findByText(`${command} spec`)).toBeTruthy();
+  expect(getInfo).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("link", { name: "下载 SKILL.md" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "复制 Skill 内容" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "复制 Agent 提示词" }));
+  await screen.findByText("已复制提示词");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`${command} validate draft.md`));
+
+  fireEvent.click(screen.getByRole("button", { name: "安装 Skill" }));
+  expect(await screen.findByText(`已安装至 ${skillDirectory}\\SKILL.md`)).toBeTruthy();
+  expect(installSkill).toHaveBeenNthCalledWith(1, "codex");
+  fireEvent.change(screen.getByRole("combobox", { name: "Skill 安装位置" }), { target: { value: "custom" } });
+  const customButton = screen.getByRole<HTMLButtonElement>("button", { name: "选择目录并安装" });
+  fireEvent.click(customButton);
+  await waitFor(() => expect(customButton.disabled).toBe(false));
+  expect(installSkill).toHaveBeenNthCalledWith(2, "custom");
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(customButton);
+  expect((await screen.findByRole("alert")).textContent).toContain("目标已存在");
 });
 
 it("adds and renames a tag, resets its color, and confirms deletion with its use count", async () => {
@@ -126,7 +194,7 @@ it("applies the saved font size and uses preferences for workspace defaults afte
   expect(document.documentElement.style.getPropertyValue("--question-size")).toBe("25px");
   expect(JSON.parse(window.localStorage.getItem(preferencesKey)!)).toEqual({
     questionSize: "large", confirmExamSubmit: false, showShortcutHints: true,
-    sidebarCollapsed: true, libraryView: "grid",
+    sidebarCollapsed: true, libraryView: "grid", cliEnabled: false,
   });
   app.unmount();
   render(<App />);

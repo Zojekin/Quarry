@@ -9,6 +9,7 @@ export type Preferences = {
   showShortcutHints: boolean;
   sidebarCollapsed: boolean;
   libraryView: "list" | "grid";
+  cliEnabled: boolean;
 };
 
 const defaults: Preferences = {
@@ -17,6 +18,7 @@ const defaults: Preferences = {
   showShortcutHints: false,
   sidebarCollapsed: false,
   libraryView: "list",
+  cliEnabled: false,
 };
 
 const listeners = new Set<() => void>();
@@ -41,6 +43,7 @@ function parse(value: string): Preferences {
       showShortcutHints: typeof stored?.showShortcutHints === "boolean" ? stored.showShortcutHints : defaults.showShortcutHints,
       sidebarCollapsed: typeof stored?.sidebarCollapsed === "boolean" ? stored.sidebarCollapsed : defaults.sidebarCollapsed,
       libraryView: stored?.libraryView === "grid" ? "grid" : defaults.libraryView,
+      cliEnabled: typeof stored?.cliEnabled === "boolean" ? stored.cliEnabled : defaults.cliEnabled,
     };
   } catch {
     return defaults;

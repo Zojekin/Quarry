@@ -4,6 +4,7 @@ interface Window {
     setTitleBarOverlay?: (colors: import("./lib/themes.js").ResolvedTheme["overlay"]) => void;
     updater?: import("@quarry/shared").DesktopUpdaterBridge;
     zoom?: import("@quarry/shared").DesktopZoomBridge;
+    cliTools?: import("@quarry/shared").DesktopCliToolsBridge;
   };
 }
 

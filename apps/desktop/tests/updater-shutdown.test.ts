@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cliToolsChannels } from '../src/cli-tools-channels.js';
 import { updaterChannels } from '../src/updater-channels.js';
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +10,8 @@ const mocks = vi.hoisted(() => ({
     on: vi.fn(), isPackaged: true, whenReady: vi.fn(), getVersion: vi.fn(), getPath: vi.fn(),
     quit: vi.fn(), exit: vi.fn(),
   },
-  browserWindow: vi.fn(), fromWebContents: vi.fn(), handle: vi.fn(),
+  browserWindow: vi.fn(), fromWebContents: vi.fn(), handle: vi.fn(), windowHandle: vi.fn(), showOpenDialog: vi.fn(),
+  mainFrame: {},
   download: vi.fn(), onUpdaterEvent: vi.fn(), check: vi.fn(), install: vi.fn(), stop: vi.fn(),
 }));
 
@@ -19,7 +21,7 @@ vi.mock('electron', () => ({
     getAllWindows: () => [],
     fromWebContents: mocks.fromWebContents,
   }),
-  dialog: { showErrorBox: vi.fn() },
+  dialog: { showErrorBox: vi.fn(), showOpenDialog: mocks.showOpenDialog },
   ipcMain: { handle: mocks.handle },
   Menu: { setApplicationMenu: vi.fn() },
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1040 } }) },
@@ -55,10 +57,39 @@ beforeEach(() => {
     return {
       loadFile: async () => undefined,
       once: vi.fn(),
-      webContents: { ipc: { handle: vi.fn(), on: vi.fn() }, setWindowOpenHandler: vi.fn(), on: vi.fn() },
+      webContents: {
+        mainFrame: mocks.mainFrame,
+        ipc: { handle: mocks.windowHandle, on: vi.fn() },
+        setWindowOpenHandler: vi.fn(),
+        on: vi.fn(),
+      },
     };
   });
   mocks.stop.mockImplementation(() => new Promise<void>((resolve) => { finishStop = resolve; }));
+});
+
+it('restricts CLI tool IPC to the main frame and installs using the native directory picker', async () => {
+  const skillDirectory = path.join(directory, 'skills', 'question-converter');
+  const custom = path.join(directory, 'custom');
+  mkdirSync(skillDirectory, { recursive: true });
+  mkdirSync(custom);
+  writeFileSync(path.join(skillDirectory, 'SKILL.md'), '# 题目转换');
+  mocks.showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [custom] });
+  await load();
+
+  const handler = (channel: string) => mocks.windowHandle.mock.calls.find(([name]) => name === channel)![1];
+  const getInfo = handler(cliToolsChannels.getInfo);
+  const installSkill = handler(cliToolsChannels.installSkill);
+  expect(() => getInfo({ senderFrame: {} })).toThrow('Untrusted desktop request');
+  expect(() => installSkill({ senderFrame: null }, 'custom')).toThrow('Untrusted desktop request');
+  expect(mocks.showOpenDialog).not.toHaveBeenCalled();
+
+  const event = { senderFrame: mocks.mainFrame };
+  await expect(getInfo(event)).resolves.toMatchObject({ cli: null, targets: expect.any(Array) });
+  const file = path.join(realpathSync(custom), 'question-converter', 'SKILL.md');
+  await expect(installSkill(event, 'custom')).resolves.toEqual({ status: 'installed', path: file });
+  expect(mocks.showOpenDialog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ properties: ['openDirectory'] }));
+  expect(readFileSync(file, 'utf8')).toBe('# 题目转换');
 });
 
 afterEach(() => {

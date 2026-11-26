@@ -54,7 +54,7 @@
 * **文件夹归档往返**：资料库可导出和导入文件夹 `.quarry` 归档。导入前校验归档校验和并预览数量，提交后在根目录创建新子树。
 * **带后悔药的备份回滚**：全量导出为包含完整数据库与附件的 `.quarry-backup` 容器；恢复备份前自动在本地保存还原点快照，发生异常自动回滚。
 * **两阶段安全回收站**：资料删除先进入回收站软删除，可随时完整还原，清空回收站才物理清除；学习与错题历史独立保留。
-* **Quarry CLI 与题目转换 Skill**支持用轻量 Markdown 题目 DSL 编写草稿，通过 `pnpm quarry validate` 和 `pnpm quarry convert` 生成合规导入文件。系统设置提供命令速查、可复制模板及 AI Skill 使用说明。
+* **Quarry CLI 与题目转换 Skill**支持用轻量 Markdown 题目 DSL 编写草稿，校验后生成合规导入文件。在系统设置开启「题目转换 CLI 与 AI Skill」后，可复制 Agent 提示词、查看命令速查及复制草稿模板。开关默认关闭。
 
 ### 6. 系统设置
 
@@ -121,6 +121,11 @@ pnpm build
 * 两个入口的 Vite 均绑定 `127.0.0.1`，从端口 5173 起尝试。终端会显示实际地址。
 
 ### 4. Quarry CLI 题目转换
+
+桌面版随包提供 `resources/cli/index.js` 和 `resources/skills/question-converter/SKILL.md`。开启设置中的转换工具后，可复制使用内置 CLI 的 Agent 提示词，并将 Skill 安装到 Claude Code、Codex、Gemini CLI、Antigravity 或自选目录。自选时请选择 Agent 的 Skills 父目录。安装会保留目标中已有的 Skill。内置 CLI 在 Windows PowerShell 中通过 `node` 调用，需要 Node.js 22.14 或更新版本。
+
+Web 版可以复制或下载 `SKILL.md`。从源码执行 CLI 时，先在仓库根目录运行 `pnpm install` 和 `pnpm build`，再使用以下命令。
+
 ```bash
 # 查看轻量 Markdown 题目 DSL 规范与示例
 pnpm quarry spec
