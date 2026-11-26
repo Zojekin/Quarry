@@ -86,7 +86,7 @@ it('restricts CLI tool IPC to the main frame and installs using the native direc
 
   const event = { senderFrame: mocks.mainFrame };
   await expect(getInfo(event)).resolves.toMatchObject({ cli: null, targets: expect.any(Array) });
-  const file = path.join(realpathSync(custom), 'question-converter', 'SKILL.md');
+  const file = path.join(realpathSync.native(custom), 'question-converter', 'SKILL.md');
   await expect(installSkill(event, 'custom')).resolves.toEqual({ status: 'installed', path: file });
   expect(mocks.showOpenDialog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ properties: ['openDirectory'] }));
   expect(readFileSync(file, 'utf8')).toBe('# 题目转换');
