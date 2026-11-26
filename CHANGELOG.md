@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Zojekin/Quarry/compare/0.4.0...0.5.0) (2026-11-26)
+
+
+### Features
+
+* **web,desktop:** resolve UI layout, custom themes, and CLI/Skill issues ([#33](https://github.com/Zojekin/Quarry/issues/33)-[#36](https://github.com/Zojekin/Quarry/issues/36)) ([#37](https://github.com/Zojekin/Quarry/issues/37)) ([a5f1f25](https://github.com/Zojekin/Quarry/commit/a5f1f25597bfc01002fefd758c1f8f83daaf3088))
+
 ## [0.4.0](https://github.com/Zojekin/Quarry/compare/0.3.0...0.4.0) (2026-11-26)
 
 
