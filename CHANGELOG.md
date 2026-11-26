@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/Zojekin/Quarry/compare/0.3.0...0.4.0) (2026-11-26)
+
+
+### Features
+
+* **desktop:** 优化 Windows 安装器，支持选择创建桌面与开始菜单快捷方式 ([#22](https://github.com/Zojekin/Quarry/issues/22)) ([6a8b9e9](https://github.com/Zojekin/Quarry/commit/6a8b9e969473a8a7b44233abe887cb013142d149))
+* **desktop:** 接入 electron-updater 自动静默下载与重启安装 ([#28](https://github.com/Zojekin/Quarry/issues/28)) ([a0b6ac0](https://github.com/Zojekin/Quarry/commit/a0b6ac0b9733de85422ce906ec3e064efa908bf4))
+* **desktop:** 支持应用内缩放并优化小视口布局 ([#32](https://github.com/Zojekin/Quarry/issues/32)) ([ebaa074](https://github.com/Zojekin/Quarry/commit/ebaa0742edfcbd704b6600ba116ec44b2209150d)), closes [#31](https://github.com/Zojekin/Quarry/issues/31)
+* **web:** rebuild renderer with shadcn/ui and unified desktop titlebar ([#26](https://github.com/Zojekin/Quarry/issues/26)) ([65122ac](https://github.com/Zojekin/Quarry/commit/65122ac7d26bc2cf31684c2082aaeea1cfb7c2da)), closes [#15](https://github.com/Zojekin/Quarry/issues/15)
+* **web:** 为柱状图标内部镂空填充暖米白背景 ([#27](https://github.com/Zojekin/Quarry/issues/27)) ([69ac7da](https://github.com/Zojekin/Quarry/commit/69ac7daa698916741f3c93a67b1389a61f57a6bc))
+* **web:** 优化 Obsidian 式标签体验并补全系统设置与 CLI 指南 ([#29](https://github.com/Zojekin/Quarry/issues/29)) ([87a901f](https://github.com/Zojekin/Quarry/commit/87a901f9490cb6b6716ad33362ec8ed71e045ee2))
+* **web:** 支持统一预设与自定义主题及日夜切换 ([#30](https://github.com/Zojekin/Quarry/issues/30)) ([59e5f57](https://github.com/Zojekin/Quarry/commit/59e5f577b1f7078723de4781fc00024353b22446))
+
+
+### Bug Fixes
+
+* **server:** 修复首小题作为材料父题时的组卷快照与乱序分组缺陷 ([#24](https://github.com/Zojekin/Quarry/issues/24)) ([7ce724a](https://github.com/Zojekin/Quarry/commit/7ce724a06828e76326dd9ff624aa8b4ac581c185))
+
 ## [0.3.0](https://github.com/Zojekin/Quarry/compare/0.2.1...0.3.0) (2026-11-24)
 
 

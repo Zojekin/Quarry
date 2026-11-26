@@ -1,6 +1,6 @@
 {
   "name": "@quarry/desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "main": "dist/runtime/main.js",
@@ -92,7 +92,9 @@
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
       "language": "2052",
-      "installerLanguages": ["zh_CN"]
+      "installerLanguages": [
+        "zh_CN"
+      ]
     },
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
