@@ -1,6 +1,6 @@
 # 题匣视觉系统
 
-本文件记录题匣正式前端（`apps/web`）采用 `shadcn/ui` + Tailwind CSS v4 重构后的现行视觉与交互规则。基础主题令牌、衬线体声明、`@theme inline` 映射与热力图/标题栏样式统一位于 `apps/web/src/index.css`；Markdown、KaTeX 与文件输入按钮适配位于 `apps/web/src/production.css`；`apps/web/src/components/ui/` 存放 shadcn/Radix 基础原语，`apps/web/src/components/ui.tsx` 导出业务高阶封装（`Modal`、`Facet`、`SearchField`、`Segmented`、`StatusPill`、`NavigationControls` 等）。
+本文件记录题匣正式前端（`apps/web`）采用 `shadcn/ui` + Tailwind CSS v4 重构后的现行视觉与交互规则。`apps/web/src/lib/themes.ts` 定义主题预设和动态令牌，`apps/web/src/index.css` 提供衬线体声明、`@theme inline` 映射与热力图、标题栏样式。Markdown、KaTeX 与文件输入按钮适配位于 `apps/web/src/production.css`。`apps/web/src/components/ui/` 存放 shadcn/Radix 基础原语，`apps/web/src/components/ui.tsx` 导出业务高阶封装（`Modal`、`Facet`、`SearchField`、`Segmented`、`StatusPill`、`NavigationControls` 等）。
 
 ## 字体与层级
 
@@ -10,15 +10,17 @@
 
 ## 颜色与三层表面系统
 
-- **三层表面**：侧栏与统一标题栏 `#f3f3ee`（`--sidebar`）→ 主工作画布纸白 `#fafaf7`（`--background`）→ 内容卡片 `#ffffff`（`--card`）。
+- **主题预设**：松绿纸韵（`pine-paper`）、青黛书墨（`indigo-ink`）、暖陶琥珀（`amber-clay`）与石板素灰（`slate-neutral`）各有日间和夜间色板。跟随系统实时响应 `prefers-color-scheme`。页面与原生表单控件均使用已解析模式。
+- **默认三层表面**：松绿纸韵日间的侧栏与统一标题栏为 `#f3f3ee`（`--sidebar`），主画布为 `#fafaf7`（`--background`），内容卡片为 `#ffffff`（`--card`）。
 - **核心强调色**：松绿 `--primary: #2d5c48` / `--primary-hover: #224737`；辅助 `#666e68`（`--muted-foreground`）；边框使用 `1px` 微透明墨色（`rgba(23, 27, 25, 0.09)`）。
 - **待判分选中态**：`--selection-bg: #f6efd9`、边框 `--selection-border: #d7c797`、前景色 `--selection-ink: #5a4b28`。
 - **正误与状态**：`--success-*`（`#e7f4ec` / `#1f663e`）、`--error-*`（`#fbeceb` / `#b23a31`）、`--info-*`、`--warning-*` 仅用于语义状态与锁定判分，不与标签分类混用。
-- **标签配色**由 `tagColorStyle` 根据自定义颜色计算前景色。标签颜色为空时统一使用 `#E4EADE` 背景。
+- **标签配色**由 `tagColorStyle` 根据标签自定义颜色计算高对比前景色。标签颜色为空时统一使用 `#E4EADE` 背景。
+- **派生令牌与对比度**：自定义主色、画布、侧栏和卡片覆盖预设种子色。主题计算按钮前景与悬停、强调色、边框、输入、焦点环、待判分选中态和学习热力图五阶色。设置显示正文、次要文字、主色文字及主按钮文字各项检测中的最低对比度。自动调整按 WCAG 4.5:1 修复当前模式下对比度不足的颜色。
 
 ## 触感工艺、外壳与关键布局
 
-- **统一无框窗口标题栏（`42px`）**：`apps/desktop` 移除原生菜单栏并开启 Windows `titleBarOverlay`（高 `42px`），前端 `.quarry-titlebar` 将应用标识、多标签页与 `Ctrl+K` 快速命令触发器融合于同一拖拽条。
+- **统一无框窗口标题栏（`42px`）**：`apps/desktop` 移除原生菜单栏并开启 Windows `titleBarOverlay`（高 `42px`），前端 `.quarry-titlebar` 将应用标识、多标签页、外观模式按钮与 `Ctrl+K` 快速命令触发器融合于同一拖拽条。Windows 原生窗口按钮跟随 `--sidebar`，图标按该表面的对比度选择主色或可读前景色。
 - **可折叠侧边栏**：展开 `224px` / 收起 `58px`（纯图标 + Radix `Tooltip`）；进入 `Study` 后原位切换为作答控制台（状态卡、5 列题号导航、`暂停`/`交卷`/`结束练习`/`退出答题`）。
 - **首页（`Home`）**：未完成会话以焦点横幅置顶于首屏；3 项 KPI 指标与 53×7 年度学习热力图收敛于同一复合卡片内，避免卡片嵌套；待续会话与待复习错题列于下方双栏。
 - **题库与套题（`Library`）**：Master-Detail 双栏布局（左侧列表/网格 + 右侧粘性概览 Inspector 卡），支持悬停显现行内图标操作与底部深色多选批量浮栏（导出/删除/取消）。

@@ -29,7 +29,7 @@ export function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-7 items-center justify-center rounded-md px-3 text-[12.5px] font-medium whitespace-nowrap transition-all outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_2px_rgba(23,27,25,0.06)]",
+        "inline-flex h-7 items-center justify-center rounded-md px-3 text-[12.5px] font-medium whitespace-nowrap transition-all outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_2px_rgba(var(--shadow-ink),0.06)]",
         className,
       )}
       {...props}

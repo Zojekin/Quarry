@@ -26,6 +26,7 @@ import {
   type WorkspaceTab,
 } from "./state.js";
 import { ViewContext } from "./components/ui.js";
+import { ThemeModeToggle } from "./components/ThemeModeToggle.js";
 import { Badge } from "./components/ui/badge.js";
 import { Button } from "./components/ui/button.js";
 import {
@@ -44,6 +45,7 @@ import {
 } from "./components/ui/tooltip.js";
 import { cn } from "./lib/utils.js";
 import { questionSizes, usePreferences } from "./lib/preferences.js";
+import { ThemeProvider } from "./lib/theme-context.js";
 import { Detail, Library } from "./pages/Library.js";
 import { Home, Mistakes, Records, Settings, Trash } from "./pages/Learning.js";
 import { Result, Study } from "./pages/Study.js";
@@ -96,6 +98,14 @@ const secondaryNav = [
 ] as const;
 
 export function App() {
+  return (
+    <ThemeProvider>
+      <Workspace />
+    </ThemeProvider>
+  );
+}
+
+function Workspace() {
   const preferences = usePreferences();
   const questionSize = questionSizes[preferences.questionSize];
   const initial = useRef(loadTabs());
@@ -298,8 +308,8 @@ export function App() {
           compact && "justify-center px-0",
           !compact && "max-[960px]:justify-center max-[960px]:px-0",
           activeItem
-            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_rgba(45,92,72,0.12)]"
-            : "text-sidebar-foreground/85 hover:bg-black/[0.045] hover:text-foreground",
+            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_12%,transparent)]"
+            : "text-sidebar-foreground/85 hover:bg-(--sidebar-hover) hover:text-foreground",
         )}
       >
         <IconComp
@@ -374,8 +384,8 @@ export function App() {
                   className={cn(
                     "group/tab inline-flex h-7.5 max-w-[200px] min-w-[96px] items-center rounded-md border text-[12.5px] transition-all",
                     isSelected
-                      ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.05)]"
-                      : "border-transparent bg-transparent text-muted-foreground hover:bg-black/[0.04] hover:text-foreground",
+                      ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.05)]"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-(--tab-hover) hover:text-foreground",
                   )}
                 >
                   <button
@@ -435,6 +445,7 @@ export function App() {
           </div>
 
           <div className="quarry-no-drag ml-auto flex shrink-0 items-center gap-1.5">
+            <ThemeModeToggle />
             <Button
               variant="outline"
               size="sm"

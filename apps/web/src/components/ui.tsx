@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { BookOpen, ChevronDown, Search, X } from "lucide-react";
 import { Icon, type IconName } from "./Icons.js";
 import { BackendError } from "../api/client.js";
+import { contrastInk } from "../lib/themes.js";
 import { cn } from "../lib/utils.js";
 import { Button } from "./ui/button.js";
 import { Badge } from "./ui/badge.js";
@@ -433,11 +434,6 @@ export function tagColorStyle(color: string | null): CSSProperties {
     .slice(1)
     .match(/../g)!
     .map((value) => parseInt(value, 16));
-  const [red, green, blue] = rgb.map((value) => {
-    const ratio = value / 255;
-    return ratio <= 0.04045 ? ratio / 12.92 : ((ratio + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
   const outline = rgb
     .map((value) =>
       Math.round(value * 0.65)
@@ -447,7 +443,7 @@ export function tagColorStyle(color: string | null): CSSProperties {
     .join("");
   return {
     "--tag-bg": background,
-    "--tag-ink": luminance > 0.179 ? "#253128" : "#FFFFFF",
+    "--tag-ink": contrastInk(background, "#253128").toUpperCase(),
     "--tag-outline": "#" + outline,
   } as CSSProperties;
 }
@@ -601,16 +597,16 @@ export function NavigationControls({
   );
 }
 
-export function Segmented({
+export function Segmented<Value extends string>({
   label,
   options,
   value,
   onChange,
 }: {
   label: string;
-  options: readonly (readonly [string, string])[];
-  value: string;
-  onChange: (value: string) => void;
+  options: readonly (readonly [Value, string])[];
+  value: Value;
+  onChange: (value: Value) => void;
 }) {
   return (
     <div
@@ -627,7 +623,7 @@ export function Segmented({
           className={cn(
             "inline-flex h-7 items-center justify-center rounded-md px-3 text-[12.5px] font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/35",
             key === value
-              ? "bg-card text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.06)]"
+              ? "bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.06)]"
               : "text-muted-foreground hover:text-foreground",
           )}
         >

@@ -86,7 +86,7 @@ export function TagInput({
               type="button"
               aria-label={`移除 ${tag.name}`}
               disabled={disabled}
-              className="grid size-5 shrink-0 place-items-center rounded-full text-sm hover:bg-black/10 focus-visible:outline-2"
+              className="grid size-5 shrink-0 place-items-center rounded-full text-sm hover:bg-current/10 focus-visible:outline-2"
               onClick={() => {
                 onChange(value.filter((_, position) => position !== index));
                 setActive(-1);
@@ -128,7 +128,7 @@ export function TagInput({
           id={listId}
           role="listbox"
           aria-label={`${label}建议`}
-          className="absolute inset-x-0 z-10 max-h-36 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md"
+          className="absolute inset-x-0 z-10 max-h-36 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
         >
           {matches.map((tag, index) => (
             <li

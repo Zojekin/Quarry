@@ -10,7 +10,7 @@ export function Card({
     <Component
       data-slot="card"
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground shadow-[0_1px_3px_rgba(23,27,25,0.04)]",
+        "rounded-xl border border-border bg-card text-card-foreground shadow-[0_1px_3px_rgba(var(--shadow-ink),0.04)]",
         className,
       )}
       {...props}

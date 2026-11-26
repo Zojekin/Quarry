@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startLocalBackend, type LocalBackend } from './backend-manager.js';
+import { isTitleBarColors, titleBarOverlayChannel } from './titlebar-overlay.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 let backend: LocalBackend | undefined;
@@ -19,6 +20,7 @@ async function createWindow(): Promise<void> {
     icon: iconPath,
     autoHideMenuBar: true,
     ...(process.platform === 'win32' ? {
+      show: false,
       titleBarStyle: 'hidden',
       titleBarOverlay: { color: '#f3f3ee', symbolColor: '#2d5c48', height: 42 },
     } : {}),
@@ -28,6 +30,15 @@ async function createWindow(): Promise<void> {
       additionalArguments: [`--quarry-api-url=${backend.url}`],
     },
   });
+  if (process.platform === 'win32') {
+    window.webContents.ipc.on(titleBarOverlayChannel, (event, colors: unknown) => {
+      if (window.isDestroyed() || event.senderFrame !== window.webContents.mainFrame ||
+          !isTitleBarColors(colors)) return;
+      const { color, symbolColor } = colors;
+      window.setTitleBarOverlay({ color, symbolColor, height: 42 });
+    });
+    window.once('ready-to-show', () => window.show());
+  }
   window.webContents.setWindowOpenHandler(({ url }) => {
     const target = URL.parse(url);
     if (target && ['http:', 'https:', 'mailto:'].includes(target.protocol)) {

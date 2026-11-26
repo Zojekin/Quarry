@@ -163,10 +163,10 @@ export function Answer({
                   "flex w-full items-start gap-3.5 rounded-lg border px-4 py-3 text-left text-[15px] leading-relaxed transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
                   !locked &&
                     !chosen &&
-                    "border-border bg-card hover:border-black/15 hover:bg-muted/45",
+                    "border-border bg-card hover:border-control-edge/15 hover:bg-muted/45",
                   !reveal &&
                     chosen &&
-                    "chosen border-[var(--selection-border)] bg-[var(--selection-bg)] text-[var(--selection-ink)] shadow-[0_1px_2px_rgba(90,75,40,0.08)]",
+                    "chosen border-[var(--selection-border)] bg-[var(--selection-bg)] text-[var(--selection-ink)] shadow-[0_1px_2px_color-mix(in_srgb,var(--selection-ink)_8%,transparent)]",
                   right &&
                     "answer-correct border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-fg)]",
                   missed &&
@@ -211,7 +211,7 @@ export function Answer({
         </div>
 
         {reveal && q.explanation && (
-          <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="rounded-lg bg-(--answer-bg) px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <span className="font-semibold text-foreground/85">解析：</span>
             <Markdown text={q.explanation} />
           </div>
@@ -243,7 +243,7 @@ export function Answer({
           </label>
         ))}
         {reveal && q.explanation && (
-          <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="rounded-lg bg-(--answer-bg) px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
             <span className="font-semibold text-foreground/85">解析：</span>
             <Markdown text={q.explanation} />
           </div>
@@ -281,7 +281,7 @@ export function Answer({
         )}
       </label>
       {reveal && q.explanation && (
-        <div className="rounded-lg bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
+        <div className="rounded-lg bg-(--answer-bg) px-4 py-3 text-[13.5px] leading-relaxed text-muted-foreground">
           <span className="font-semibold text-foreground/85">解析：</span>
           <Markdown text={q.explanation} />
         </div>
@@ -1077,7 +1077,7 @@ export function Study({
 
     onRail(
       <div className="space-y-5 px-0.5 text-[13px]">
-        <div className="space-y-2 rounded-lg bg-card/85 p-3 shadow-[0_1px_2px_rgba(23,27,25,0.04)]">
+        <div className="space-y-2 rounded-lg bg-card/85 p-3 shadow-[0_1px_2px_rgba(var(--shadow-ink),0.04)]">
           <div className="flex items-center justify-between gap-2">
             <Badge variant={session.mode === "exam" ? "warning" : "info"}>
               {session.mode === "exam" ? "考试模式" : "练习模式"}
@@ -1294,7 +1294,7 @@ export function Study({
             />
 
             {currentCheck && (
-              <div className="space-y-2 rounded-xl bg-[#f3f5ef] px-4 py-3 text-[13.5px] leading-relaxed">
+              <div className="space-y-2 rounded-xl bg-(--answer-bg) px-4 py-3 text-[13.5px] leading-relaxed">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <StatusPill
                     state={
@@ -1564,7 +1564,7 @@ export function Result({
                       onChange={() => {}}
                     />
                   )}
-                  <details className="mt-3 rounded-lg bg-[#f3f5ef] px-3.5 py-2.5 text-[13px]">
+                  <details className="mt-3 rounded-lg bg-(--answer-bg) px-3.5 py-2.5 text-[13px]">
                     <summary className="font-medium text-primary">
                       {r ? "参考答案" : "答案与解析"}
                     </summary>

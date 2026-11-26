@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 import { Facet, tagColorStyle } from "../src/components/ui.js";
+import { contrastRatio } from "../src/lib/themes.js";
 import { Answer, emptyAnswer } from "../src/pages/Study.js";
 import { closeTab, navigateTab, newTab, formatTime } from "../src/state.js";
 import type { QuestionView } from "../src/api/client.js";
@@ -82,6 +83,10 @@ describe("Workspace and study interactions", () => {
       "--tag-bg": "#386450", "--tag-ink": "#FFFFFF", "--tag-outline": "#244134",
     });
     expect(tagColorStyle(null)).toMatchObject({ "--tag-bg": "#E4EADE", "--tag-ink": "#253128" });
+  });
+  it("keeps tag text readable on colors near the black/white threshold", () => {
+    const style = tagColorStyle("#777777", "Midtone");
+    expect(contrastRatio(Reflect.get(style, "--tag-ink"), "#777777")).toBeGreaterThanOrEqual(4.5);
   });
   it("keeps a multi-select menu mounted and distinguishes all from none", async () => {
     function Example() {

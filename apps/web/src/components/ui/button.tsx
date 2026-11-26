@@ -9,17 +9,17 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(23,27,25,0.12),inset_0_1px_0_rgba(255,255,255,0.18)] hover:bg-primary-hover hover:border-primary-hover",
+          "border-primary bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.12),inset_0_1px_0_var(--primary-highlight)] hover:bg-primary-hover hover:border-primary-hover",
         outline:
-          "border-input bg-card text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:bg-muted/70 hover:border-black/20",
+          "border-input bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.04),inset_0_1px_0_var(--control-highlight)] hover:bg-muted/70 hover:border-control-edge/20",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
           "border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-accent/70 hover:text-foreground",
         destructive:
-          "border-destructive bg-destructive text-destructive-foreground shadow-[0_1px_2px_rgba(23,27,25,0.12),inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-destructive/90",
+          "border-destructive bg-destructive text-destructive-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.12),inset_0_1px_0_var(--destructive-highlight)] hover:bg-destructive/90",
         destructiveGhost:
-          "border-transparent bg-transparent text-destructive shadow-none hover:bg-[#fbeceb]",
+          "border-transparent bg-transparent text-destructive shadow-none hover:bg-(--error-bg)",
       },
       size: {
         default: "h-9 px-3.5",

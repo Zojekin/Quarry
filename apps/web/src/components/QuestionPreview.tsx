@@ -41,7 +41,7 @@ export function QuestionPreview({
         </div>
       )}
       {reveal && (
-        <div className="space-y-2 rounded-lg bg-[#f3f5ef] px-3.5 py-3 text-[13px] leading-relaxed">
+        <div className="space-y-2 rounded-lg bg-(--answer-bg) px-3.5 py-3 text-[13px] leading-relaxed">
           <div>
             <div className="font-semibold text-primary">参考答案</div>
             <div className="mt-0.5 text-foreground/90">

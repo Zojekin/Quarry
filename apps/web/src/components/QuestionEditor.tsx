@@ -185,7 +185,7 @@ export function QuestionEditor({
         )}
 
         <div>
-          <label className="file-input-button inline-flex h-8.5 items-center gap-2 rounded-md border border-input bg-card px-3 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.04)] hover:bg-muted/70">
+          <label className="file-input-button inline-flex h-8.5 items-center gap-2 rounded-md border border-input bg-card px-3 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.04)] hover:bg-muted/70">
             <ImagePlus className="size-4 text-muted-foreground" />
             <span>插入图片附件</span>
             <input

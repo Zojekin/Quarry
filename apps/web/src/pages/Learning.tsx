@@ -9,6 +9,7 @@ import { CliGuideCard } from "../components/CliGuideCard.js";
 import { DiagnosticsCard } from "../components/DiagnosticsCard.js";
 import { PreferencesSettingsCard } from "../components/PreferencesSettingsCard.js";
 import { TagManagerCard } from "../components/TagManagerCard.js";
+import { ThemeSettingsCard } from "../components/ThemeSettingsCard.js";
 import {
   Button,
   EmptyState,
@@ -938,7 +939,10 @@ export function Settings() {
       </div>
 
       <Notice error={message} loading={false} />
+      <ThemeSettingsCard />
       <TagManagerCard key={restoreRevision} />
+      <PreferencesSettingsCard />
+      <DiagnosticsCard />
 
       {/* Backup & About Card */}
       <Card>
@@ -1006,9 +1010,7 @@ export function Settings() {
           </label>
         </CardContent>
       </Card>
-      <PreferencesSettingsCard />
       <CliGuideCard />
-      <DiagnosticsCard />
       {confirm.dialog}
     </div>
   );
