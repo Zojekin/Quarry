@@ -66,5 +66,39 @@ test('restores dark mode before the app mounts and syncs the Windows caption col
     mode: 'dark', appRootExists: false,
   });
   await expect(page.getByRole('heading', { name: '学习概览' })).toBeVisible();
+
+  const sidebar = page.getByRole('complementary', { name: '主导航' });
+  await sidebar.getByRole('button', { name: '系统设置' }).click();
+  const darkCard = 'rgb(32, 44, 37)';
+  for (const name of ['外观与主题', '标签管理', '显示与操作', '题目转换 CLI 与 AI Skill']) {
+    const card = page.locator('[data-slot="card"]').filter({
+      has: page.getByRole('heading', { name, exact: true }),
+    });
+    await expect(card).toHaveCSS('background-color', darkCard);
+  }
+
+  const bank = '夜间题库';
+  await api(page, 'banks', { name: bank });
+  await api(page, 'tags', { name: '文件分类', target_type: 'file' });
+  await api(page, 'tags', { name: '题目分类', target_type: 'question' });
+  await sidebar.getByRole('button', { name: '题库与套题' }).click();
+  await page.getByRole('button', { name: '新建', exact: true }).click();
+  await page.getByRole('menuitem', { name: '新建题库' }).click();
+
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('combobox', { name: '文件标签' }).fill('文件分类');
+  const fileOptions = dialog.getByRole('listbox', { name: '文件标签建议' });
+  await expect(fileOptions).toHaveCSS('background-color', darkCard);
+  await fileOptions.getByRole('option', { name: '文件分类' }).click();
+  await expect(dialog.getByRole('button', { name: '移除 文件分类' })).toBeVisible();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+
+  await page.getByRole('button', { name: bank, exact: true }).click();
+  await page.getByRole('button', { name: '新建题目' }).click();
+  await dialog.getByRole('combobox', { name: '题目标签' }).fill('题目分类');
+  const questionOptions = dialog.getByRole('listbox', { name: '题目标签建议' });
+  await expect(questionOptions).toHaveCSS('background-color', darkCard);
+  await questionOptions.getByRole('option', { name: '题目分类' }).click();
+  await expect(dialog.getByRole('button', { name: '移除 题目分类' })).toBeVisible();
   await assertPageHealthy(page);
 });

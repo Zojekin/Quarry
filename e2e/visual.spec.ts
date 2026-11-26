@@ -151,7 +151,8 @@ for (const layout of layouts) {
 
     await nav(page, '系统设置').click();
     await page.getByRole('tab', { name: '题目标签' }).click();
-    await expect(page.getByLabel('岩石分类颜色')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '外观与主题' })).toBeInViewport();
+    await expect(page.getByLabel('岩石分类颜色')).toBeInViewport();
     await capture('settings');
 
     await nav(page, '回收站').click();

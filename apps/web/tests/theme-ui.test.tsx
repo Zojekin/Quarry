@@ -92,9 +92,10 @@ it("refreshes the theme when another renderer changes the stored configuration",
 });
 
 it("shares theme state between Settings and the titlebar, previews overrides, fixes contrast and resets", async () => {
-  vi.spyOn(client.tags, "list").mockResolvedValue([]);
+  vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([]);
+  vi.spyOn(client, "health").mockResolvedValue({ status: "ok", database: "connected", version: "0.3.0", timestamp: 0 });
   const { unmount } = render(<ThemeProvider><ThemeModeToggle /><Settings /></ThemeProvider>);
-  await screen.findByText("当前分类下还没有标签。");
+  await screen.findByText("此分类暂无标签。");
   const settings = within(screen.getByRole("region", { name: "外观与主题" }));
   const preset = settings.getByRole("button", { name: "暖陶琥珀" });
   fireEvent.click(preset);
@@ -119,7 +120,7 @@ it("shares theme state between Settings and the titlebar, previews overrides, fi
 
   unmount();
   render(<ThemeProvider><Settings /></ThemeProvider>);
-  await screen.findByText("当前分类下还没有标签。");
+  await screen.findByText("此分类暂无标签。");
   expect(root.style.getPropertyValue("--primary")).toBe(savedTheme().custom.primary);
   fireEvent.click(screen.getByRole("button", { name: "恢复默认主题" }));
   expect(savedTheme()).toEqual(defaultThemeConfig);
