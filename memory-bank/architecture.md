@@ -127,11 +127,11 @@
   1. 宿主注入的 `window.__QUARRY_API_URL__`
   2. 构建/环境变量 `VITE_API_URL`
   3. 回退默认值 `http://127.0.0.1:48123`
-- **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史，整合于 `42px` 一体化标题栏并支持 `Ctrl+K` 快速命令跳转；一级栏目为首页（学习概览）、题库与套题、错题本、练习记录，另含回收站与系统设置。
-- **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。
+- **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史。无边框侧栏贯通品牌区与导航区。标签栏以 `42px` 为基准高度，对齐主内容，留白可拖动窗口并为 Windows 原生按钮预留空间。支持 `Ctrl+K` 快速命令跳转。一级栏目为首页（学习概览）、资料库、错题本和练习记录，另含回收站与系统设置。资料库在视口达到 `1340px` 时显示粘性右侧文件概览，低于该宽度时只显示列表或网格。
+- **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。`cliEnabled` 默认为关闭，开启后才显示 CLI 与 Skill 控件。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
-- **主题启动与持久化**：`lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`，解析预设、模式与四项可选覆盖色并生成语义令牌。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
+- **主题启动与持久化**：无依赖的 `lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`。配置记录预设、外观模式、自定义主题列表和选中的主题 ID。每个命名主题保留基础预设与日间、夜间各四项可选覆盖色。旧版单组覆盖色解析为同时适用于日间和夜间的已选命名主题。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将活动主题令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---
@@ -139,11 +139,12 @@
 ## 7. Electron 桌面宿主与 Windows 打包 (`apps/desktop`)
 
 - **后端托管 (`src/backend-manager.ts`)**：主进程在 `127.0.0.1` 上通过操作系统分配的随机可用端口拉起同进程 Hono 服务，轮询 `/api/health` 就绪后打开主窗口；数据目录位于 Electron `userData`（`quarry.sqlite`、`attachments/`、`recovery-points/`）。退出时先排空 HTTP 请求再销毁 SQLite（最长等待 5 秒），支持启动失败清理与幂等多次关闭。
-- **安全边界 (`src/main.ts` & `src/preload.ts`)**：开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，在可选的 `window.__QUARRY_DESKTOP__` 接口提供标题栏配色、`updater` 和 `zoom`。主进程仅接受应用窗口主帧的对应请求，业务通信经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
+- **安全边界 (`src/main.ts` & `src/preload.ts`)**：开启 `sandbox` 与 `contextIsolation`、禁用 `nodeIntegration`，禁止新建窗口与 renderer 页面跳转。`preload.cjs` 暴露经校验的只读 `window.__QUARRY_API_URL__`，在可选的 `window.__QUARRY_DESKTOP__` 接口提供标题栏配色、`updater`、`zoom` 和 `cliTools`。主进程仅接受应用窗口主帧的对应请求，业务通信经 `BackendClient`。桌面端 CORS 额外允许 `loadFile` 产生的不透明 `null` origin。
 - **窗口与界面缩放 (`src/main.ts` & `src/zoom.ts`)**：窗口初始 `1440×900`、最小 `900×600`，两者分别按主屏可用工作区的逻辑尺寸限幅。主进程通过 `webContents.setZoomFactor` 应用快捷键或设置选择的倍率，并保存于 `userData/zoom.json`。预加载通过 `packages/shared/src/desktop-zoom.ts` 的类型读取、设置及订阅倍率。Windows 原生标题栏以 42 为基准随应用倍率改变高度，前端通过 `env(titlebar-area-height, 42px)` 对齐标题栏和侧栏。独立 Web 版沿用浏览器缩放。
 - **版本更新 (`src/updater.ts`)**：带更新源配置的 Windows 发布构建启动 5 秒后默认检查公开的 `Zojekin/Quarry` GitHub Releases，`userData/updater-settings.json` 保存自动检查和下载偏好。`electron-updater` 后台下载完整 NSIS 安装包并校验 `latest.yml` 的 SHA-512。当前构建为无签名发布，关闭 Authenticode 发布者匹配。安装器在本地 HTTP 服务与 SQLite 关闭后启动，支持手动重启和正常退出时安装。纯 Web 设置页手动查询 GitHub Releases API 并显示下载链接。
 - **运行时打包与 N-API 原生绑定**：
   - `scripts/before-pack.cjs` 调用 `scripts/bundle.mjs`，通过 `esbuild` 生成包含 `electron-updater` 的 `dist/runtime/main.js`（ESM）与 `dist/runtime/preload.cjs`（CJS）。
+  - 同一脚本构建独立 CLI 产物 `packages/cli/dist/index.js`，开发时直接使用该产物与仓库中的 Skill。Electron Builder 通过 `extraResources` 将 CLI 和完整 Skill 目录分别部署至 `resources/cli/` 和 `resources/skills/question-converter/`。CLI 目录中的 `package.json` 声明 ESM，安装路径不会影响 Node.js 对 `index.js` 的模块解析。
   - `better-sqlite3` v13 随包提供 N-API 预编译二进制，Node.js 与 Electron 共用原生绑定。pnpm 跳过该依赖的原生构建脚本，electron-builder 以 `npmRebuild: false` 保留预编译绑定，并通过 `asarUnpack` 将依赖部署到 `app.asar.unpacked`。
 - **应用图标**：`resources/icon.png`（1024×1024）与 `resources/icon.ico`（16–256 px 多尺寸）沿用 Web 图标的暖米白填充和透明外部，分别供桌面窗口和 Windows 打包使用。
 - **Windows x64 发布产物**（位于 `apps/desktop/release/`，桌面展示名与快捷方式为“题匣”，产物文件名为英文 `Quarry`）：
@@ -161,6 +162,7 @@
   - `quarry validate <file>`：校验 `.md` 或 `.json` 草稿并输出错误行号/字段或统计摘要；
   - `quarry convert <file> -o <output> [--format json|md]`：输出可直接导入题匣的标准化 JSON 或 `# Quarry` Markdown 文件。
 - `skills/question-converter/SKILL.md` 为 AI Agent 提供将各类原始文本/文档规范转换为题匣可导入题库的操作指南。
+- 开启设置开关后，桌面端通过共享类型 `DesktopCliToolsBridge` 读取本地 CLI 调用方式并安装 Skill。主进程仅接受预设标识或通过原生目录选择器获取自选父目录，先暂存完整 Skill 再发布到 `question-converter` 子目录，遇到已有安装时保留原目录。浏览器端通过 Vite 读取同一份 `SKILL.md` 以供复制和下载，提示词使用源码仓库的 `pnpm quarry`。
 
 ## 9. 实时开发与桌面测试
 

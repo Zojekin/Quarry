@@ -302,7 +302,7 @@ export function Library({
           <Breadcrumb
             items={[
               {
-                label: "题库与套题",
+                label: "资料库",
                 ...(folder ? { onClick: () => navigate({ page: "library" }) } : {}),
               },
               ...trail.map((item, idx) => ({
@@ -372,7 +372,7 @@ export function Library({
 
       <div>
         <h1 className="m-0 font-serif text-[26px] font-semibold tracking-[-0.02em] text-foreground">
-          {trail.at(-1)?.name ?? "题库与套题"}
+          {trail.at(-1)?.name ?? "资料库"}
         </h1>
       </div>
 
@@ -626,7 +626,7 @@ export function Library({
 
           {/* Right Inspector Panel */}
           {inspected && (
-            <Card as="aside" aria-label="文件概览" className="min-[1340px]:sticky min-[1340px]:top-[calc(var(--titlebar-height)+22px)]">
+            <Card as="aside" aria-label="文件概览" className="hidden min-[1340px]:block min-[1340px]:sticky min-[1340px]:top-[calc(var(--titlebar-height)+22px)]">
               <CardHeader className="pb-3">
                 <div className="space-y-1.5">
                   <Badge variant="info">{kindNames[inspected.kind]}</Badge>
@@ -905,7 +905,7 @@ export function Detail({
           <Breadcrumb
             items={[
               {
-                label: "题库与套题",
+                label: "资料库",
                 onClick: () => navigate({ page: "library" }),
               },
               ...(parentFolder
@@ -1079,7 +1079,6 @@ export function Detail({
                 label="搜索题目"
                 value={search}
                 onChange={setSearch}
-                placeholder="搜索题干或解析"
                 className="min-w-[200px] flex-1 sm:max-w-[280px]"
               />
               {bank && (

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { DesktopUpdaterBridge, DesktopUpdateState, DesktopZoomBridge, DesktopZoomLevel } from '@quarry/shared';
+import type { DesktopCliToolsBridge, DesktopUpdaterBridge, DesktopUpdateState, DesktopZoomBridge, DesktopZoomLevel } from '@quarry/shared';
+import { cliToolsChannels } from './cli-tools-channels.js';
 import { isTitleBarColors, titleBarOverlayChannel, type TitleBarColors } from './titlebar-overlay.js';
 import { updaterChannels } from './updater-channels.js';
 import { zoomChannels } from './zoom-channels.js';
@@ -34,12 +35,18 @@ const zoom: DesktopZoomBridge = {
   },
 };
 
+const cliTools: DesktopCliToolsBridge = {
+  getInfo: () => ipcRenderer.invoke(cliToolsChannels.getInfo),
+  installSkill: target => ipcRenderer.invoke(cliToolsChannels.installSkill, target),
+};
+
 // Publish the preload-owned namespace once so contextBridge freezes the complete API.
 const desktop = globalThis as typeof globalThis & { __QUARRY_DESKTOP__?: Record<string, unknown> };
 contextBridge.exposeInMainWorld('__QUARRY_DESKTOP__', {
   ...desktop.__QUARRY_DESKTOP__,
   updater,
   zoom,
+  cliTools,
   setTitleBarOverlay(colors: TitleBarColors) {
     if (isTitleBarColors(colors)) {
       const { color, symbolColor } = colors;

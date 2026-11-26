@@ -71,8 +71,8 @@ for (const { width, height, level } of [
         const area = overlay.getTitlebarAreaRect();
         const bar = document.querySelector('.quarry-titlebar')!;
         const tabs = bar.querySelector('[role="tablist"]')!;
-        const controlsFit = [...bar.children].every(child => {
-          const bounds = child.getBoundingClientRect();
+        const controlsFit = [...bar.querySelectorAll('button, [role="tablist"]')].every(control => {
+          const bounds = control.getBoundingClientRect();
           return bounds.left >= area.left - 1 && bounds.right <= area.right + 1 &&
             bounds.top >= area.top - 1 && bounds.bottom <= area.bottom + 1;
         });
@@ -98,8 +98,8 @@ for (const { width, height, level } of [
 
     await page.keyboard.press('Control+k');
     const command = page.getByRole('dialog', { name: '快速命令' });
-    await command.getByPlaceholder('搜索视图、题库或套题…').fill('题库与套题');
-    await command.getByRole('option', { name: '题库与套题' }).click();
+    await command.getByPlaceholder('搜索视图、题库或套题…').fill('资料库');
+    await command.getByRole('option', { name: '资料库' }).click();
     const table = page.getByRole('table', { name: '文件列表' });
     await expect(table).toBeVisible();
     await assertPageHealthy(page);

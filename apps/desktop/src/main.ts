@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { NsisUpdater } from 'electron-updater';
 import { isDesktopZoomLevel, type DesktopZoomLevel } from '@quarry/shared';
 import { startLocalBackend, type LocalBackend } from './backend-manager.js';
+import { cliToolsPaths, createCliTools } from './cli-tools.js';
+import { cliToolsChannels } from './cli-tools-channels.js';
 import { isTitleBarColors, titleBarOverlayChannel, type TitleBarColors } from './titlebar-overlay.js';
 import { createUpdater } from './updater.js';
 import { updaterChannels } from './updater-channels.js';
@@ -71,7 +73,7 @@ async function createWindow(): Promise<void> {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const userData = app.getPath('userData');
   let zoomLevel = loadZoom(userData);
-  let titleBarColors: TitleBarColors = { color: '#f3f3ee', symbolColor: '#2d5c48' };
+  let titleBarColors: TitleBarColors = { color: '#fafaf7', symbolColor: '#2d5c48' };
   // Scale the native caption with the renderer so its CSS height stays close to 42px.
   const overlayOptions = () => ({ ...titleBarColors, height: Math.round(titleBarHeight * zoomLevel / 100) });
   const iconPath = app.isPackaged
@@ -104,8 +106,28 @@ async function createWindow(): Promise<void> {
     contents.send(zoomChannels.levelChange, level);
   }
   function requireMainFrame(event: IpcMainInvokeEvent) {
-    if (!event.senderFrame || event.senderFrame !== contents.mainFrame) throw new Error('Untrusted zoom request');
+    if (!event.senderFrame || event.senderFrame !== contents.mainFrame) throw new Error('Untrusted desktop request');
   }
+  const cliTools = createCliTools({
+    ...cliToolsPaths(directory, app.isPackaged ? process.resourcesPath : undefined),
+    home: app.getPath('home'),
+    platform: process.platform,
+    async pickDirectory() {
+      const selection = await dialog.showOpenDialog(window, {
+        title: '选择 Agent 的 Skills 目录',
+        properties: ['openDirectory'],
+      });
+      return selection.canceled ? undefined : selection.filePaths[0];
+    },
+  });
+  contents.ipc.handle(cliToolsChannels.getInfo, event => {
+    requireMainFrame(event);
+    return cliTools.getInfo();
+  });
+  contents.ipc.handle(cliToolsChannels.installSkill, (event, target: unknown) => {
+    requireMainFrame(event);
+    return cliTools.installSkill(target);
+  });
   contents.ipc.handle(zoomChannels.getLevel, event => {
     requireMainFrame(event);
     return zoomLevel;

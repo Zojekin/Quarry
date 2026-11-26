@@ -5,6 +5,7 @@ import { buildSync } from 'esbuild';
 
 export function bundle(outfile) {
   buildSync({
+    absWorkingDir: fileURLToPath(new URL('.', import.meta.url)),
     entryPoints: ['src/index.ts'],
     bundle: true,
     platform: 'node',
@@ -12,7 +13,7 @@ export function bundle(outfile) {
     format: 'esm',
     target: 'node22',
     banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
-    outfile,
+    outfile: resolve(outfile),
   });
   chmodSync(outfile, 0o755);
 }

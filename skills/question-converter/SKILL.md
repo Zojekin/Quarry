@@ -61,7 +61,7 @@ tags: [示例, 数学]
 ## 本地生成与校验
 
 1. 把原始题目整理为 `draft.md`，保留题干、正确选项、答案、解析和 LaTeX。对原文缺失的答案先向用户确认。
-2. 在 Quarry 仓库执行 `pnpm install` 和 `pnpm build`。使用 `pnpm quarry spec` 查阅语法。
+2. 如果用户提供了桌面版提示词，用其中的 `node '<CLI 路径>'` 替换下列命令里的 `pnpm quarry`，并使用 Node.js 22.14 或更新版本。否则在 Quarry 仓库执行 `pnpm install` 和 `pnpm build`。运行 `pnpm quarry spec`（或对应的桌面命令）查阅语法。
 3. 执行 `pnpm quarry validate draft.md`。按报错行号、题型与字段路径修正草稿，然后重新运行校验，直到退出码为 0。
 4. 核对题型统计和材料小题数，再执行 `pnpm quarry convert draft.md -o questions.json`。需要 Markdown 导入文件时，使用 `pnpm quarry convert draft.md -o questions.md --format md`。
 5. 校验生成的导入文件。CLI 也支持已有的 ContentDocument JSON 和带 `# Quarry` 标题的导入 Markdown，以及缺少生成字段和默认配置的 JSON 草稿。

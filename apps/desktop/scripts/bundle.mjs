@@ -1,7 +1,10 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
+import { bundle as bundleCli } from '../../../packages/cli/build.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+bundleCli(fileURLToPath(new URL('../../../packages/cli/dist/index.js', import.meta.url)));
+
 // Bundle workspace TS and electron-updater. Only Electron and the native SQLite binding stay external.
 await build({
   absWorkingDir: root,

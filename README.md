@@ -54,11 +54,11 @@
 * **文件夹归档往返**：资料库可导出和导入文件夹 `.quarry` 归档。导入前校验归档校验和并预览数量，提交后在根目录创建新子树。
 * **带后悔药的备份回滚**：全量导出为包含完整数据库与附件的 `.quarry-backup` 容器；恢复备份前自动在本地保存还原点快照，发生异常自动回滚。
 * **两阶段安全回收站**：资料删除先进入回收站软删除，可随时完整还原，清空回收站才物理清除；学习与错题历史独立保留。
-* **Quarry CLI 与题目转换 Skill**支持用轻量 Markdown 题目 DSL 编写草稿，通过 `pnpm quarry validate` 和 `pnpm quarry convert` 生成合规导入文件。系统设置提供命令速查、可复制模板及 AI Skill 使用说明。
+* **Quarry CLI 与题目转换 Skill**支持用轻量 Markdown 题目 DSL 编写草稿，校验后生成合规导入文件。在系统设置开启「题目转换 CLI 与 AI Skill」后，可复制 Agent 提示词、查看命令速查及复制草稿模板。开关默认关闭。
 
 ### 6. 系统设置
 
-* **外观与主题**提供松绿纸韵、青黛书墨、暖陶琥珀和石板素灰四套预设，默认为松绿纸韵日间模式。标题栏可在日间、夜间和跟随系统之间切换。主色、画布、侧栏和卡片颜色支持自定义、即时预览与本地保存。文字对比度低于 WCAG AA 4.5:1 时可一键调整，也可恢复默认主题。
+* **外观与主题**提供松绿纸韵、青黛书墨、暖陶琥珀和石板素灰四套预设，默认为松绿纸韵日间模式。标题栏可在日间、夜间和跟随系统之间切换。可在设置中创建、编辑和删除多个命名主题，在对话框中分别预览、调整日间和夜间的主色、画布、侧栏与卡片颜色。对话框检查 WCAG AA 4.5:1 文字对比度并提供自动调整。保存后立即应用，恢复默认时保留已保存的主题。
 * **标签管理**支持新增、改名、自定义颜色、恢复系统默认色，以及查看用量并确认删除。资料库和错题本等页面的筛选菜单支持搜索、全选和清空。
 * **显示与操作**支持调整题目字号、手动交卷确认、答题快捷键提示、启动时是否收起侧边栏，以及资料库默认视图。桌面版可将界面缩放设为 75% 至 150%，也可按 `Ctrl+=` 或 `Ctrl++` 放大、`Ctrl+-` 缩小、`Ctrl+0` 还原到 100%。应用会记住缩放倍率，网页版使用浏览器的缩放功能。
 * **运行诊断与存储**可检查本地服务和数据库状态。系统设置也提供完整备份与恢复入口。
@@ -121,6 +121,11 @@ pnpm build
 * 两个入口的 Vite 均绑定 `127.0.0.1`，从端口 5173 起尝试。终端会显示实际地址。
 
 ### 4. Quarry CLI 题目转换
+
+桌面版随包提供 `resources/cli/index.js` 和 `resources/skills/question-converter/SKILL.md`。开启设置中的转换工具后，可复制使用内置 CLI 的 Agent 提示词，并将 Skill 安装到 Claude Code、Codex、Gemini CLI、Antigravity 或自选目录。自选时请选择 Agent 的 Skills 父目录。安装会保留目标中已有的 Skill。内置 CLI 在 Windows PowerShell 中通过 `node` 调用，需要 Node.js 22.14 或更新版本。
+
+Web 版可以复制或下载 `SKILL.md`。从源码执行 CLI 时，先在仓库根目录运行 `pnpm install` 和 `pnpm build`，再使用以下命令。
+
 ```bash
 # 查看轻量 Markdown 题目 DSL 规范与示例
 pnpm quarry spec
@@ -150,12 +155,12 @@ Windows 桌面版默认在启动后检查 GitHub Releases 并在后台下载更�
 
 ### 6. Electron 端到端与视觉回归
 
-桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统与统一无菜单栏标题栏（100% 时高 `42px`，Windows `titleBarOverlay` + 全局 `Ctrl+K` 快速命令），覆盖展开侧栏、收起侧栏和窄屏布局。题库与套题支持 Master-Detail 列表/网格双视图与批量浮栏，设置中的文件标签与题目标签通过标签页分开选色并自动保存。
+桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统，包含无边框侧栏、与主内容对齐的可拖动标签栏（100% 缩放时高 `42px`），以及全局 `Ctrl+K` 快速命令。资料库支持列表、网格和批量操作，视口达到 `1340px` 时在右侧显示文件概览。设置中的文件标签与题目标签通过标签页分开选色并自动保存。
 
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
 * `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用（含桌面无菜单栏、Pause Esc 焦点恢复等交互）。
 * `pnpm exec playwright test --project=visual` 在 Windows 比对 36 张截图基线（12 视图 × 3 种布局），日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
-* 在 Windows 用 `pnpm run test:e2e:update-snapshots` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
+* 在 Windows 用 `pnpm exec playwright test --project=visual --update-snapshots=all` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
 * GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流、缩放与小窗口布局及重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
 
 ---

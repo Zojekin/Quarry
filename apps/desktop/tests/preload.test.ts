@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { cliToolsChannels } from '../src/cli-tools-channels.js';
 import { updaterChannels } from '../src/updater-channels.js';
 import { zoomChannels } from '../src/zoom-channels.js';
 
@@ -15,13 +16,14 @@ afterEach(() => {
   vi.resetModules();
 });
 
-it('exposes the backend URL and one desktop bridge for the titlebar, updater and zoom', async () => {
+it('exposes the backend URL and one desktop bridge', async () => {
   process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
   await import('../src/preload.js');
   expect(expose.mock.calls).toEqual([
     ['__QUARRY_API_URL__', 'http://127.0.0.1:54321'],
     ['__QUARRY_DESKTOP__', {
       setTitleBarOverlay: expect.any(Function),
+      cliTools: { getInfo: expect.any(Function), installSkill: expect.any(Function) },
       zoom: {
         getLevel: expect.any(Function), setLevel: expect.any(Function), onLevelChange: expect.any(Function),
       },
@@ -31,6 +33,20 @@ it('exposes the backend URL and one desktop bridge for the titlebar, updater and
         setAutoUpdate: expect.any(Function), onStateChange: expect.any(Function),
       },
     }],
+  ]);
+});
+
+it('invokes only the named CLI tools channels', async () => {
+  process.argv = ['electron', '--quarry-api-url=http://127.0.0.1:54321'];
+  await import('../src/preload.js');
+  const { cliTools } = expose.mock.calls[1]![1];
+  await cliTools.getInfo();
+  await cliTools.installSkill('codex');
+  await cliTools.installSkill('custom');
+  expect(ipcRenderer.invoke.mock.calls).toEqual([
+    [cliToolsChannels.getInfo],
+    [cliToolsChannels.installSkill, 'codex'],
+    [cliToolsChannels.installSkill, 'custom'],
   ]);
 });
 

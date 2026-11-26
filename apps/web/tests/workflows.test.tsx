@@ -1185,13 +1185,13 @@ it("filters bank questions by search, type, and tag and paper questions by searc
   await screen.findByText("玄武岩成因");
   expect(screen.getByText("板块构造假说")).toBeTruthy();
 
-  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索题目" }), {
     target: { value: "地质动力学" },
   });
   expect(screen.queryByText("玄武岩成因")).toBeNull();
   expect(screen.getByText("板块构造假说")).toBeTruthy();
 
-  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索题目" }), {
     target: { value: "" },
   });
   fireEvent.click(screen.getByRole("button", { name: "题型" }));
@@ -1243,7 +1243,7 @@ it("filters bank questions by search, type, and tag and paper questions by searc
     />,
   );
   await screen.findByText("玄武岩成因");
-  fireEvent.change(screen.getByPlaceholderText("搜索题干或解析"), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索题目" }), {
     target: { value: "玄武岩" },
   });
   expect(screen.getByText("玄武岩成因")).toBeTruthy();

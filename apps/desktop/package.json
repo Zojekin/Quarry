@@ -48,6 +48,18 @@
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "../../packages/cli/dist/index.js",
+        "to": "cli/index.js"
+      },
+      {
+        "from": "resources/cli/package.json",
+        "to": "cli/package.json"
+      },
+      {
+        "from": "../../skills/question-converter",
+        "to": "skills/question-converter"
       }
     ],
     "beforePack": "./scripts/before-pack.cjs",

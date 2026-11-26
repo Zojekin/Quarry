@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 import {
   BookOpen,
-  Command as CommandIcon,
   FolderOpen,
   History,
   Home as HomeIcon,
@@ -18,6 +17,7 @@ import {
 import logoUrl from "./assets/logo.svg";
 import { client } from "./api/client.js";
 import type { Bank, Paper } from "./api/client.js";
+import { Icon } from "./components/Icons.js";
 import {
   closeTab,
   navigateTab,
@@ -73,7 +73,7 @@ function defaultLabel(route: Route) {
   return (
     {
       home: "首页",
-      library: "题库与套题",
+      library: "资料库",
       bank: "题库详情",
       paper: "套题详情",
       study: "作答",
@@ -88,7 +88,7 @@ function defaultLabel(route: Route) {
 
 const primaryNav = [
   { key: "home", label: "首页", icon: HomeIcon },
-  { key: "library", label: "题库与套题", icon: BookOpen },
+  { key: "library", label: "资料库", icon: BookOpen },
   { key: "mistakes", label: "错题本", icon: RotateCcw },
   { key: "records", label: "练习记录", icon: History },
 ] as const;
@@ -112,7 +112,16 @@ function Workspace() {
   const initial = useRef(loadTabs());
   const [tabs, setTabs] = useState<WorkspaceTab[]>(initial.current.tabs);
   const [active, setActive] = useState<string>(initial.current.active);
-  const [compact, setCompact] = useState(preferences.sidebarCollapsed);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(preferences.sidebarCollapsed);
+  const [narrowSidebarCollapsed, setNarrowSidebarCollapsed] = useState<boolean | null>(null);
+  const [narrowViewport] = useState(() => window.matchMedia?.("(max-width: 960px)"));
+  const [isNarrow, setIsNarrow] = useState(() => narrowViewport?.matches ?? false);
+  useEffect(() => {
+    const sync = () => setIsNarrow(narrowViewport?.matches ?? false);
+    narrowViewport?.addEventListener("change", sync);
+    sync();
+    return () => narrowViewport?.removeEventListener("change", sync);
+  }, [narrowViewport]);
   const [rail, setRail] = useState<ReactNode>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [reviewCount, setReviewCount] = useState(0);
@@ -294,6 +303,38 @@ function Workspace() {
   );
 
   const isStudyView = route.page === "study" && !!rail;
+  const autoCompact = isNarrow && !isStudyView;
+  const compact = autoCompact ? (narrowSidebarCollapsed ?? true) : sidebarCollapsed;
+  const sidebarWidth = compact ? "[--sidebar-width:58px]" : "[--sidebar-width:224px]";
+  const sidebarColumn = "w-(--sidebar-width) shrink-0 transition-[width] duration-200";
+
+  function toggleSidebar() {
+    if (autoCompact) setNarrowSidebarCollapsed(!compact);
+    else setSidebarCollapsed(!compact);
+  }
+
+  const quickCommand = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label="快速命令"
+          onClick={() => setCommandOpen(true)}
+          className="quarry-no-drag"
+        >
+          <Icon name="command" className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side={compact ? "right" : "bottom"}>快速跳转 (Ctrl+K)</TooltipContent>
+    </Tooltip>
+  );
+  const compactUtilities = compact && (
+    <div className="flex flex-col items-center gap-1">
+      <ThemeModeToggle compact />
+      {quickCommand}
+    </div>
+  );
 
   function renderNavButton(
     item: (typeof primaryNav)[number] | (typeof secondaryNav)[number],
@@ -311,9 +352,8 @@ function Workspace() {
         aria-description={showUpdate ? "更新已就绪" : undefined}
         onClick={() => navigate({ page: item.key })}
         className={cn(
-          "group relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
-          compact && "justify-center px-0",
-          !compact && "max-[960px]:justify-center max-[960px]:px-0",
+          "group relative flex items-center gap-2.5 rounded-lg text-[13.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
+          compact ? "mx-auto size-9 justify-center px-0" : "h-9 w-full px-2.5",
           activeItem
             ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_12%,transparent)]"
             : "text-sidebar-foreground/85 hover:bg-(--sidebar-hover) hover:text-foreground",
@@ -335,7 +375,6 @@ function Workspace() {
           className={cn(
             "min-w-0 flex-1 truncate text-left",
             compact && "hidden",
-            !compact && "max-[960px]:hidden",
           )}
         >
           {item.label}
@@ -346,7 +385,6 @@ function Workspace() {
             className={cn(
               "h-5 min-w-5 justify-center rounded-full bg-primary/12 px-1.5 text-[11px] font-semibold text-primary tabular-nums",
               compact && "hidden",
-              !compact && "max-[960px]:hidden",
             )}
           >
             {badge}
@@ -366,20 +404,38 @@ function Workspace() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex min-h-dvh w-full flex-col bg-background text-foreground">
-        <header className="quarry-titlebar sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-sidebar">
-          <div className="quarry-no-drag flex shrink-0 items-center gap-2 px-1.5">
-            <img
-              src={logoUrl}
-              alt="题匣"
-              className="size-5 rounded-[5px] object-contain"
-            />
-            <span className="hidden font-serif text-[14.5px] font-semibold tracking-tight text-foreground sm:inline">
-              题匣
-            </span>
+      <div className={cn(
+        "flex min-h-dvh w-full flex-col bg-background text-foreground",
+        sidebarWidth,
+        isStudyView && !compact && "max-[960px]:[--sidebar-width:156px]",
+      )}>
+        <header className="quarry-titlebar sticky top-0 z-30 flex bg-background">
+          <div className={cn("flex items-center bg-sidebar px-1.5", sidebarColumn, compact ? "justify-center" : "justify-between")}>
+            {!compact && (
+              <div className="flex items-center gap-1.5 pl-1">
+                <img src={logoUrl} alt="" className="size-5 rounded-[5px] object-contain" />
+                <span className="whitespace-nowrap font-serif text-[14.5px] font-semibold tracking-tight">
+                  题匣
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-0.5">
+              {!compact && <ThemeModeToggle />}
+              {!compact && quickCommand}
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={compact ? "展开导航" : "收起导航"}
+                aria-expanded={!compact}
+                onClick={toggleSidebar}
+                className="quarry-no-drag"
+              >
+                {compact ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              </Button>
+            </div>
           </div>
 
-          <div className="quarry-no-drag flex min-w-0 flex-1 items-center gap-1">
+          <div className="quarry-titlebar-content mx-auto flex min-w-0 max-w-[1260px] flex-1 items-center gap-1 pl-7 max-[960px]:pl-5">
             <div className="quarry-tabs flex min-w-0 items-center gap-1 overflow-x-auto py-1" role="tablist" aria-label="工作标签页">
               {tabs.map((tab, index) => {
                 const isSelected = tab.id === current.id;
@@ -388,7 +444,7 @@ function Workspace() {
                   <div
                     key={tab.id}
                     className={cn(
-                      "group/tab inline-flex h-7.5 max-w-[200px] min-w-[96px] items-center rounded-md border text-[12.5px] transition-all",
+                      "quarry-no-drag group/tab inline-flex h-7.5 max-w-[200px] min-w-[96px] items-center rounded-md border text-[12.5px] transition-all",
                       isSelected
                         ? "border-border bg-card text-foreground shadow-[0_1px_2px_rgba(var(--shadow-ink),0.05)]"
                         : "border-transparent bg-transparent text-muted-foreground hover:bg-(--tab-hover) hover:text-foreground",
@@ -445,26 +501,9 @@ function Workspace() {
               size="iconSm"
               aria-label="新建标签页"
               onClick={addTab}
-              className="shrink-0 text-muted-foreground hover:text-foreground"
+              className="quarry-no-drag shrink-0 text-muted-foreground hover:text-foreground"
             >
               <Plus className="size-3.5" />
-            </Button>
-          </div>
-
-          <div className="quarry-no-drag ml-auto flex shrink-0 items-center gap-1.5">
-            <ThemeModeToggle />
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="快速命令"
-              onClick={() => setCommandOpen(true)}
-              className="h-7 gap-1.5 bg-card/80 px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
-            >
-              <CommandIcon className="size-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">快速跳转</span>
-              <kbd className="hidden rounded border border-border bg-muted px-1 py-px font-mono text-[10.5px] text-muted-foreground md:inline">
-                Ctrl K
-              </kbd>
             </Button>
           </div>
         </header>
@@ -473,56 +512,13 @@ function Workspace() {
         <div className="flex min-h-0 flex-1">
           <aside
             aria-label="主导航"
-            className={cn(
-              "quarry-sidebar sticky flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-2.5 transition-[width] duration-200",
-              compact
-                ? "w-[58px] items-center px-1.5"
-                : isStudyView
-                  ? "w-[224px] max-[959px]:w-[156px]"
-                  : "w-[224px] max-[960px]:w-[58px] max-[960px]:items-center max-[960px]:px-1.5",
-            )}
+            className={cn("quarry-sidebar sticky flex flex-col bg-sidebar p-2.5", sidebarColumn)}
           >
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2 px-1 pb-2",
-                compact && "justify-center px-0",
-                !compact &&
-                  !isStudyView &&
-                  "max-[960px]:justify-center max-[960px]:px-0",
-              )}
-            >
-              <span
-                className={cn(
-                  "text-[11px] font-semibold tracking-wider text-muted-foreground/75 uppercase",
-                  compact && "hidden",
-                  !compact && !isStudyView && "max-[960px]:hidden",
-                )}
-              >
-                {isStudyView ? "作答控制台" : "学习空间"}
-              </span>
-              <Button
-                variant="ghost"
-                size="iconSm"
-                aria-label={compact ? "展开导航" : "收起导航"}
-                aria-expanded={!compact}
-                onClick={() => setCompact((c) => !c)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {compact ? (
-                  <PanelLeftOpen className="size-4" />
-                ) : (
-                  <PanelLeftClose className="size-4" />
-                )}
-              </Button>
-            </div>
-
             {isStudyView ? (
-              <div
-                className={cn(
-                  "min-h-0 flex-1 overflow-y-auto pt-1",
-                  compact && "hidden",
-                )}
-              >
+              <div className={cn("min-h-0 flex-1 overflow-y-auto pt-1", compact && "hidden")}>
+                <p className="px-1 pb-2 text-[11px] font-semibold tracking-wider text-muted-foreground/75">
+                  作答控制台
+                </p>
                 {rail}
               </div>
             ) : (
@@ -536,9 +532,13 @@ function Workspace() {
                   )}
                 </div>
                 <div className="mt-auto space-y-1 pt-4">
+                  {compactUtilities}
                   {secondaryNav.map((item) => renderNavButton(item))}
                 </div>
               </nav>
+            )}
+            {isStudyView && compact && (
+              <div className="mt-auto">{compactUtilities}</div>
             )}
           </aside>
 

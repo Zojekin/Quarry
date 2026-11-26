@@ -61,39 +61,93 @@ export const themePresets = {
 } satisfies Record<string, { label: string } & Record<ResolvedThemeMode, Palette>>;
 
 export type ThemePreset = keyof typeof themePresets;
+export type CustomTheme = {
+  id: string;
+  name: string;
+  basePreset: ThemePreset;
+  colors: Record<ResolvedThemeMode, CustomColors>;
+};
+
 export type ThemeConfig = {
   preset: ThemePreset;
   mode: ThemeMode;
-  custom?: CustomColors;
+  customThemes?: CustomTheme[];
+  activeCustomThemeId?: string | undefined;
 };
 
 export const defaultThemeConfig: Readonly<ThemeConfig> = { preset: "pine-paper", mode: "light" };
 export const themeStorageKey = "quarry.theme.v1";
 export const darkPreferenceQuery = "(prefers-color-scheme: dark)";
 export const minimumContrast = 4.5;
+export const customThemeNameLimit = 40;
 
 const black = "#000000";
 const white = "#ffffff";
 const isHexColor = (value: unknown): value is string =>
   typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 
-export function normalizeThemeConfig(value: unknown): ThemeConfig {
-  if (!value || typeof value !== "object") return { ...defaultThemeConfig };
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
 
-  const data = value as Partial<Record<keyof ThemeConfig, unknown>>;
-  const preset = typeof data.preset === "string" && Object.hasOwn(themePresets, data.preset)
-    ? data.preset as ThemePreset
+function normalizePreset(value: unknown): ThemePreset {
+  return typeof value === "string" && Object.hasOwn(themePresets, value)
+    ? value as ThemePreset
     : defaultThemeConfig.preset;
+}
+
+function normalizeColors(value: unknown): CustomColors {
+  const colors = asRecord(value);
+  const normalized: CustomColors = {};
+  for (const key of customColorKeys) {
+    const color = colors[key];
+    if (isHexColor(color)) normalized[key] = color.toLowerCase();
+  }
+  return normalized;
+}
+
+export function normalizeThemeConfig(value: unknown): ThemeConfig {
+  const data = asRecord(value);
+  const preset = normalizePreset(data.preset);
   const mode = themeModes.find((option) => option === data.mode) ?? defaultThemeConfig.mode;
-  const custom: CustomColors = {};
-  if (data.custom && typeof data.custom === "object") {
-    const colors = data.custom as Record<string, unknown>;
-    for (const key of customColorKeys) {
-      const color = colors[key];
-      if (isHexColor(color)) custom[key] = color.toLowerCase();
+  const customThemes: CustomTheme[] = [];
+  if (Array.isArray(data.customThemes)) {
+    const ids = new Set<string>();
+    for (const value of data.customThemes) {
+      const { id, name, basePreset, colors } = asRecord(value);
+      if (typeof id !== "string" || !id.trim() || ids.has(id)) continue;
+      if (typeof name !== "string" || !name.trim()) continue;
+      const { light, dark } = asRecord(colors);
+      customThemes.push({
+        id,
+        name: name.trim().slice(0, customThemeNameLimit).trimEnd(),
+        basePreset: normalizePreset(basePreset),
+        colors: { light: normalizeColors(light), dark: normalizeColors(dark) },
+      });
+      ids.add(id);
+    }
+  } else {
+    // The former overrides applied to both modes, so migration preserves both appearances.
+    const legacyColors = normalizeColors(data.custom);
+    if (Object.keys(legacyColors).length) {
+      const id = "legacy-custom";
+      return {
+        preset, mode, activeCustomThemeId: id,
+        customThemes: [{
+          id, name: "自定义主题", basePreset: preset,
+          colors: { light: legacyColors, dark: { ...legacyColors } },
+        }],
+      };
     }
   }
-  return Object.keys(custom).length ? { preset, mode, custom } : { preset, mode };
+
+  const active = customThemes.find((theme) => theme.id === data.activeCustomThemeId);
+  return {
+    preset: active?.basePreset ?? preset,
+    mode,
+    ...(customThemes.length > 0 && { customThemes }),
+    ...(active && { activeCustomThemeId: active.id }),
+  };
 }
 
 export function readThemeConfig(view: Window): ThemeConfig {
@@ -167,10 +221,15 @@ const statusTokens = {
 
 export function resolveTheme(config: ThemeConfig, prefersDark: boolean) {
   const mode = config.mode === "system" ? (prefersDark ? "dark" : "light") : config.mode;
-  const palette = themePresets[config.preset][mode];
-  const { primary, background, sidebar, card } = { ...palette, ...config.custom };
+  const active = config.customThemes?.find((theme) => theme.id === config.activeCustomThemeId);
+  return resolveThemePalette(active?.basePreset ?? config.preset, mode, active?.colors[mode]);
+}
+
+export function resolveThemePalette(preset: ThemePreset, mode: ResolvedThemeMode, colors: CustomColors = {}) {
+  const palette = themePresets[preset][mode];
+  const { primary, background, sidebar, card } = { ...palette, ...colors };
   const dark = mode === "dark";
-  const pineLight = mode === "light" && config.preset === "pine-paper";
+  const pineLight = mode === "light" && preset === "pine-paper";
   const originalCardTints = pineLight && primary === palette.primary && card === palette.card;
   const originalHeat = pineLight && primary === palette.primary && background === palette.background;
   const { foreground, mutedForeground } = palette;
@@ -185,13 +244,13 @@ export function resolveTheme(config: ThemeConfig, prefersDark: boolean) {
     contrastRatio(candidate, background) >= 3,
   );
   const sidebarForeground = pineLight ? "#2f3632" : foreground;
-  const titlebarSymbol = !dark && contrastRatio(primary, sidebar) >= minimumContrast
+  const titlebarSymbol = !dark && contrastRatio(primary, background) >= minimumContrast
     ? primary
-    : contrastInk(sidebar, foreground);
+    : contrastInk(background, foreground);
 
   return {
     mode,
-    overlay: { color: sidebar, symbolColor: titlebarSymbol },
+    overlay: { color: background, symbolColor: titlebarSymbol },
     tokens: {
       background, foreground, card, sidebar, primary,
       "card-foreground": foreground,
@@ -262,10 +321,10 @@ function adjustColor(color: string, target: string, passes: (candidate: string) 
   return target;
 }
 
-export function fixThemeContrast(config: ThemeConfig, prefersDark: boolean): ThemeConfig {
-  const theme = resolveTheme(config, prefersDark);
-  const palette = themePresets[config.preset][theme.mode];
-  const custom = { ...config.custom };
+export function fixThemeContrast(preset: ThemePreset, mode: ResolvedThemeMode, colors: CustomColors): CustomColors {
+  const theme = resolveThemePalette(preset, mode, colors);
+  const palette = themePresets[preset][mode];
+  const custom = { ...colors };
   for (const { surface, ratio } of themeContrast(theme).foreground) {
     if (ratio >= minimumContrast) continue;
     custom[surface] = adjustColor(theme.tokens[surface], palette[surface], (candidate) =>
@@ -280,10 +339,10 @@ export function fixThemeContrast(config: ThemeConfig, prefersDark: boolean): The
     contrastRatio(candidate, custom[surface] ?? palette[surface]) >= minimumContrast,
   );
   if (!passesPrimary(theme.tokens.primary)) {
-    const target = passesPrimary(palette.primary) ? palette.primary : theme.mode === "dark" ? white : black;
+    const target = passesPrimary(palette.primary) ? palette.primary : mode === "dark" ? white : black;
     custom.primary = adjustColor(theme.tokens.primary, target, passesPrimary);
   }
-  return normalizeThemeConfig({ ...config, custom });
+  return custom;
 }
 
 export function applyTheme(view: Window, theme: ResolvedTheme) {
