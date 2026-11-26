@@ -423,7 +423,7 @@ export function Library({
 
       {/* Master-Detail Dual Pane */}
       {data && rows.length > 0 && (
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_312px]">
+        <div className="grid grid-cols-1 items-start gap-5 min-[1340px]:grid-cols-[minmax(0,1fr)_312px]">
           <div className="min-w-0">
             {view === "list" ? (
               <Table aria-label="文件列表">
@@ -444,7 +444,7 @@ export function Library({
                     <TableHead className="w-20">类型</TableHead>
                     <TableHead className="hidden md:table-cell">标签</TableHead>
                     <TableHead className="w-20">题数</TableHead>
-                    <TableHead className="w-28">更新时间</TableHead>
+                    <TableHead className="hidden w-28 sm:table-cell">更新时间</TableHead>
                     <TableHead className="w-28 text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -501,7 +501,7 @@ export function Library({
                         <TableCell className="text-[13px] text-muted-foreground tabular-nums">
                           {itemCountLabel(entry)}
                         </TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground tabular-nums">
+                        <TableCell className="hidden text-[13px] text-muted-foreground tabular-nums sm:table-cell">
                           <span data-dynamic-date="date">
                             {dateText(item.updated_at)}
                           </span>
@@ -626,7 +626,7 @@ export function Library({
 
           {/* Right Inspector Panel */}
           {inspected && (
-            <Card as="aside" aria-label="文件概览" className="xl:sticky xl:top-16">
+            <Card as="aside" aria-label="文件概览" className="min-[1340px]:sticky min-[1340px]:top-[calc(var(--titlebar-height)+22px)]">
               <CardHeader className="pb-3">
                 <div className="space-y-1.5">
                   <Badge variant="info">{kindNames[inspected.kind]}</Badge>
@@ -1240,7 +1240,7 @@ export function Detail({
             </>
           }
         >
-          <div className="max-h-[68vh] space-y-5 overflow-y-auto pr-1">
+          <div className="quarry-dialog-list max-h-[68dvh] space-y-5 overflow-y-auto pr-1">
             {paper.sections.map((section) => (
               <section key={section.id} className="space-y-3">
                 <h3 className="m-0 text-[14px] font-semibold text-primary">

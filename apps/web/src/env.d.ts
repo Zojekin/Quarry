@@ -3,6 +3,7 @@ interface Window {
   __QUARRY_DESKTOP__?: {
     setTitleBarOverlay?: (colors: import("./lib/themes.js").ResolvedTheme["overlay"]) => void;
     updater?: import("@quarry/shared").DesktopUpdaterBridge;
+    zoom?: import("@quarry/shared").DesktopZoomBridge;
   };
 }
 

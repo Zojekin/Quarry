@@ -1,14 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NsisUpdater } from 'electron-updater';
+import { isDesktopZoomLevel, type DesktopZoomLevel } from '@quarry/shared';
 import { startLocalBackend, type LocalBackend } from './backend-manager.js';
-import { isTitleBarColors, titleBarOverlayChannel } from './titlebar-overlay.js';
+import { isTitleBarColors, titleBarOverlayChannel, type TitleBarColors } from './titlebar-overlay.js';
 import { createUpdater } from './updater.js';
 import { updaterChannels } from './updater-channels.js';
+import { loadZoom, saveZoom, zoomShortcut } from './zoom.js';
+import { zoomChannels } from './zoom-channels.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
+const titleBarHeight = 42;
 let backend: LocalBackend | undefined;
 let startup: Promise<void> | undefined;
 let quitting = false;
@@ -64,30 +68,69 @@ function registerUpdater(): void {
 
 async function createWindow(): Promise<void> {
   if (!backend || quitting) return;
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  const userData = app.getPath('userData');
+  let zoomLevel = loadZoom(userData);
+  let titleBarColors: TitleBarColors = { color: '#f3f3ee', symbolColor: '#2d5c48' };
+  // Scale the native caption with the renderer so its CSS height stays close to 42px.
+  const overlayOptions = () => ({ ...titleBarColors, height: Math.round(titleBarHeight * zoomLevel / 100) });
   const iconPath = app.isPackaged
     ? path.join(process.resourcesPath, 'icon.png')
     : path.resolve(directory, '../../resources/icon.png');
   const window = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 900, minHeight: 600,
+    width: Math.min(1440, width), height: Math.min(900, height),
+    minWidth: Math.min(900, width), minHeight: Math.min(600, height),
     icon: iconPath,
     autoHideMenuBar: true,
     ...(process.platform === 'win32' ? {
       show: false,
       titleBarStyle: 'hidden',
-      titleBarOverlay: { color: '#f3f3ee', symbolColor: '#2d5c48', height: 42 },
+      titleBarOverlay: overlayOptions(),
     } : {}),
     webPreferences: {
       preload: path.join(directory, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
+      zoomFactor: zoomLevel / 100,
       additionalArguments: [`--quarry-api-url=${backend.url}`],
     },
   });
+  const contents = window.webContents;
+  function setZoomLevel(level: DesktopZoomLevel) {
+    if (level === zoomLevel) return;
+    saveZoom(userData, level);
+    zoomLevel = level;
+    contents.setZoomFactor(level / 100);
+    if (process.platform === 'win32') window.setTitleBarOverlay(overlayOptions());
+    contents.send(zoomChannels.levelChange, level);
+  }
+  function requireMainFrame(event: IpcMainInvokeEvent) {
+    if (!event.senderFrame || event.senderFrame !== contents.mainFrame) throw new Error('Untrusted zoom request');
+  }
+  contents.ipc.handle(zoomChannels.getLevel, event => {
+    requireMainFrame(event);
+    return zoomLevel;
+  });
+  contents.ipc.handle(zoomChannels.setLevel, (event, level: unknown) => {
+    requireMainFrame(event);
+    if (!isDesktopZoomLevel(level)) throw new Error('Invalid zoom level');
+    setZoomLevel(level);
+  });
+  contents.on('before-input-event', (event, input) => {
+    const next = zoomShortcut(input, zoomLevel);
+    if (next === undefined) return;
+    event.preventDefault();
+    try {
+      setZoomLevel(next);
+    } catch (error) {
+      console.error('Could not save desktop zoom', error);
+    }
+  });
   if (process.platform === 'win32') {
-    window.webContents.ipc.on(titleBarOverlayChannel, (event, colors: unknown) => {
-      if (window.isDestroyed() || event.senderFrame !== window.webContents.mainFrame ||
+    contents.ipc.on(titleBarOverlayChannel, (event, colors: unknown) => {
+      if (window.isDestroyed() || event.senderFrame !== contents.mainFrame ||
           !isTitleBarColors(colors)) return;
-      const { color, symbolColor } = colors;
-      window.setTitleBarOverlay({ color, symbolColor, height: 42 });
+      titleBarColors = { color: colors.color, symbolColor: colors.symbolColor };
+      window.setTitleBarOverlay(overlayOptions());
     });
     window.once('ready-to-show', () => window.show());
   }

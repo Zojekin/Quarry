@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
   dialog: { showErrorBox: vi.fn() },
   ipcMain: { handle: mocks.handle },
   Menu: { setApplicationMenu: vi.fn() },
+  screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1040 } }) },
   shell: {},
 }));
 vi.mock('electron-updater', () => ({
@@ -54,7 +55,7 @@ beforeEach(() => {
     return {
       loadFile: async () => undefined,
       once: vi.fn(),
-      webContents: { ipc: { on: vi.fn() }, setWindowOpenHandler: vi.fn(), on: vi.fn() },
+      webContents: { ipc: { handle: vi.fn(), on: vi.fn() }, setWindowOpenHandler: vi.fn(), on: vi.fn() },
     };
   });
   mocks.stop.mockImplementation(() => new Promise<void>((resolve) => { finishStop = resolve; }));

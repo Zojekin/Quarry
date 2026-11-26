@@ -279,7 +279,7 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
               </div>
 
               <div className="overflow-x-auto pb-1">
-                <div className="w-full">
+                <div className="w-full min-w-[530px]">
                   <div className="quarry-heat-months">
                     {[
                       "1月",

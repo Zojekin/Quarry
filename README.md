@@ -60,7 +60,7 @@
 
 * **外观与主题**提供松绿纸韵、青黛书墨、暖陶琥珀和石板素灰四套预设，默认为松绿纸韵日间模式。标题栏可在日间、夜间和跟随系统之间切换。主色、画布、侧栏和卡片颜色支持自定义、即时预览与本地保存。文字对比度低于 WCAG AA 4.5:1 时可一键调整，也可恢复默认主题。
 * **标签管理**支持新增、改名、自定义颜色、恢复系统默认色，以及查看用量并确认删除。资料库和错题本等页面的筛选菜单支持搜索、全选和清空。
-* **显示与操作**支持调整题目字号、手动交卷确认、答题快捷键提示、启动时是否收起侧边栏，以及资料库默认视图。
+* **显示与操作**支持调整题目字号、手动交卷确认、答题快捷键提示、启动时是否收起侧边栏，以及资料库默认视图。桌面版可将界面缩放设为 75% 至 150%，也可按 `Ctrl+=` 或 `Ctrl++` 放大、`Ctrl+-` 缩小、`Ctrl+0` 还原到 100%。应用会记住缩放倍率，网页版使用浏览器的缩放功能。
 * **运行诊断与存储**可检查本地服务和数据库状态。系统设置也提供完整备份与恢复入口。
 
 ---
@@ -150,13 +150,13 @@ Windows 桌面版默认在启动后检查 GitHub Releases 并在后台下载更�
 
 ### 6. Electron 端到端与视觉回归
 
-桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统与统一 `42px` 无菜单栏整合标题栏（Windows `titleBarOverlay` + 全局 `Ctrl+K` 快速命令），覆盖展开侧栏、收起侧栏和窄屏布局。题库与套题支持 Master-Detail 列表/网格双视图与批量浮栏，设置中的文件标签与题目标签通过标签页分开选色并自动保存。
+桌面工作区采用 `shadcn/ui` + Tailwind CSS v4 视觉系统与统一无菜单栏标题栏（100% 时高 `42px`，Windows `titleBarOverlay` + 全局 `Ctrl+K` 快速命令），覆盖展开侧栏、收起侧栏和窄屏布局。题库与套题支持 Master-Detail 列表/网格双视图与批量浮栏，设置中的文件标签与题目标签通过标签页分开选色并自动保存。
 
 * `pnpm run test:e2e` 构建本地运行时并执行冒烟与完整工作流测试。
 * `pnpm run package:dir` 后运行 `pnpm run test:e2e:packaged`，用同一组用例测试已解包的应用（含桌面无菜单栏、Pause Esc 焦点恢复等交互）。
 * `pnpm exec playwright test --project=visual` 在 Windows 比对 36 张截图基线（12 视图 × 3 种布局），日期和计时字段统一遮罩。其他平台仍执行页面交互与健康检查。
 * 在 Windows 用 `pnpm run test:e2e:update-snapshots` 重新生成全部基线。PowerShell 中设置 `$env:QUARRY_CAPTURE_REVIEW="1"` 后运行视觉项目，可在 `e2e/review-screenshots/` 获取保留真实日期的审阅图。
-* GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流和重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
+* GitHub Actions 的 `e2e-windows` 作业检查解包 `Quarry.exe` 的冒烟、完整工作流、缩放与小窗口布局及重启持久化，并比对 Windows 视觉基线。Playwright 使用 Electron 自带的 Chromium。
 
 ---
 

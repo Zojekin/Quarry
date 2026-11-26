@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 /// <reference types="vitest/jsdom" />
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { DesktopZoomBridge, DesktopZoomLevel } from "@quarry/shared";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
 import { client, type Tag } from "../src/api/client.js";
 import { CliGuideCard } from "../src/components/CliGuideCard.js";
 import { DiagnosticsCard } from "../src/components/DiagnosticsCard.js";
 import { TagManagerCard } from "../src/components/TagManagerCard.js";
+import { PreferencesSettingsCard } from "../src/components/PreferencesSettingsCard.js";
 import { preferencesKey } from "../src/lib/preferences.js";
 
 // Use the jsdom origin's storage even when Node exposes its own global getter.
@@ -20,6 +22,36 @@ afterEach(() => {
   sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("uses the browser's own zoom in the absence of a desktop zoom bridge", () => {
+  render(<PreferencesSettingsCard />);
+  expect(screen.queryByLabelText("界面缩放")).toBeNull();
+  expect(screen.getByRole("group", { name: "题目字号" })).toBeTruthy();
+});
+
+it("loads desktop zoom, sends the chosen level and follows desktop changes", async () => {
+  let notify: (level: DesktopZoomLevel) => void = () => {};
+  const unsubscribe = vi.fn();
+  const zoom: DesktopZoomBridge = {
+    getLevel: vi.fn().mockResolvedValue(85),
+    setLevel: vi.fn().mockImplementation(async (level: DesktopZoomLevel) => notify(level)),
+    onLevelChange: (callback) => {
+      notify = callback;
+      return unsubscribe;
+    },
+  };
+  vi.stubGlobal("__QUARRY_DESKTOP__", { zoom });
+  const card = render(<PreferencesSettingsCard />);
+  const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "界面缩放" });
+  await waitFor(() => expect(select.value).toBe("85"));
+  fireEvent.change(select, { target: { value: "125" } });
+  expect(zoom.setLevel).toHaveBeenCalledWith(125);
+  expect(select.value).toBe("125");
+  act(() => notify(150));
+  expect(select.value).toBe("150");
+  card.unmount();
+  expect(unsubscribe).toHaveBeenCalledOnce();
 });
 
 it("shows the CLI workflow and copies the exact displayed DSL example", async () => {

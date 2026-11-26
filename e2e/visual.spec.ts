@@ -157,6 +157,13 @@ for (const layout of layouts) {
     if (process.env.QUARRY_E2E_PACKAGED !== '1') {
       await expect(page.getByText('自动更新适用于 Windows 正式发布的桌面版。')).toBeVisible();
     }
+    const zoom = page.getByRole('combobox', { name: '界面缩放' });
+    await expect(zoom).toHaveValue('100');
+    await zoom.evaluate(select => {
+      const bottom = select.getBoundingClientRect().bottom;
+      window.scrollBy(0, Math.max(0, bottom + 24 - window.innerHeight));
+    });
+    await expect(zoom).toBeInViewport({ ratio: 1 });
     await capture('settings');
 
     await nav(page, '回收站').click();

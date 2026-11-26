@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
+import { desktopZoomLevels, isDesktopZoomLevel, type DesktopZoomLevel } from "@quarry/shared";
 import { updatePreferences, usePreferences, type Preferences } from "../lib/preferences.js";
 import { Segmented } from "./ui.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card.js";
@@ -13,6 +14,29 @@ const switchSettings = [
 export function PreferencesSettingsCard() {
   const id = useId();
   const preferences = usePreferences();
+  const zoom = typeof window === "undefined" ? undefined : window.__QUARRY_DESKTOP__?.zoom;
+  const [zoomLevel, setZoomLevel] = useState<DesktopZoomLevel>();
+  const [zoomError, setZoomError] = useState(false);
+
+  useEffect(() => {
+    if (!zoom) return;
+    let active = true;
+    let receivedChange = false;
+    const unsubscribe = zoom.onLevelChange((level) => {
+      receivedChange = true;
+      setZoomLevel(level);
+      setZoomError(false);
+    });
+    void zoom.getLevel().then(
+      (level) => { if (active && !receivedChange) setZoomLevel(level); },
+      () => { if (active && !receivedChange) setZoomError(true); },
+    );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [zoom]);
+
   return (
     <Card>
       <CardHeader>
@@ -22,6 +46,31 @@ export function PreferencesSettingsCard() {
         </div>
       </CardHeader>
       <CardContent className="divide-y divide-border">
+        {zoom && (
+          <div className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <label htmlFor={`${id}-zoom`} className="text-sm font-medium">界面缩放</label>
+            <select
+              id={`${id}-zoom`}
+              className="h-8 min-w-20 rounded-md border border-input bg-card px-2 text-[13px] font-medium"
+              value={zoomLevel ?? ""}
+              disabled={zoomLevel === undefined}
+              onChange={(event) => {
+                const level = Number(event.currentTarget.value);
+                if (!isDesktopZoomLevel(level)) return;
+                setZoomError(false);
+                void zoom.setLevel(level).catch(() => setZoomError(true));
+              }}
+            >
+              {zoomLevel === undefined && <option value="">—</option>}
+              {desktopZoomLevels.map((level) => <option key={level} value={level}>{level}%</option>)}
+            </select>
+            {zoomError && (
+              <p role="alert" className="w-full text-sm text-destructive">
+                {zoomLevel === undefined ? "无法读取界面缩放。" : "无法保存界面缩放。"}
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 py-3">
           <span className="text-sm font-medium">题目字号</span>
           <Segmented

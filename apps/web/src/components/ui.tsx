@@ -101,7 +101,7 @@ export function Modal({
           </Button>
         </DialogClose>
       </DialogHeader>
-      {children && <div className="space-y-4 text-[13.5px]">{children}</div>}
+      {children && <div data-slot="modal-body" className="space-y-4 text-[13.5px]">{children}</div>}
       <DialogFooter>{actions}</DialogFooter>
     </>
   );
@@ -115,7 +115,7 @@ export function Modal({
     >
       <DialogContent
         ref={contentRef}
-        className={className}
+        className={cn("quarry-modal", className)}
         aria-describedby={undefined}
         onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => {

@@ -22,7 +22,8 @@
 
 - `apps/desktop/src/main.ts` 启动本地后端，创建窗口，选择 Vite URL 或本地 `index.html`，统一协调普通退出与更新重启前的后端关闭。
 - `apps/desktop/src/backend-manager.ts` 初始化 SQLite、迁移、附件目录与恢复点。桌面 API 绑定 `127.0.0.1` 随机端口。
-- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`，并在 `window.__QUARRY_DESKTOP__` 中提供 `setTitleBarOverlay` 和 `updater` 操作及状态订阅。主进程与 preload 复用 `titlebar-overlay.ts` 校验颜色，主进程仅为 Windows 目标窗口更新按钮区。
+- `apps/desktop/src/preload.ts` 校验 `--quarry-api-url` 后暴露只读的 `window.__QUARRY_API_URL__`，并在 `window.__QUARRY_DESKTOP__` 中提供 `setTitleBarOverlay`、`updater` 和 `zoom`。主进程与 preload 复用 `titlebar-overlay.ts` 校验颜色，主进程为 Windows 目标窗口更新按钮区。
+- `apps/desktop/src/zoom.ts` 解析缩放快捷键和读写 `userData/zoom.json`。倍率与桌面桥接类型见 `packages/shared/src/desktop-zoom.ts`，设置入口为 `apps/web/src/components/PreferencesSettingsCard.tsx`。
 - `apps/desktop/src/updater.ts` 持久化自动更新偏好，协调 NSIS 版本检查、下载进度与安装。`packages/shared/src/desktop-updater.ts` 定义桌面和 Web 共用的状态与桥接类型。
 - `apps/desktop/scripts/bundle.mjs` 打包为 ESM `dist/runtime/main.js` 和 CJS `dist/runtime/preload.cjs`。
 - `apps/desktop/scripts/before-pack.cjs` 在 electron-builder 打包时执行同一打包脚本。
@@ -37,7 +38,7 @@
 
 - `apps/web/vite.config.ts` 在 `index.html` 内联 `lib/themes.ts` 的启动入口，在 `main.tsx` 挂载 React 前应用主题。后续由 `lib/theme-context.tsx` 处理模式、颜色和本地存储变化。
 - `apps/web/src/main.tsx` 挂载 React，加载 `index.css`（Tailwind CSS v4、`@theme inline` 令牌与标题栏/热力图样式）和 `production.css`（Markdown/KaTeX 与文件输入按钮适配）。
-- `apps/web/src/App.tsx` 负责一体化 `42px` 标题栏工作区标签、`224px/58px` 可折叠侧栏、全局 `Ctrl+K` 快速命令面板、前进后退与视图滚动恢复。
+- `apps/web/src/App.tsx` 负责一体化标题栏工作区标签、可折叠侧栏、全局 `Ctrl+K` 快速命令面板、前进后退与视图滚动恢复。标题栏和侧栏共用 `--titlebar-height`。
 - `apps/web/src/components/ui/` 存放 `shadcn/ui` 与 Radix 基础原语（`button`、`card`、`badge`、`table`、`input`、`select`、`dialog`、`popover`、`dropdown-menu`、`tabs`、`checkbox`、`switch`、`progress`、`tooltip`、`command`）；`apps/web/src/lib/utils.ts` 提供 `cn`。
 - `apps/web/src/state.ts` 定义路由、页签和计时格式，`components/ui.tsx` 提供弹窗、可搜索的多选 `Facet`、搜索框、状态药丸与 `useConfirmation`。
 - `apps/web/src/api/client.ts` 包装 HTTP、错误与文件处理。API 地址优先使用 preload，其次使用 `VITE_API_URL`。
@@ -100,5 +101,6 @@
 - `file://` 渲染器依靠 Vite 的相对资源路径。loopback 后端允许桌面文件页面的 `null` origin。
 - Web 端改动使用标准浏览器 API 和 `BackendClient`。原生阻塞弹窗会绕开页面交互和可访问性。
 - Electron 45.2.3 可用 Playwright `_electron.launch()`，Windows 解包路径是 `apps/desktop/release/win-unpacked/Quarry.exe`。
+- `e2e/zoom.spec.ts` 验证快捷键、设置同步、重启恢复、Windows 标题栏对齐，以及小窗口内的标签、热力图、资料库、弹窗和作答导航。
 - 文件下载通过 Electron `will-download` 验证，fixture 将真实文件保存到测试工件目录。
 - Node.js 和 Electron 使用同一个 `better-sqlite3` N-API 绑定。运行时 esbuild 将该依赖保留为外部模块。
