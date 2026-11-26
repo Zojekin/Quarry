@@ -9,13 +9,14 @@ import {
   themeStorageKey,
   writeThemeConfig,
 } from "./themes.js";
-import type { ResolvedTheme, ThemeConfig } from "./themes.js";
+import type { CustomTheme, ResolvedTheme, ThemeConfig } from "./themes.js";
 
 const ThemeContext = createContext<{
   config: ThemeConfig;
   theme: ResolvedTheme;
-  prefersDark: boolean;
   setConfig: (config: ThemeConfig) => void;
+  saveCustomTheme: (theme: CustomTheme) => void;
+  deleteCustomTheme: (id: string) => void;
 } | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -47,8 +48,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     writeThemeConfig(window, normalized);
   }
 
+  function saveCustomTheme(customTheme: CustomTheme) {
+    const customThemes = config.customThemes ?? [];
+    saveConfig({
+      ...config,
+      activeCustomThemeId: customTheme.id,
+      customThemes: customThemes.some(({ id }) => id === customTheme.id)
+        ? customThemes.map((entry) => entry.id === customTheme.id ? customTheme : entry)
+        : [...customThemes, customTheme],
+    });
+  }
+
+  function deleteCustomTheme(id: string) {
+    saveConfig({
+      ...config,
+      activeCustomThemeId: config.activeCustomThemeId === id ? undefined : config.activeCustomThemeId,
+      customThemes: (config.customThemes ?? []).filter((entry) => entry.id !== id),
+    });
+  }
+
   return (
-    <ThemeContext.Provider value={{ config, theme, prefersDark, setConfig: saveConfig }}>
+    <ThemeContext.Provider value={{ config, theme, setConfig: saveConfig, saveCustomTheme, deleteCustomTheme }}>
       {children}
     </ThemeContext.Provider>
   );

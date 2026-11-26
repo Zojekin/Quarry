@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  contrastRatio, defaultThemeConfig, fixThemeContrast, minimumContrast, normalizeThemeConfig,
-  resolveTheme, themeContrast, themePresets,
+  contrastRatio, customThemeNameLimit, defaultThemeConfig, fixThemeContrast, minimumContrast, normalizeThemeConfig,
+  resolveTheme, resolveThemePalette, themeContrast, themePresets,
   type ThemePreset,
 } from "../src/lib/themes.js";
 
@@ -52,7 +52,7 @@ describe("theme palettes", () => {
   it("derives custom states from all four overrides and falls back to a legible titlebar symbol", () => {
     const base = resolveTheme(defaultThemeConfig, false);
     const custom = { primary: "#faf9f8", background: "#eeeeee", card: "#eaeaea", sidebar: "#fafafa" };
-    const theme = resolveTheme({ ...defaultThemeConfig, custom }, false);
+    const theme = resolveThemePalette("pine-paper", "light", custom);
     expect(theme.tokens).toMatchObject({ ...custom, "primary-foreground": "#000000", popover: custom.card });
     for (const key of ["primary-hover", "accent", "accent-foreground", "ring", "selection-bg", "heat-4"] as const) {
       expect(theme.tokens[key]).not.toBe(base.tokens[key]);
@@ -64,10 +64,57 @@ describe("theme palettes", () => {
   it("recovers from incomplete, malformed, and unknown stored values", () => {
     expect(normalizeThemeConfig(null)).toEqual(defaultThemeConfig);
     expect(normalizeThemeConfig({ preset: "__proto__", mode: "solar", custom: { primary: "#123", background: "red" } })).toEqual(defaultThemeConfig);
-    expect(normalizeThemeConfig({
+  });
+
+  it("migrates legacy overrides into a selected named theme in both modes", () => {
+    const migrated = normalizeThemeConfig({
       preset: "amber-clay", mode: "system",
       custom: { primary: "#AABBCC", background: 0, card: "#deface", extra: "#ff0000" },
-    })).toEqual({ preset: "amber-clay", mode: "system", custom: { primary: "#aabbcc", card: "#deface" } });
+    });
+    const colors = { primary: "#aabbcc", card: "#deface" };
+    expect(migrated).toEqual({
+      preset: "amber-clay", mode: "system", activeCustomThemeId: "legacy-custom",
+      customThemes: [{
+        id: "legacy-custom", name: "自定义主题", basePreset: "amber-clay",
+        colors: { light: colors, dark: colors },
+      }],
+    });
+    expect(resolveTheme(migrated, false).tokens).toMatchObject(colors);
+    expect(resolveTheme(migrated, true).tokens).toMatchObject(colors);
+    expect(normalizeThemeConfig(migrated)).toEqual(migrated);
+  });
+
+  it("normalizes named themes and resolves only the selected theme's current mode", () => {
+    const config = normalizeThemeConfig({
+      preset: "slate-neutral", mode: "system", activeCustomThemeId: "ink",
+      customThemes: [
+        { id: "ink", name: " 青墨 ", basePreset: "indigo-ink", colors: {
+          light: { primary: "#ABCDEF", sidebar: "blue" }, dark: { card: "#242400" },
+        } },
+        { id: "ink", name: "重复 ID" },
+        { id: "invalid", name: " " },
+        { id: "paper", name: "纸".repeat(50), basePreset: "__proto__", colors: null },
+      ],
+    });
+    expect(config).toEqual({
+      preset: "indigo-ink", mode: "system", activeCustomThemeId: "ink",
+      customThemes: [
+        {
+          id: "ink", name: "青墨", basePreset: "indigo-ink",
+          colors: { light: { primary: "#abcdef" }, dark: { card: "#242400" } },
+        },
+        {
+          id: "paper", name: "纸".repeat(customThemeNameLimit), basePreset: "pine-paper",
+          colors: { light: {}, dark: {} },
+        },
+      ],
+    });
+    expect(resolveTheme(config, false).tokens).toMatchObject({ primary: "#abcdef", sidebar: "#eef0f8" });
+    expect(resolveTheme(config, true).tokens).toMatchObject({ card: "#242400", primary: "#a8b9f2" });
+    expect(resolveTheme({ ...config, activeCustomThemeId: "paper" }, true).tokens.background).toBe("#151c18");
+    const fallback = normalizeThemeConfig({ ...config, activeCustomThemeId: "missing" });
+    expect(fallback.activeCustomThemeId).toBeUndefined();
+    expect(resolveTheme(fallback, true).tokens.card).toBe("#242b40");
   });
 });
 
@@ -81,21 +128,19 @@ describe("contrast", () => {
   });
 
   it.each([
-    { prefersDark: false, primary: "#fffff0", badSurface: "#0e1520", goodCard: "#fffbf4" },
-    { prefersDark: true, primary: "#151412", badSurface: "#fff0ef", goodCard: "#272727" },
-  ])("adjusts only failing colors when system dark is $prefersDark", ({ prefersDark, primary, badSurface, goodCard }) => {
-    const config = {
-      preset: "amber-clay", mode: "system",
-      custom: { primary, background: badSurface, sidebar: badSurface, card: goodCard },
-    } as const;
-    const before = themeContrast(resolveTheme(config, prefersDark));
+    { mode: "light", primary: "#fffff0", badSurface: "#0e1520", goodCard: "#fffbf4" },
+    { mode: "dark", primary: "#151412", badSurface: "#fff0ef", goodCard: "#272727" },
+  ] as const)("adjusts only failing colors in the $mode palette", ({ mode, primary, badSurface, goodCard }) => {
+    const preset = "amber-clay";
+    const colors = { primary, background: badSurface, sidebar: badSurface, card: goodCard };
+    const before = themeContrast(resolveThemePalette(preset, mode, colors));
     expect(before.foreground[0]!.ratio).toBeLessThan(minimumContrast);
-    const fixed = fixThemeContrast(config, prefersDark);
-    expect(fixed).toMatchObject({ preset: config.preset, mode: config.mode, custom: { card: goodCard } });
-    expect(fixed.custom?.primary).not.toBe(primary);
-    expect(fixed.custom?.background).not.toBe(badSurface);
-    const after = themeContrast(resolveTheme(fixed, prefersDark));
+    const fixed = fixThemeContrast(preset, mode, colors);
+    expect(fixed.card).toBe(goodCard);
+    expect(fixed.primary).not.toBe(primary);
+    expect(fixed.background).not.toBe(badSurface);
+    const after = themeContrast(resolveThemePalette(preset, mode, fixed));
     expect(Math.min(after.primary, after.button, ...after.foreground.map((pair) => pair.ratio))).toBeGreaterThanOrEqual(minimumContrast);
-    expect(fixThemeContrast(fixed, prefersDark)).toEqual(fixed);
+    expect(fixThemeContrast(preset, mode, fixed)).toEqual(fixed);
   });
 });

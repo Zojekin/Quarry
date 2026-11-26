@@ -71,6 +71,7 @@ export function Modal({
   children,
   actions,
   className = "",
+  style,
   onSubmit,
 }: {
   title: string;
@@ -78,6 +79,7 @@ export function Modal({
   children?: ReactNode;
   actions: ReactNode;
   className?: string;
+  style?: CSSProperties | undefined;
   onSubmit?: () => void;
 }) {
   const activeElement = document.activeElement;
@@ -116,6 +118,7 @@ export function Modal({
       <DialogContent
         ref={contentRef}
         className={cn("quarry-modal", className)}
+        style={style}
         aria-describedby={undefined}
         onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => {

@@ -131,7 +131,7 @@
 - **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
-- **主题启动与持久化**：`lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`，解析预设、模式与四项可选覆盖色并生成语义令牌。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
+- **主题启动与持久化**：无依赖的 `lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`。配置记录预设、外观模式、自定义主题列表和选中的主题 ID。每个命名主题保留基础预设与日间、夜间各四项可选覆盖色。旧版单组覆盖色解析为同时适用于日间和夜间的已选命名主题。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将活动主题令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---
