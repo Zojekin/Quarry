@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Calendar, Play, Sparkles, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Calendar, Info, Play, Sparkles, Trash2, Upload } from "lucide-react";
 import logoUrl from "../assets/logo.svg";
 import { client } from "../api/client.js";
-import type { Dashboard, Mistake, Paper, Session } from "../api/client.js";
+import type { Dashboard, Mistake, Paper, Session, TrashItem } from "../api/client.js";
 import { formatTime, type Route } from "../state.js";
 import { QuestionPreview } from "../components/QuestionPreview.js";
 import { CliGuideCard } from "../components/CliGuideCard.js";
@@ -44,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table.js";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip.js";
 import { cn } from "../lib/utils.js";
 import { download } from "./Library.js";
 
@@ -1025,10 +1026,39 @@ const trashLabels = {
   questions: "题目",
 } as const;
 
+const trashCategories = [["resources", "题库与套题"], ["questions", "单独题目"]] as const;
+const trashItemKey = ({ entity, id }: TrashItem) => `${entity}:${id}`;
+
 export function Trash({ onChanged }: { onChanged: () => void }) {
   const { data, error, reload } = useLoad(() => client.trash.list(), []);
+  const [category, setCategory] = useViewState<"resources" | "questions">("trash.category", "resources");
+  const [selected, setSelected] = useState(() => new Set<string>());
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const confirm = useConfirmation();
+  const showQuestions = category === "questions";
+  const items = (data ?? []).filter((item) => showQuestions
+    ? item.entity === "questions" && !item.parent_deleted
+    : item.entity !== "questions");
+  const selectedItems = items.filter((item) => selected.has(trashItemKey(item)));
+  const allSelected = items.length > 0 && selectedItems.length === items.length;
+
+  async function apply(action: "restore" | "purge", targets: TrashItem[]) {
+    setBusy(true);
+    setMessage("");
+    try {
+      await client.trash.batch(action, targets);
+      setSelected(new Set());
+      onChanged();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      reload();
+      setBusy(false);
+    }
+  }
+
+  const contentsWarning = showQuestions ? "" : "所选资料中的内容也会永久删除。";
 
   return (
     <div className="space-y-5">
@@ -1038,66 +1068,137 @@ export function Trash({ onChanged }: { onChanged: () => void }) {
         </h1>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1">
+          <Segmented
+            label="回收站分类"
+            options={trashCategories}
+            value={category}
+            onChange={(next) => {
+              if (next === category) return;
+              setCategory(next);
+              setSelected(new Set());
+              setMessage("");
+            }}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="iconSm" aria-label="单独题目说明">
+                <Info aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-64" side="bottom">
+              这里只显示单独删除且原题库或套题仍存在的题目。随题库或套题删除的题目，可以随原资料一起恢复。
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" disabled={busy || !selectedItems.length} onClick={() => void apply("restore", selectedItems)}>
+            批量恢复
+          </Button>
+          <Button
+            size="sm"
+            variant="destructiveGhost"
+            disabled={busy || !selectedItems.length}
+            onClick={() => confirm.ask(
+              `确认永久删除选中的 ${selectedItems.length} 项吗？${contentsWarning}此操作不可撤销。`,
+              () => void apply("purge", selectedItems),
+            )}
+          >
+            批量永久删除
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || !items.length}
+            onClick={() => confirm.ask(
+              `确认清空「${showQuestions ? "单独题目" : "题库与套题"}」中的 ${items.length} 项吗？${contentsWarning}此操作不可撤销。`,
+              () => void apply("purge", items),
+            )}
+          >
+            清空当前分类
+          </Button>
+        </div>
+      </div>
+
       <Notice error={error || message} loading={!data && !error} />
 
-      {data && data.length === 0 && (
+      {data && items.length === 0 && (
         <EmptyState
-          title="回收站为空"
-          detail="被删除的文件夹、题库与套题会暂时存放在这里。"
+          title={showQuestions ? "没有单独删除的题目" : "没有已删除的资料"}
+          detail={showQuestions
+            ? "单独删除且原题库或套题仍存在的题目会显示在这里。"
+            : "被删除的文件夹、题库与套题会显示在这里。"}
         />
       )}
 
-      {data && data.length > 0 && (
-        <Table aria-label="回收站项目">
+      {items.length > 0 && (
+        <Table aria-label="回收站项目" aria-busy={busy}>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead className="w-24">类型</TableHead>
+              <TableHead className="w-10 pr-0">
+                <Checkbox
+                  aria-label="选择当前分类的所有项目"
+                  checked={allSelected ? true : selectedItems.length > 0 ? "indeterminate" : false}
+                  disabled={busy}
+                  onCheckedChange={(checked) => setSelected(new Set(checked === true ? items.map(trashItemKey) : []))}
+                />
+              </TableHead>
+              <TableHead>{showQuestions ? "题干" : "名称"}</TableHead>
+              <TableHead className="w-24">{showQuestions ? "题型" : "类型"}</TableHead>
+              {showQuestions && <TableHead className="w-1/4">原题库或套题</TableHead>}
               <TableHead className="w-40 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((item) => {
-              const title = item.name ?? item.stem ?? "未命名项目";
+            {items.map((item) => {
+              const key = trashItemKey(item);
+              const isQuestion = item.entity === "questions";
+              const title = isQuestion ? item.stem.replace(/\s+/g, " ").trim() || "空题干" : item.name;
+              const typeLabel = isQuestion
+                ? types.find((type) => type.id === item.question_type)?.name ?? trashLabels.questions
+                : trashLabels[item.entity];
+              const checked = selected.has(key);
               return (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{title}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {trashLabels[item.entity]}
-                    </Badge>
+                <TableRow key={key} data-selected={checked}>
+                  <TableCell className="pr-0">
+                    <Checkbox
+                      aria-label={`选择 ${title}`}
+                      checked={checked}
+                      disabled={busy}
+                      onCheckedChange={(value) => setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (value === true) next.add(key);
+                        else next.delete(key);
+                        return next;
+                      })}
+                    />
                   </TableCell>
+                  <TableCell className="font-medium">
+                    {isQuestion ? <span className="line-clamp-2 break-all">{title}</span> : title}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{typeLabel}</Badge>
+                  </TableCell>
+                  {isQuestion && <TableCell className="break-all text-muted-foreground">{item.parent_name ?? "—"}</TableCell>}
                   <TableCell className="text-right">
                     <div className="inline-flex items-center justify-end gap-1.5">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          void client.trash
-                            .restore(item.entity, item.id)
-                            .then(() => {
-                              onChanged();
-                              reload();
-                            })
-                            .catch((e) => setMessage((e as Error).message))
-                        }
+                        disabled={busy}
+                        onClick={() => void apply("restore", [item])}
                       >
                         恢复
                       </Button>
                       <Button
                         size="sm"
                         variant="destructiveGhost"
+                        disabled={busy}
                         onClick={() =>
                           confirm.ask(
-                            `确认永久删除「${title}」吗？此操作不可撤销。`,
-                            () =>
-                              void client.trash
-                                .purge(item.entity, item.id)
-                                .then(() => {
-                                  onChanged();
-                                  reload();
-                                })
-                                .catch((e) => setMessage((e as Error).message)),
+                            `确认永久删除「${title}」吗？${contentsWarning}此操作不可撤销。`,
+                            () => void apply("purge", [item]),
                           )
                         }
                       >
