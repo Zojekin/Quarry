@@ -11,12 +11,13 @@ import {
   within,
 } from "@testing-library/react";
 import { BackendError, client } from "../src/api/client.js";
-import type { ImportResult, Mistake, Paper, QuestionView, Session, Tag } from "../src/api/client.js";
+import type { ImportResult, Mistake, Paper, QuestionView, Session, Tag, TrashItem } from "../src/api/client.js";
 import { App } from "../src/App.js";
 import { Detail, Library } from "../src/pages/Library.js";
-import { Mistakes, Records, Settings } from "../src/pages/Learning.js";
+import { Mistakes, Records, Settings, Trash } from "../src/pages/Learning.js";
 import { Result, Study } from "../src/pages/Study.js";
 import { PromptDialog } from "../src/components/ui.js";
+import { TooltipProvider } from "../src/components/ui/tooltip.js";
 import { updatePreferences } from "../src/lib/preferences.js";
 import { ThemeProvider } from "../src/lib/theme-context.js";
 
@@ -31,6 +32,56 @@ afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
 });
+it("scopes trash selection, restore, and confirmed clearing to the active category", async () => {
+  let items: TrashItem[] = [
+    { entity: "folders", id: "folder", name: "旧文件夹", deleted_batch_id: "resources" },
+    { entity: "question_banks", id: "bank", name: "旧题库", deleted_batch_id: "resources" },
+    { entity: "questions", id: "child", stem: "随题库删除的题目", parent_deleted: true,
+      parent_name: "旧题库", question_type: "subjective", deleted_batch_id: "resources" },
+    { entity: "questions", id: "standalone", stem: "单独\n删除的题目", parent_deleted: false,
+      parent_name: "原套题", question_type: "single_choice", deleted_batch_id: "standalone" },
+  ];
+  vi.spyOn(client.trash, "list").mockImplementation(async () => items);
+  const batch = vi.spyOn(client.trash, "batch").mockImplementation(async (_action, targets) => {
+    items = items.filter((item) => !targets.some((target) => target.id === item.id));
+    return null;
+  });
+  const onChanged = vi.fn();
+  render(<TooltipProvider><Trash onChanged={onChanged} /></TooltipProvider>);
+
+  fireEvent.click(await screen.findByRole("checkbox", { name: "选择 旧文件夹" }));
+  const restore = screen.getByRole("button", { name: "批量恢复" }) as HTMLButtonElement;
+  expect(restore.disabled).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "单独题目" }));
+  const row = screen.getByRole("row", { name: /单独 删除的题目/ });
+  expect(within(row).getByText("单选题")).toBeTruthy();
+  expect(within(row).getByText("原套题")).toBeTruthy();
+  expect(screen.queryByText("随题库删除的题目")).toBeNull();
+  expect(restore.disabled).toBe(true);
+
+  fireEvent.focus(screen.getByRole("button", { name: "单独题目说明" }));
+  expect((await screen.findByRole("tooltip")).textContent).toContain("可以随原资料一起恢复");
+  const clear = screen.getByRole("button", { name: "清空当前分类" });
+  fireEvent.click(clear);
+  let dialog = within(screen.getByRole("dialog", { name: /清空「单独题目」/ }));
+  fireEvent.click(dialog.getByRole("button", { name: "取消" }));
+  expect(batch).not.toHaveBeenCalled();
+  fireEvent.click(clear);
+  dialog = within(screen.getByRole("dialog", { name: /清空「单独题目」/ }));
+  fireEvent.click(dialog.getByRole("button", { name: "确认" }));
+  await screen.findByText("没有单独删除的题目");
+  expect(batch).toHaveBeenLastCalledWith("purge", [expect.objectContaining({ id: "standalone" })]);
+
+  fireEvent.click(screen.getByRole("button", { name: "题库与套题" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "选择当前分类的所有项目" }));
+  fireEvent.click(restore);
+  await screen.findByText("没有已删除的资料");
+  expect(batch).toHaveBeenLastCalledWith("restore", [
+    expect.objectContaining({ id: "folder" }), expect.objectContaining({ id: "bank" }),
+  ]);
+  expect(onChanged).toHaveBeenCalledTimes(2);
+});
+
 it("opens a production create form and saves the current folder ownership", async () => {
   vi.spyOn(client.folders, "list").mockResolvedValue([]);
   vi.spyOn(client.banks, "list").mockResolvedValue([]);

@@ -112,7 +112,8 @@
 - **标签**支持通过 `GET /api/tags?target_type=file|question` 按命名空间获取，只有 `include_usage=true` 时响应才附加 `usage_count`。计数包含回收站项目的现存关联。`PUT /api/tags/:id` 支持改名和修改颜色（`null` 为系统默认色）。`DELETE /api/tags/:id` 在仓储事务内利用 SQLite 外键级联删除标签关联，标签不存在时返回 404。
 - **附件**通过 `/api/attachments` 提供 multipart SHA-256 去重上传与流式读取。
 - **答题、错题与统计**：`/api/sessions`（`start`、`/:id/draft`、`/:id/submit-question`、`/:id/submit-exam`、`/:id/pause`、`/:id/resume`、`/:id/complete`）；`/api/mistakes`（多维 `types`/`source_paper_ids`/`folder_ids`/`tag_ids` 同维 OR 跨维 AND 过滤、掌握状态、`/create-paper`）；`/api/analytics/dashboard`
-- **回收站与迁移**：`/api/trash`（列表、批次恢复、物理清除）；`/api/import/{preview,commit}`、`/api/export/{bank|paper}/:id`、`/api/export/folder/:id`（子树 `.quarry` ZIP 导出）、`/api/backup/{create,restore}`
+- **回收站**通过 `GET /api/trash` 返回各实体的软删除行，题目附带 `parent_deleted`、`parent_name` 和 `question_type`。所属题库或套题的状态（含共用材料父题的所属资料）取自同一次仓储快照。`POST /api/trash/batch` 接受 `action`（`restore` 或 `purge`）及 `targets`（`{ entity, id }[]`），在一个事务内处理所列目标和适用子项。恢复沿用原删除批次，永久删除按子项优先顺序处理重叠子树。保留单项恢复、单项永久删除和全量清空接口。
+- **导入、导出与备份**使用 `/api/import/{preview,commit}`、`/api/export/{bank|paper}/:id`、`/api/export/folder/:id`（子树 `.quarry` ZIP 导出）和 `/api/backup/{create,restore}`。
 
 **已知后端边界**：
 - 尚未实现崩溃/休眠心跳协议或脱离客户端的独立服务端考试超时强交卷（当前依赖客户端运行期定时与重启恢复超时提交）。
@@ -131,6 +132,7 @@
 - **资料库批量导入**共用文件多选与系统文件拖放入口。`ImportDialog` 通过 `BackendClient` 逐个向提交接口发送文件和当前文件夹 ID，逐项显示成功或错误详情，用户点「完成」后刷新资料库。
 - **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。`cliEnabled` 默认为关闭，开启后才显示 CLI 与 Skill 控件。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
+- **回收站界面**按 `entity` 与 `parent_deleted` 区分资料和单独题目。批量操作提交已勾选项目。清空操作在用户确认后提交所显示分类的全部项目。
 - **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
 - **主题启动与持久化**：无依赖的 `lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`。配置记录预设、外观模式、自定义主题列表和选中的主题 ID。每个命名主题保留基础预设与日间、夜间各四项可选覆盖色。旧版单组覆盖色解析为同时适用于日间和夜间的已选命名主题。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将活动主题令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。

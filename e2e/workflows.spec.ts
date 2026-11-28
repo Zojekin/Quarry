@@ -283,3 +283,41 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await assertPageHealthy(page);
   });
 });
+
+test('trash scopes clearing and batch actions to the displayed category', async ({ quarry }) => {
+  const { page } = quarry;
+  const deletedBank = await api<{ id: string }>(page, 'banks', { name: '已删除的题库' });
+  const activeBank = await api<{ id: string }>(page, 'banks', { name: '仍在使用的题库' });
+  const makeQuestion = (owner_id: string, content: string) => api<{ id: string }>(page, 'questions', {
+    owner_type: 'question_bank', owner_id, type: 'subjective', content, reference_answer: '答案',
+  });
+  await makeQuestion(deletedBank.id, '随题库删除的题目');
+  const purge = await makeQuestion(activeBank.id, '待永久删除的题目');
+  const restore = await makeQuestion(activeBank.id, '待恢复的题目');
+  await api(page, `banks/${deletedBank.id}`, undefined, 'DELETE');
+  for (const { id } of [purge, restore]) await api(page, `questions/${id}`, undefined, 'DELETE');
+
+  await sidebar(page, '回收站').click();
+  await button(page, '单独题目').click();
+  await expect(page.getByText('仍在使用的题库', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('随题库删除的题目')).toHaveCount(0);
+  await button(page, '题库与套题').click();
+  await expect(page.getByText('已删除的题库', { exact: true })).toBeVisible();
+  await button(page, '清空当前分类').click();
+  await confirmAction(page, /清空「题库与套题」/);
+  await expect(page.getByText('没有已删除的资料')).toBeVisible();
+
+  await button(page, '单独题目').click();
+  await expect(page.getByText('仍在使用的题库', { exact: true })).toHaveCount(2);
+  await page.getByRole('checkbox', { name: '选择 待永久删除的题目' }).check();
+  await button(page, '批量永久删除').click();
+  await confirmAction(page, /永久删除选中的 1 项/);
+  await expect(page.getByText('待永久删除的题目')).toHaveCount(0);
+
+  await page.getByRole('checkbox', { name: '选择当前分类的所有项目' }).check();
+  await button(page, '批量恢复').click();
+  await expect(page.getByText('没有单独删除的题目')).toBeVisible();
+  const questions = await api<{ id: string }[]>(page, `questions?bank_id=${activeBank.id}`);
+  expect(questions.map(({ id }) => id)).toEqual([restore.id]);
+  await assertPageHealthy(page);
+});

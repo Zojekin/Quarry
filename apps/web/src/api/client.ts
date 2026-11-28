@@ -112,12 +112,21 @@ export interface Dashboard {
   total_duration_seconds: number;
   daily_heatmap: { date: string; count: number; duration_seconds: number }[];
 }
-export interface TrashItem {
+type TrashItemFields = {
   id: string;
-  entity: "folders" | "question_banks" | "papers" | "questions";
-  name?: string;
-  stem?: string;
-}
+  deleted_batch_id: string | null;
+};
+export type TrashItem = TrashItemFields & (
+  | { entity: "folders" | "question_banks" | "papers"; name: string }
+  | {
+      entity: "questions";
+      stem: string;
+      parent_deleted: boolean;
+      parent_name: string | null;
+      question_type: Question["type"];
+    }
+);
+type TrashTarget = Pick<TrashItem, "entity" | "id">;
 export type Query = Record<
   string,
   string | number | boolean | readonly string[] | undefined
@@ -355,6 +364,11 @@ export class BackendClient {
       this.request<null>(`trash/${entity}/${id}/restore`, "POST"),
     purge: (entity: TrashItem["entity"], id: string) =>
       this.request<null>(`trash/${entity}/${id}`, "DELETE"),
+    batch: (action: "restore" | "purge", items: readonly TrashTarget[]) =>
+      this.request<null>("trash/batch", "POST", {
+        action,
+        targets: items.map(({ entity, id }) => ({ entity, id })),
+      }),
   };
   backup = {
     export: (
