@@ -76,6 +76,17 @@ describe("BackendClient HTTP contracts", () => {
     expect(request?.body).toBeInstanceOf(FormData);
     expect(request?.headers).toBeUndefined();
   });
+  it.each(["folder", undefined])("commits a file with folder target %s", async (folderId) => {
+    const { api, fetcher } = harness();
+    const file = new File(["{}"], "questions.json");
+    await api.backup.importCommit(file, folderId);
+    const [url, request] = fetcher.mock.calls[0]!;
+    expect(url).toBe("http://localhost:48123/api/import/commit");
+    expect(request?.method).toBe("POST");
+    const form = request?.body as FormData;
+    expect(form.get("file")).toBe(file);
+    expect(form.get("folder_id")).toBe(folderId ?? null);
+  });
   it("downloads binary archives without parsing JSON", async () => {
     const { api, fetcher } = harness();
     fetcher.mockResolvedValue(new Response(new Blob(["zip"])));

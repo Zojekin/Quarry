@@ -39,9 +39,10 @@ async function openCreateMenu(page: Page, item: string) {
 
 async function archiveImport(page: Page, path: string, summary: RegExp) {
   await page.locator('input[accept=".quarry,.json,.md"]').setInputFiles(path);
-  const dialog = page.getByRole('dialog', { name: '导入预览' });
+  const dialog = page.getByRole('dialog', { name: '导入文件' });
+  await expect(dialog.getByText('导入成功', { exact: true })).toBeVisible();
   await expect(dialog.getByText(summary)).toBeVisible();
-  await dialog.getByRole('button', { name: '确认导入为新文件' }).click();
+  await dialog.getByRole('button', { name: '完成', exact: true }).click();
   await expect(dialog).toBeHidden();
 }
 
@@ -217,14 +218,15 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await quarry.download(bankFile, () =>
       row(page, bank).getByRole('button', { name: '导出' }).click({ force: true }),
     );
-    await archiveImport(page, bankFile, /题库 · 1 道题目 · 1 个附件/);
+    await archiveImport(page, bankFile, /火山题库 · 题库 · 1 道题目/);
+    await expect(row(page, bank)).toHaveCount(2);
 
     await sidebar(page, '资料库').click();
     const folderFile = testInfo.outputPath('folder.quarry');
     await quarry.download(folderFile, () =>
       row(page, folder).getByRole('button', { name: '导出' }).click({ force: true }),
     );
-    await archiveImport(page, folderFile, /1 个文件夹 · 1 个题库 · 1 份套题 · 2 道题目 · 1 个附件/);
+    await archiveImport(page, folderFile, /地理资料 · 文件夹 · 3 道题目/);
     await expect(row(page, folder)).toHaveCount(2);
 
     await sidebar(page, '系统设置').click();
@@ -245,14 +247,18 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
   });
 
   await test.step('trash and recover files, permanently purge and autosave a tag color', async () => {
-    await row(page, bank).getByRole('button', { name: '删除' }).click({ force: true });
+    await button(page, folder).first().click();
+    await expect(row(page, bank)).toHaveCount(2);
+    await row(page, bank).first().getByRole('button', { name: '删除' }).click({ force: true });
     await confirmAction(page, /确认删除/);
-    await expect(row(page, bank)).toHaveCount(0);
+    await expect(row(page, bank)).toHaveCount(1);
     await sidebar(page, '回收站').click();
     await page.getByRole('row').filter({ hasText: bank }).getByRole('button', { name: '恢复' }).click();
     await expect(page.getByRole('row').filter({ hasText: bank })).toHaveCount(0);
     await sidebar(page, '资料库').click();
-    await expect(row(page, bank)).toBeVisible();
+    await button(page, folder).first().click();
+    await expect(row(page, bank)).toHaveCount(2);
+    await sidebar(page, '资料库').click();
 
     await row(page, '岩石复习').getByRole('button', { name: '删除' }).click({ force: true });
     await confirmAction(page, /确认删除/);

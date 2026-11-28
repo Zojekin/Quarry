@@ -142,7 +142,9 @@ export function Library({
   );
   const [create, setCreate] = useState<"folders" | "banks" | "papers">();
   const [editing, setEditing] = useState<FileEntry>();
-  const [importing, setImporting] = useState<File>();
+  const [importing, setImporting] = useState<File[]>();
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const libraryRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -219,6 +221,50 @@ export function Library({
     setActiveId(undefined);
   }, [folder]);
 
+  useEffect(() => {
+    // The workspace also includes the blank canvas around the Library content.
+    const workspace = libraryRef.current?.closest("main") ?? libraryRef.current;
+    if (!workspace) return;
+    let dragDepth = 0;
+    const isFileDrag = (event: DragEvent) => event.dataTransfer?.types.includes("Files");
+
+    function enter(event: DragEvent) {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      if (importing) return;
+      dragDepth += 1;
+      if (dragDepth === 1) setDraggingFiles(true);
+    }
+    function over(event: DragEvent) {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer!.dropEffect = importing ? "none" : "copy";
+    }
+    function leave(event: DragEvent) {
+      if (!isFileDrag(event) || dragDepth === 0) return;
+      if (--dragDepth === 0) setDraggingFiles(false);
+    }
+    function drop(event: DragEvent) {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setDraggingFiles(false);
+      const files = Array.from(event.dataTransfer!.files);
+      if (!importing && files.length) setImporting(files);
+    }
+
+    workspace.addEventListener("dragenter", enter);
+    workspace.addEventListener("dragover", over);
+    workspace.addEventListener("dragleave", leave);
+    workspace.addEventListener("drop", drop);
+    return () => {
+      workspace.removeEventListener("dragenter", enter);
+      workspace.removeEventListener("dragover", over);
+      workspace.removeEventListener("dragleave", leave);
+      workspace.removeEventListener("drop", drop);
+    };
+  }, [importing]);
+
   function openEntry(entry: FileEntry) {
     if (entry.kind === "folders") navigate({ page: "library", id: entry.item.id });
     else if (entry.kind === "banks") navigate({ page: "bank", id: entry.item.id });
@@ -294,7 +340,7 @@ export function Library({
     inspected?.kind === "banks" ? (inspected.item as Bank) : undefined;
 
   return (
-    <div className="space-y-5">
+    <div ref={libraryRef} className="space-y-5">
       {/* Header Row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -337,10 +383,11 @@ export function Library({
             <input
               type="file"
               accept=".quarry,.json,.md"
+              multiple
               onChange={(event) => {
-                const file = event.target.files?.[0];
+                const files = Array.from(event.target.files ?? []);
                 event.target.value = "";
-                if (file) setImporting(file);
+                if (files.length) setImporting(files);
               }}
             />
           </label>
@@ -774,9 +821,19 @@ export function Library({
           onSaved={reload}
         />
       )}
+      {draggingFiles && !importing && (
+        <div className="quarry-dialog-overlay pointer-events-none fixed top-(--titlebar-height) right-0 bottom-0 left-[var(--sidebar-width,0px)] z-45 grid place-items-center bg-background/80 p-5">
+          <div role="status" className="quarry-panel-animate grid size-full place-content-center justify-items-center gap-3 rounded-xl border-2 border-dashed border-primary/55 bg-primary/5 px-4 text-center">
+            <Upload className="size-8 text-primary" aria-hidden="true" />
+            <p className="m-0 font-serif text-[22px] font-semibold wrap-anywhere">松开即可导入「{trail.at(-1)?.name ?? "资料库"}」</p>
+            <p className="m-0 text-[13px] text-muted-foreground">支持 .quarry、.json、.md</p>
+          </div>
+        </div>
+      )}
       {importing && (
         <ImportDialog
-          file={importing}
+          files={importing}
+          {...(folder ? { folderId: folder } : {})}
           onClose={() => setImporting(undefined)}
           onSaved={reload}
         />

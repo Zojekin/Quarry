@@ -153,16 +153,20 @@ export class BackupService {
     validateContentReferences(document, referenceError);
     return document;
   }
-  async commit(content: string, format: string, files: Files = {}) {
-    const document = this.preview(content, format);
-    return this.commitImport([document], files, async (repositories, attachmentIds) => ({
-      id: (await restoreDocument(repositories, document, null, attachmentIds)).id,
-      entity: document.entity, imported_count: document.questions.length,
+  async commit(content: string, format: string, folderId: string | null = null) {
+    return this.commitDocument(this.preview(content, format), {}, folderId);
+  }
+  private commitDocument(document: ContentDocument, files: Files, folderId: string | null) {
+    return this.commitImport([document], files, folderId, async (repositories, attachmentIds) => ({
+      id: (await restoreDocument(repositories, document, folderId, attachmentIds)).id,
+      name: document.name, entity: document.entity, imported_count: document.questions.length,
     }));
   }
-  private commitImport<T>(documents: ContentDocument[], files: Files,
+  private commitImport<T>(documents: ContentDocument[], files: Files, folderId: string | null,
     write: (repositories: Repositories, attachmentIds: Map<string, string>) => Promise<T>) {
     return this.transaction(async repositories => {
+      if (folderId !== null && !(await repositories.folders.findById(folderId)))
+        throw new AppError(ErrorCode.NotFound, 'Import target folder not found');
       const uploaded = new Set<string>();
       const ids = new Map<string, string>();
       try {
@@ -192,7 +196,7 @@ export class BackupService {
       }
     });
   }
-  async importArchive(bytes: Uint8Array, commit: boolean) {
+  async importArchive(bytes: Uint8Array, commit: boolean, folderId: string | null = null) {
     const files = unpack(bytes);
     if (!files['content.json']) reject([{ line: 1, message: 'Missing content.json' }]);
     if (files['manifest.json']) {
@@ -208,12 +212,12 @@ export class BackupService {
         return reject([{ line: 1, message: 'Invalid folder archive: ' + String(error) }]);
       }
       if (!commit) return archive.preview;
-      return this.commitImport(archive.contents.map(entry => entry.document), files, async (repositories, attachmentIds) => {
+      return this.commitImport(archive.contents.map(entry => entry.document), files, folderId, async (repositories, attachmentIds) => {
         const targets = new Map<string, string>();
         for (const folder of archive.folders) {
           const id = randomUUID();
           await repositories.folders.create({ id, name: folder.name,
-            parent_id: folder.parent_id ? targets.get(folder.parent_id)! : null });
+            parent_id: folder.parent_id ? targets.get(folder.parent_id)! : folderId });
           targets.set(folder.id, id);
         }
         const bankQuestions = new Map<string, string>();
@@ -240,14 +244,13 @@ export class BackupService {
           if (!(await repositories.tags.listRelations(tag_id)).some(entry => entry.target_id === target_id))
             await repositories.tags.addRelation({ id: randomUUID(), tag_id, target_id, target_type: 'file' });
         }
-        return { id: targets.get(archive.folders[0]!.id)!, entity: 'folder' as const,
+        return { id: targets.get(archive.folders[0]!.id)!, name: archive.preview.name, entity: 'folder' as const,
           imported_count: archive.preview.summary.questions };
       });
     }
-    const content = strFromU8(files['content.json']);
-    const document = this.preview(content, 'json');
+    const document = this.preview(strFromU8(files['content.json']), 'json');
     verifyArchiveAttachments(document, files);
-    return commit ? this.commit(content, 'json', files) : document;
+    return commit ? this.commitDocument(document, files, folderId) : document;
   }
   async export(entity: string, id: string, format: string) {
     if (entity === 'folder') return this.exportFolder(id);

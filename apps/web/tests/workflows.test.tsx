@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /// <reference types="vitest/jsdom" />
-import { useState, type ReactNode } from "react";
+import { StrictMode, useState, type ReactNode } from "react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import {
   cleanup,
@@ -10,8 +10,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { client } from "../src/api/client.js";
-import type { Mistake, Paper, QuestionView, Session, Tag } from "../src/api/client.js";
+import { BackendError, client } from "../src/api/client.js";
+import type { ImportResult, Mistake, Paper, QuestionView, Session, Tag } from "../src/api/client.js";
 import { App } from "../src/App.js";
 import { Detail, Library } from "../src/pages/Library.js";
 import { Mistakes, Records, Settings } from "../src/pages/Learning.js";
@@ -64,6 +64,92 @@ it("opens a production create form and saves the current folder ownership", asyn
     }),
   );
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+function renderLibraryImport() {
+  vi.spyOn(client.folders, "list").mockResolvedValue([
+    { id: "parent", name: "课程资料", parent_id: null, tag_ids: [], updated_at: "" },
+  ]);
+  const loadBanks = vi.spyOn(client.banks, "list").mockResolvedValue([]);
+  vi.spyOn(client.papers, "list").mockResolvedValue([]);
+  vi.spyOn(client.questions, "list").mockResolvedValue([]);
+  vi.spyOn(client.tags, "list").mockResolvedValue([]);
+  const view = render(
+    <StrictMode>
+      <aside>侧栏</aside>
+      <main>
+        <Library
+          folder="parent"
+          navigate={() => {}}
+          navigation={{ back: () => {}, forward: () => {}, home: () => {}, canBack: false, canForward: false }}
+          search=""
+          setSearch={() => {}}
+        />
+      </main>
+    </StrictMode>,
+  );
+  return { ...view, loadBanks };
+}
+it("automatically imports each selected file and reloads the folder on completion", async () => {
+  const { container, loadBanks } = renderLibraryImport();
+  const files = [new File(["{}"], "bank.json"), new File(["invalid"], "bad.md"), new File(["archive"], "paper.quarry")];
+  const bank = { id: "bank", name: "地理题库", entity: "bank", imported_count: 3 } as const;
+  let release: (result: ImportResult) => void = () => {};
+  const commit = vi.spyOn(client.backup, "importCommit")
+    .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+    .mockRejectedValueOnce(new BackendError("Import rejected", 400, "IMPORT_FAILED", [
+      { line: 4, path: "questions.0.content", message: "Invalid question" },
+    ]))
+    .mockResolvedValueOnce({ id: "paper", name: "地理测验", entity: "paper", imported_count: 2 });
+  const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  expect(input.multiple).toBe(true);
+  fireEvent.change(input, { target: { files } });
+  const dialog = within(screen.getByRole("dialog", { name: "导入文件" }));
+  const done = dialog.getByRole<HTMLButtonElement>("button", { name: "完成" });
+  expect(done.disabled).toBe(true);
+  expect(dialog.getByText("校验并导入中")).toBeTruthy();
+  expect(commit.mock.calls).toEqual([[files[0], "parent"]]);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.getByRole("dialog", { name: "导入文件" })).toBeTruthy();
+
+  release(bank);
+  await dialog.findByText("地理测验 · 套题 · 2 道题目");
+  expect(dialog.getByText("地理题库 · 题库 · 3 道题目")).toBeTruthy();
+  expect(dialog.getByText("导入失败")).toBeTruthy();
+  expect(dialog.getByRole("alert").textContent).toContain("第 4 行 questions.0.content Invalid question");
+  expect(commit.mock.calls).toEqual(files.map((file) => [file, "parent"]));
+  expect(done.disabled).toBe(false);
+  loadBanks.mockClear();
+  fireEvent.click(done);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(loadBanks).toHaveBeenCalledTimes(1);
+});
+it("shows the Library drop zone only for external files and imports a drop as a batch", async () => {
+  renderLibraryImport();
+  const commit = vi.spyOn(client.backup, "importCommit")
+    .mockResolvedValue({ id: "imported", name: "试题", entity: "bank", imported_count: 1 });
+  const workspace = screen.getByRole("main");
+  const heading = await screen.findByRole("heading", { name: "课程资料" });
+  const files = [new File(["{}"], "questions.json"), new File(["archive"], "folder.quarry")];
+  const external = { dataTransfer: { types: ["Files"], files } };
+  const label = "松开即可导入「课程资料」";
+  fireEvent.dragEnter(workspace, { dataTransfer: { types: ["text/plain"] } });
+  fireEvent.dragEnter(screen.getByText("侧栏"), external);
+  expect(screen.queryByText(label)).toBeNull();
+
+  fireEvent.dragEnter(workspace, external);
+  fireEvent.dragEnter(heading, external);
+  fireEvent.dragLeave(workspace, external);
+  expect(screen.getByText(label)).toBeTruthy();
+  fireEvent.dragLeave(heading, external);
+  expect(screen.queryByText(label)).toBeNull();
+
+  fireEvent.dragEnter(workspace, external);
+  fireEvent.drop(workspace, external);
+  const dialog = within(screen.getByRole("dialog", { name: "导入文件" }));
+  await waitFor(() => expect(dialog.getAllByText("导入成功")).toHaveLength(2));
+  expect(commit.mock.calls).toEqual(files.map((file) => [file, "parent"]));
+  fireEvent.click(dialog.getByRole("button", { name: "完成" }));
+  expect(screen.queryByText(label)).toBeNull();
 });
 it("serializes color saves and acknowledges only the final persisted color", async () => {
   const tag: Tag = {
