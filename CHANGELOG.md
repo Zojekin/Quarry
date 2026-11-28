@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/Zojekin/Quarry/compare/0.5.0...0.6.0) (2026-11-28)
+
+
+### Features
+
+* **import:** support multi-file batch import, drag-drop and folder target ([#46](https://github.com/Zojekin/Quarry/issues/46)) ([a19651d](https://github.com/Zojekin/Quarry/commit/a19651d09ea915cde77a7bfb1f96f56537f669aa))
+* **library:** add file-manager drag-drop, context menu, clipboard and shortcuts ([#50](https://github.com/Zojekin/Quarry/issues/50)) ([77dfa90](https://github.com/Zojekin/Quarry/commit/77dfa90a1797eaa783d0a7902e171d6ce0883670))
+* **trash:** split resources and standalone questions views ([#47](https://github.com/Zojekin/Quarry/issues/47)) ([1454317](https://github.com/Zojekin/Quarry/commit/1454317740571e6c8ed052699d9af0a061108ad3)), closes [#40](https://github.com/Zojekin/Quarry/issues/40)
+
+
+### Bug Fixes
+
+* **web:** polish sidebar icon footer, shadcn selects and frosted glass ([#48](https://github.com/Zojekin/Quarry/issues/48)) ([b60a388](https://github.com/Zojekin/Quarry/commit/b60a38821f001e4a411adfd17b90894082003a5d))
+
 ## [0.5.0](https://github.com/Zojekin/Quarry/compare/0.4.0...0.5.0) (2026-11-26)
 
 
