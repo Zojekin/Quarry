@@ -130,11 +130,11 @@
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史。无边框侧栏贯通品牌区与导航区。标签栏以 `42px` 为基准高度，对齐主内容，留白可拖动窗口并为 Windows 原生按钮预留空间。支持 `Ctrl+K` 快速命令跳转。一级栏目为首页（学习概览）、资料库、错题本和练习记录，另含回收站与系统设置。资料库在视口达到 `1340px` 时显示粘性右侧文件概览，低于该宽度时只显示列表或网格。
 - **资料库批量导入**共用文件多选与系统文件拖放入口。`ImportDialog` 通过 `BackendClient` 逐个向提交接口发送文件和当前文件夹 ID，逐项显示成功或错误详情，用户点「完成」后刷新资料库。
-- **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。`cliEnabled` 默认为关闭，开启后才显示 CLI 与 Skill 控件。
+- **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。`cliEnabled` 默认为关闭，开启后才显示 CLI 与 Skill 控件。`glassTransparency` 为 0–100 的整数，旧偏好默认使用 38。工作区将比例写入根元素的 `--glass-transparency`，由 CSS 派生 `--popover-surface`、`--popover-blur` 和 `--dialog-overlay-blur`。挂载到根节点的浮层与设置内的预览共享这些变量。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **回收站界面**按 `entity` 与 `parent_deleted` 区分资料和单独题目。批量操作提交已勾选项目。清空操作在用户确认后提交所显示分类的全部项目。
-- **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
-- **主题启动与持久化**：无依赖的 `lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`。配置记录预设、外观模式、自定义主题列表和选中的主题 ID。每个命名主题保留基础预设与日间、夜间各四项可选覆盖色。旧版单组覆盖色解析为同时适用于日间和夜间的已选命名主题。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将活动主题令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 统一管理设置页和标题栏的主题状态，订阅系统配色与本地存储变化。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
+- **共用视觉组件**：`components/ui/` 提供 `shadcn/ui` 与 Radix 基础原语，`Select` 用于热力图年份、桌面缩放、Skill 安装位置等单选交互。`components/ui.tsx` 提供模态框、多选 `Facet` 与状态药丸，`components/Icons.tsx` 封装 `lucide-react` 图标，`components/QuestionPreview.tsx` 供详情和错题本复用。`index.css` 将主题变量映射为 Tailwind CSS v4 令牌，`production.css` 适配 Markdown、KaTeX 与文件输入按钮。
+- **主题启动与持久化**：无依赖的 `lib/themes.ts` 校验 `localStorage` 键 `quarry.theme.v1`。配置记录预设、外观模式、自定义主题列表和选中的主题 ID。每个命名主题保留基础预设与日间、夜间各四项可选覆盖色。旧版单组覆盖色解析为同时适用于日间和夜间的已选命名主题。Vite 从同一解析器生成内联启动脚本，在首次绘制与 React 挂载前将活动主题令牌、`data-theme-mode` 及 `dark` 类写入根元素。`lib/theme-context.tsx` 管理主题状态并订阅系统配色与本地存储变化。用户在系统设置的「外观与主题」切换模式。该配置随各浏览器或桌面渲染器存储，独立于后端 SQLite 数据备份。
 - **富文本与按需分块**：`Markdown.tsx` 通过 `React.lazy` 懒加载 `MarkdownContent.tsx`（`react-markdown` + `remark-math` + `rehype-katex`），禁用原始 HTML。
 
 ---

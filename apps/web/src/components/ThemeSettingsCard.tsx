@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Check, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { updatePreferences, usePreferences } from "../lib/preferences.js";
 import { useTheme } from "../lib/theme-context.js";
 import {
   customColorKeys, customThemeNameLimit, defaultThemeConfig, fixThemeContrast, minimumContrast, resolveThemePalette,
@@ -170,6 +171,8 @@ function ThemeEditor({ initial, isNew, initialMode, customThemes, style, onSave,
 
 export function ThemeSettingsCard() {
   const { config, setConfig, theme, saveCustomTheme, deleteCustomTheme } = useTheme();
+  const { glassTransparency } = usePreferences();
+  const transparencyId = useId();
   const [editor, setEditor] = useState<{ initial: CustomTheme; isNew: boolean } | null>(null);
   const [deleting, setDeleting] = useState<CustomTheme | null>(null);
   const { customThemes = [], activeCustomThemeId } = config;
@@ -251,6 +254,38 @@ export function ThemeSettingsCard() {
           <RotateCcw className="size-3.5" aria-hidden="true" />
           恢复默认主题
         </Button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
+          <div className="min-w-48 flex-1 space-y-1">
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <label htmlFor={transparencyId} className="font-medium">浮层与遮罩磨砂通透度</label>
+              <span className="text-muted-foreground tabular-nums" aria-hidden="true">{glassTransparency}%</span>
+            </div>
+            <input
+              id={transparencyId}
+              type="range"
+              min={0}
+              max={100}
+              value={glassTransparency}
+              aria-valuetext={`${glassTransparency}%`}
+              onChange={(event) => updatePreferences({ glassTransparency: event.currentTarget.valueAsNumber })}
+              className="block h-5 w-full cursor-pointer rounded accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            />
+          </div>
+          <div className="flex gap-2 text-center text-xs text-muted-foreground" aria-hidden="true">
+            <div>
+              <div className="quarry-glass-preview h-6 w-14 overflow-hidden rounded-md border border-border p-1">
+                <div className="quarry-popover-surface h-full rounded-sm border border-border" />
+              </div>
+              浮层
+            </div>
+            <div>
+              <div className="quarry-glass-preview h-6 w-14 overflow-hidden rounded-md border border-border">
+                <div className="quarry-overlay-surface h-full" />
+              </div>
+              遮罩
+            </div>
+          </div>
+        </div>
         {editor && (
           <ThemeEditor
             {...editor}

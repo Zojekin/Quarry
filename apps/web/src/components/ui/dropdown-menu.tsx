@@ -18,7 +18,7 @@ export function DropdownMenuContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "quarry-panel-animate z-50 min-w-[168px] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(var(--shadow-ink),0.14),0_2px_8px_-2px_rgba(var(--shadow-ink),0.06)]",
+          "quarry-panel-animate quarry-popover-surface z-50 min-w-[168px] overflow-hidden rounded-lg border border-border p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(var(--shadow-ink),0.14),0_2px_8px_-2px_rgba(var(--shadow-ink),0.06)]",
           className,
         )}
         {...props}

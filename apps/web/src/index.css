@@ -49,6 +49,10 @@
   --question-size: 19px;
   --titlebar-height: env(titlebar-area-height, 42px);
   --dialog-max-height: 85dvh;
+  --glass-transparency: 0.38;
+  --popover-surface: color-mix(in srgb, var(--popover) calc(100% - 40% * var(--glass-transparency)), transparent);
+  --popover-blur: calc(16px * (1 - pow(1 - var(--glass-transparency), 3)));
+  --dialog-overlay-blur: calc(8px * var(--glass-transparency));
   --shadow-ink: 23, 27, 25;
   --control-edge: #000000;
   --control-highlight: rgba(255, 255, 255, 0.8);
@@ -126,6 +130,21 @@
 
 .quarry-dialog-overlay {
   animation: quarry-overlay-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.quarry-popover-surface {
+  background-color: var(--popover);
+  background-color: var(--popover-surface);
+  backdrop-filter: blur(var(--popover-blur));
+}
+
+.quarry-overlay-surface {
+  background-color: var(--scrim);
+  backdrop-filter: blur(var(--dialog-overlay-blur));
+}
+
+.quarry-glass-preview {
+  background: repeating-linear-gradient(135deg, var(--background) 0 8px, var(--primary) 8px 16px);
 }
 
 .quarry-panel-animate {

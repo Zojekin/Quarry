@@ -128,7 +128,7 @@ export function TagInput({
           id={listId}
           role="listbox"
           aria-label={`${label}建议`}
-          className="absolute inset-x-0 z-10 max-h-36 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+          className="absolute inset-x-0 z-10 max-h-36 overflow-y-auto rounded-md border border-border bg-card p-1 text-card-foreground shadow-md"
         >
           {matches.map((tag, index) => (
             <li

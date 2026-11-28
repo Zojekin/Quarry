@@ -36,6 +36,7 @@ import {
 import { Checkbox } from "../components/ui/checkbox.js";
 import { Input } from "../components/ui/input.js";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover.js";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select.js";
 import {
   Table,
   TableBody,
@@ -255,18 +256,16 @@ export function Home({ navigate }: { navigate: (route: Route) => void }) {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    aria-label="年份"
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    className="h-8 rounded-md border border-input bg-card px-2.5 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(23,27,25,0.04)] outline-none focus-visible:border-primary"
-                  >
-                    {years.map((y) => (
-                      <option key={y} value={String(y)}>
-                        {y} 年
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={year} onValueChange={setYear}>
+                    <SelectTrigger aria-label="年份" className="h-8 min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Segmented
                     label="统计维度"
                     options={[

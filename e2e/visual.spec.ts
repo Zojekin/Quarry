@@ -111,7 +111,13 @@ for (const layout of layouts) {
       });
     };
 
-    await page.getByLabel('年份').selectOption('2024');
+    const year = page.getByRole('combobox', { name: '年份' });
+    const yearOption = page.getByRole('option', { name: '2024 年', exact: true });
+    await year.press('Enter');
+    await yearOption.press('Enter');
+    await expect(yearOption).toBeHidden();
+    await expect(year).toHaveText('2024 年');
+    await year.blur();
     await expect(page.locator('.quarry-heat-grid > i')).toHaveCount(53 * 7);
     await capture('home');
 
@@ -158,7 +164,7 @@ for (const layout of layouts) {
       await expect(page.getByText('自动更新适用于 Windows 正式发布的桌面版。')).toBeVisible();
     }
     const zoom = page.getByRole('combobox', { name: '界面缩放' });
-    await expect(zoom).toHaveValue('100');
+    await expect(zoom).toHaveText('100%');
     await zoom.evaluate(select => {
       const bottom = select.getBoundingClientRect().bottom;
       window.scrollBy(0, Math.max(0, bottom + 24 - window.innerHeight));

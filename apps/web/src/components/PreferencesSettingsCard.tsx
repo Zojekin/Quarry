@@ -3,6 +3,7 @@ import { desktopZoomLevels, isDesktopZoomLevel, type DesktopZoomLevel } from "@q
 import { updatePreferences, usePreferences, type Preferences } from "../lib/preferences.js";
 import { Segmented } from "./ui.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card.js";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.js";
 import { Switch } from "./ui/switch.js";
 
 const switchSettings = [
@@ -49,21 +50,23 @@ export function PreferencesSettingsCard() {
         {zoom && (
           <div className="flex flex-wrap items-center justify-between gap-2 py-3">
             <label htmlFor={`${id}-zoom`} className="text-sm font-medium">界面缩放</label>
-            <select
-              id={`${id}-zoom`}
-              className="h-8 min-w-20 rounded-md border border-input bg-card px-2 text-[13px] font-medium"
-              value={zoomLevel ?? ""}
+            <Select
+              value={zoomLevel === undefined ? "" : String(zoomLevel)}
               disabled={zoomLevel === undefined}
-              onChange={(event) => {
-                const level = Number(event.currentTarget.value);
+              onValueChange={(value) => {
+                const level = Number(value);
                 if (!isDesktopZoomLevel(level)) return;
                 setZoomError(false);
                 void zoom.setLevel(level).catch(() => setZoomError(true));
               }}
             >
-              {zoomLevel === undefined && <option value="">—</option>}
-              {desktopZoomLevels.map((level) => <option key={level} value={level}>{level}%</option>)}
-            </select>
+              <SelectTrigger id={`${id}-zoom`} className="h-8 min-w-20">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {desktopZoomLevels.map((level) => <SelectItem key={level} value={String(level)}>{level}%</SelectItem>)}
+              </SelectContent>
+            </Select>
             {zoomError && (
               <p role="alert" className="w-full text-sm text-destructive">
                 {zoomLevel === undefined ? "无法读取界面缩放。" : "无法保存界面缩放。"}

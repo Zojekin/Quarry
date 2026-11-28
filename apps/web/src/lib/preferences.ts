@@ -10,6 +10,7 @@ export type Preferences = {
   sidebarCollapsed: boolean;
   libraryView: "list" | "grid";
   cliEnabled: boolean;
+  glassTransparency: number;
 };
 
 const defaults: Preferences = {
@@ -19,7 +20,14 @@ const defaults: Preferences = {
   sidebarCollapsed: false,
   libraryView: "list",
   cliEnabled: false,
+  glassTransparency: 38,
 };
+
+function normalizeGlassTransparency(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(100, Math.max(0, Math.round(value)))
+    : defaults.glassTransparency;
+}
 
 const listeners = new Set<() => void>();
 let memoryPreferences: string | undefined;
@@ -44,6 +52,7 @@ function parse(value: string): Preferences {
       sidebarCollapsed: typeof stored?.sidebarCollapsed === "boolean" ? stored.sidebarCollapsed : defaults.sidebarCollapsed,
       libraryView: stored?.libraryView === "grid" ? "grid" : defaults.libraryView,
       cliEnabled: typeof stored?.cliEnabled === "boolean" ? stored.cliEnabled : defaults.cliEnabled,
+      glassTransparency: normalizeGlassTransparency(stored?.glassTransparency),
     };
   } catch {
     return defaults;
@@ -68,7 +77,9 @@ export function usePreferences() {
 }
 
 export function updatePreferences(patch: Partial<Preferences>) {
-  const value = JSON.stringify({ ...parse(read()), ...patch });
+  const next = { ...parse(read()), ...patch };
+  next.glassTransparency = normalizeGlassTransparency(next.glassTransparency);
+  const value = JSON.stringify(next);
   try {
     window.localStorage.setItem(preferencesKey, value);
     memoryPreferences = undefined;

@@ -41,7 +41,7 @@ export function SelectContent({
         position={position}
         sideOffset={4}
         className={cn(
-          "quarry-panel-animate z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(var(--shadow-ink),0.14),0_2px_8px_-2px_rgba(var(--shadow-ink),0.06)]",
+          "quarry-panel-animate quarry-popover-surface z-50 max-h-[min(18rem,var(--radix-select-content-available-height,100dvh))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border p-1 text-popover-foreground shadow-[0_10px_28px_-6px_rgba(var(--shadow-ink),0.14),0_2px_8px_-2px_rgba(var(--shadow-ink),0.06)]",
           className,
         )}
         {...props}

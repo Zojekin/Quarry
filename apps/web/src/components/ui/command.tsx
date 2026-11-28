@@ -11,7 +11,7 @@ export function Command({
   return (
     <CommandPrimitive
       data-slot="command"
-      className={cn("flex h-full w-full flex-col overflow-hidden bg-popover text-popover-foreground", className)}
+      className={cn("flex h-full w-full flex-col overflow-hidden bg-card text-card-foreground", className)}
       {...props}
     />
   );

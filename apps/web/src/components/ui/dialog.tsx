@@ -16,7 +16,7 @@ export function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "quarry-dialog-overlay fixed inset-0 z-50 bg-(--scrim) backdrop-blur-[1.5px]",
+        "quarry-dialog-overlay quarry-overlay-surface fixed inset-0 z-50",
         className,
       )}
       {...props}
