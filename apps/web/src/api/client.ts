@@ -157,6 +157,12 @@ export type ImportPreview = {
   entity: "folder";
   summary: { folders: number; banks: number; papers: number; questions: number; attachments: number };
 };
+export type ImportResult = {
+  id: string;
+  name: string;
+  entity: ImportPreview["entity"];
+  imported_count: number;
+};
 export class BackendError extends Error {
   constructor(
     message: string,
@@ -365,10 +371,11 @@ export class BackendClient {
       ),
     importPreview: (file: File) =>
       this.request<ImportPreview>("import/preview", "POST", this.file(file)),
-    importCommit: (file: File) =>
-      this.request<{ id: string; entity: ImportPreview["entity"]; imported_count: number }>(
-        "import/commit", "POST", this.file(file),
-      ),
+    importCommit: (file: File, folderId?: string) => {
+      const form = this.file(file);
+      if (folderId) form.set("folder_id", folderId);
+      return this.request<ImportResult>("import/commit", "POST", form);
+    },
     backupCreate: () =>
       this.request<Blob>("backup/create", "POST", undefined, undefined, true),
     backupRestore: (file: File) =>

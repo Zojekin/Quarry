@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { client } from "../api/client.js";
-import type { Paper, Tag, ComposerSection } from "../api/client.js";
+import type { Paper, Tag, ComposerSection, ImportResult } from "../api/client.js";
 import {
   Button,
+  errorMessage,
   Facet,
   Modal,
   Notice,
@@ -10,6 +11,7 @@ import {
   types,
   useLoad,
 } from "./ui.js";
+import { Badge } from "./ui/badge.js";
 import { Checkbox } from "./ui/checkbox.js";
 import {
   Select,
@@ -297,82 +299,92 @@ export function FollowDialog({
   );
 }
 
+type ImportState =
+  | { status: "pending" | "importing" }
+  | { status: "success"; result: ImportResult }
+  | { status: "failure"; error: string };
+
+const importStatuses = {
+  pending: { label: "等待导入", variant: "secondary" },
+  importing: { label: "校验并导入中", variant: "info" },
+  success: { label: "导入成功", variant: "success" },
+  failure: { label: "导入失败", variant: "destructive" },
+} as const;
+
+const importEntityNames = { bank: "题库", paper: "套题", folder: "文件夹" };
+
 export function ImportDialog({
-  file,
+  files,
+  folderId,
   onClose,
   onSaved,
 }: {
-  file: File;
+  files: File[];
+  folderId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { data, error } = useLoad(
-    () => client.backup.importPreview(file),
-    [file],
-  );
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [states, setStates] = useState<ImportState[]>(() => files.map(() => ({ status: "pending" })));
+  const started = useRef(false);
+  useEffect(() => {
+    // A repeated effect must not write the same files again.
+    if (started.current) return;
+    started.current = true;
+
+    function update(index: number, state: ImportState) {
+      setStates((current) => current.map((entry, i) => i === index ? state : entry));
+    }
+
+    async function importFiles() {
+      for (const [index, file] of files.entries()) {
+        update(index, { status: "importing" });
+        try {
+          const result = await client.backup.importCommit(file, folderId);
+          update(index, { status: "success", result });
+        } catch (error) {
+          update(index, { status: "failure", error: errorMessage(error) });
+        }
+      }
+    }
+
+    void importFiles();
+  }, [files, folderId]);
+
+  const finished = states.every(({ status }) => status === "success" || status === "failure");
   return (
     <Modal
-      title="导入预览"
+      title="导入文件"
       onClose={onClose}
+      dismissible={false}
       actions={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            variant="default"
-            disabled={!data || busy || !!error}
-            onClick={() => {
-              setBusy(true);
-              void client.backup
-                .importCommit(file)
-                .then(() => {
-                  onSaved();
-                  onClose();
-                })
-                .catch((e) => setMessage(e.message))
-                .finally(() => setBusy(false));
-            }}
-          >
-            确认导入为新文件
-          </Button>
-        </>
+        <Button disabled={!finished} onClick={() => {
+          onSaved();
+          onClose();
+        }}>
+          完成
+        </Button>
       }
     >
-      <Notice error={error || message} loading={!data && !error} />
-      {data && (
-        <div className="space-y-3">
-          <h3 className="m-0 font-serif text-[18px] font-semibold">{data.name}</h3>
-          {data.entity === "folder" ? (
-            <p className="text-[13.5px] text-muted-foreground">
-              {data.summary.folders} 个文件夹 · {data.summary.banks} 个题库 ·{" "}
-              {data.summary.papers} 份套题 · {data.summary.questions} 道题目 ·{" "}
-              {data.summary.attachments} 个附件
-            </p>
-          ) : (
-            <>
-              <p className="text-[13.5px] text-muted-foreground">
-                {data.entity === "bank" ? "题库" : "套题"} ·{" "}
-                {data.questions.length} 道题目 · {data.attachments.length}{" "}
-                个附件
-              </p>
-              {data.description && <Markdown text={data.description} preview />}
-              <div className="quarry-dialog-list max-h-60 space-y-2 overflow-y-auto">
-                {data.questions.map((q) => (
-                  <article
-                    key={q.id}
-                    className="rounded-md border border-border bg-muted/35 px-3 py-2 text-[13px]"
-                  >
-                    <Markdown text={q.content} preview />
-                  </article>
-                ))}
+      <ul className="quarry-dialog-list max-h-80 space-y-2 overflow-y-auto" aria-live="polite">
+        {states.map((state, index) => {
+          const { name } = files[index]!;
+          const { label, variant } = importStatuses[state.status];
+          return (
+            <li key={index} className="space-y-2 rounded-md border border-border px-3 py-2.5 wrap-anywhere">
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 font-medium">{name}</span>
+                <Badge variant={variant}>{label}</Badge>
               </div>
-            </>
-          )}
-        </div>
-      )}
+              {state.status === "success" && (
+                <p className="m-0 text-muted-foreground">
+                  {state.result.name} · {importEntityNames[state.result.entity]} · {state.result.imported_count} 道题目
+                </p>
+              )}
+              {state.status === "failure" && <Notice error={state.error} loading={false} />}
+            </li>
+          );
+        })}
+      </ul>
     </Modal>
   );
 }

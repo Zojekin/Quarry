@@ -1,10 +1,15 @@
 ﻿import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { ISnapshotRepository } from '@quarry/database';
+import { IdSchema } from '@quarry/shared';
 import type { QuarryServerEnv } from '../app.js';
 import { BackupService } from '../services/backup.service.js';
 import { LocalAttachmentStorage } from '../services/attachment.service.js';
-import { body, invalid } from '../services/common.js';
+import { body, invalid, parse } from '../services/common.js';
+
+function importFolderId(value: unknown): string | null {
+  return value === undefined || value === null || value === '' ? null : parse(IdSchema, value);
+}
 
 export function createBackupImportRoutes(snapshots: ISnapshotRepository, recoveryPointsDir?: string) {
   const routes = new Hono<QuarryServerEnv>();
@@ -16,13 +21,15 @@ export function createBackupImportRoutes(snapshots: ISnapshotRepository, recover
     if (c.req.header('content-type')?.includes('multipart/form-data')) {
       const form = await c.req.formData(); const file = form.get('file');
       if (!(file instanceof File)) invalid('Expected file');
-      const format = String(form.get('format') ?? file.name.split('.').pop());
-      if (format === 'quarry') return service(c).importArchive(new Uint8Array(await file.arrayBuffer()), commit);
-      return commit ? service(c).commit(await file.text(), format) : service(c).preview(await file.text(), format);
+      const format = String(form.get('format') ?? file.name.split('.').pop()?.toLowerCase());
+      const folderId = commit ? importFolderId(form.get('folder_id')) : null;
+      if (format === 'quarry') return service(c).importArchive(new Uint8Array(await file.arrayBuffer()), commit, folderId);
+      return commit ? service(c).commit(await file.text(), format, folderId) : service(c).preview(await file.text(), format);
     }
     const input = await body(c);
     if (typeof input.content !== 'string' || typeof input.format !== 'string') invalid('Expected content and format');
-    return commit ? service(c).commit(input.content, input.format) : service(c).preview(input.content, input.format);
+    return commit ? service(c).commit(input.content, input.format, importFolderId(input.folder_id))
+      : service(c).preview(input.content, input.format);
   }
   return routes
     .post('/import/preview', async c => c.json({ success: true, data: await importRequest(c, false) }))

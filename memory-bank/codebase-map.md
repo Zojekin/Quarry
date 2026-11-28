@@ -46,7 +46,7 @@
 - `components/QuestionEditor.tsx` 编辑六种题型和上传图片。资料与题目编辑器经 `components/TagInput.tsx` 管理标签草稿，在保存时调用 `lib/tags.ts` 获取或创建标签 ID。
 - `components/Icons.tsx` 基于 `lucide-react` 提供共用的导航与操作图标。
 - `components/QuestionPreview.tsx` 渲染资料详情和错题本复用的题目、答案与解析。
-- `components/Workflows.tsx` 包含题库选题、来源差异与导入预览。
+- `components/Workflows.tsx` 包含题库选题、来源差异与批量导入弹窗。
 - `pages/Study.tsx` 实现练习左右分栏（常规字重题干、无方框 `A/B/C/D` 选项、无底座三操作按钮与数字键/回车快捷键）、考试整卷作答、防并发 409 草稿队列、暂停遮罩与焦点返回以及成绩报告。
 - `pages/Learning.tsx` 包含学习概览、记录、错题、设置与回收站。设置组合 `ThemeSettingsCard`、`TagManagerCard`、`UpdateSettingsCard`、`PreferencesSettingsCard`、`DiagnosticsCard`、备份恢复区和 `CliGuideCard`。`lib/preferences.ts` 管理独立于页签状态的本地偏好。
 - `components/ThemeSettingsCard.tsx` 在设置页提供预设预览、自定义颜色与对比度调整。`components/ThemeModeToggle.tsx` 提供标题栏快捷切换。

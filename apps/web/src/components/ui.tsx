@@ -73,6 +73,7 @@ export function Modal({
   className = "",
   style,
   onSubmit,
+  dismissible = true,
 }: {
   title: string;
   onClose: () => void;
@@ -81,6 +82,7 @@ export function Modal({
   className?: string;
   style?: CSSProperties | undefined;
   onSubmit?: () => void;
+  dismissible?: boolean;
 }) {
   const activeElement = document.activeElement;
   const menuTriggerId = activeElement
@@ -97,11 +99,13 @@ export function Modal({
         <DialogTitle className="font-serif text-[20px] font-semibold tracking-[-0.01em] text-foreground">
           {title}
         </DialogTitle>
-        <DialogClose asChild>
-          <Button size="icon" variant="ghost" aria-label="关闭">
-            <X className="size-4" />
-          </Button>
-        </DialogClose>
+        {dismissible && (
+          <DialogClose asChild>
+            <Button size="icon" variant="ghost" aria-label="关闭">
+              <X className="size-4" />
+            </Button>
+          </DialogClose>
+        )}
       </DialogHeader>
       {children && <div data-slot="modal-body" className="space-y-4 text-[13.5px]">{children}</div>}
       <DialogFooter>{actions}</DialogFooter>
@@ -112,7 +116,7 @@ export function Modal({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && dismissible) onClose();
       }}
     >
       <DialogContent
@@ -121,6 +125,9 @@ export function Modal({
         style={style}
         aria-describedby={undefined}
         onInteractOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => {
+          if (!dismissible) event.preventDefault();
+        }}
         onOpenAutoFocus={(event) => {
           const input = contentRef.current?.querySelector<HTMLElement>(
             "[data-autofocus], input, textarea",

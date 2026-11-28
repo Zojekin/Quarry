@@ -57,6 +57,64 @@ it('roundtrips documented Markdown and JSON templates without overwriting existi
   expect(await database.repositories.questionBanks.list()).toHaveLength(4);
   expect(await database.repositories.questions.list()).toHaveLength(8);
 });
+it('commits JSON and multipart Markdown into the requested folder', async () => {
+  const folder = await database.repositories.folders.create({ id: randomUUID(), name: 'Destination', parent_id: null });
+  const content = JSON.stringify(document());
+  const markdown = new FormData();
+  markdown.set('file', new File(['# Quarry\n\n```json\n' + content + '\n```\n'], 'questions.MD'));
+  markdown.set('folder_id', folder.id);
+  const requests = [
+    { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'json', content, folder_id: folder.id }) },
+    { body: markdown },
+  ];
+  for (const request of requests) {
+    const response = await app.request('/api/import/commit', { method: 'POST', ...request });
+    const result = await response.json();
+    expect(response.status, JSON.stringify(result)).toBe(201);
+    expect(result.data).toMatchObject({ name: 'Imported', entity: 'bank', imported_count: 2 });
+    expect(await database.repositories.questionBanks.findById(result.data.id)).toMatchObject({ folder_id: folder.id });
+  }
+});
+it.each([undefined, '', null])('commits to the root when folder_id is %s', async folder_id => {
+  const response = await app.request('/api/import/commit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ format: 'json', content: JSON.stringify(document()), folder_id }) });
+  expect(response.status).toBe(201);
+  const { data } = await response.json();
+  expect(await database.repositories.questionBanks.findById(data.id)).toMatchObject({ folder_id: null });
+});
+it('rejects malformed, missing and deleted import targets without writing content', async () => {
+  const repositories = database.repositories;
+  const deleted = await repositories.folders.create({ id: randomUUID(), name: 'Deleted', parent_id: null });
+  await repositories.folders.delete(deleted.id);
+  const content = JSON.stringify(document());
+  const archive = zipSync({ 'content.json': strToU8(content) });
+  for (const [folderId, status] of [['malformed', 400], [randomUUID(), 404], [deleted.id, 404]] as const) {
+    const response = await app.request('/api/import/commit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format: 'json', content, folder_id: folderId }) });
+    expect(response.status).toBe(status);
+    const form = new FormData();
+    form.set('file', new File([archive], 'questions.quarry'));
+    form.set('folder_id', folderId);
+    expect((await app.request('/api/import/commit', { method: 'POST', body: form })).status).toBe(status);
+  }
+  expect(await repositories.questionBanks.list()).toEqual([]);
+  expect(await repositories.questions.list()).toEqual([]);
+});
+it.each(['bank', 'paper'] as const)('commits a single %s archive into the requested folder', async entity => {
+  const repositories = database.repositories;
+  const folder = await repositories.folders.create({ id: randomUUID(), name: 'Destination', parent_id: null });
+  const original = await service.commit(JSON.stringify({ ...document(), entity }), 'json');
+  const exported = await service.export(entity, original.id, 'quarry');
+  const form = new FormData();
+  form.set('file', new File([Buffer.from(exported.bytes)], 'questions.quarry'));
+  form.set('folder_id', folder.id);
+  const response = await app.request('/api/import/commit', { method: 'POST', body: form });
+  const result = await response.json();
+  expect(response.status, JSON.stringify(result)).toBe(201);
+  expect(result.data).toMatchObject({ name: 'Imported', entity, imported_count: 2 });
+  const repository = entity === 'bank' ? repositories.questionBanks : repositories.papers;
+  expect(await repository.findById(result.data.id)).toMatchObject({ folder_id: folder.id });
+});
 it('exports and imports .quarry attachment bytes through multipart routes', async () => {
   const form = new FormData(); form.set('file', new File(['picture'], 'image.png', { type: 'image/png' }));
   const upload = await app.request('/api/attachments', { method: 'POST', body: form });
@@ -174,7 +232,7 @@ it('exports only the folder subtree with file tags, portable contents and refere
   expect((await app.request(`/api/export/folder/${randomUUID()}`)).status).toBe(404);
 });
 
-it('previews and imports a verified folder archive into a fresh database', async () => {
+it('previews and imports a verified folder archive under the requested folder', async () => {
   const r = database.repositories;
   const root = await r.folders.create({ id: randomUUID(), name: 'Root', parent_id: null });
   const child = await r.folders.create({ id: randomUUID(), name: 'Nested', parent_id: root.id });
@@ -216,14 +274,22 @@ it('previews and imports a verified folder archive into a fresh database', async
     expect(await target.repositories.folders.list()).toEqual([]);
     expect(await target.repositories.attachments.list()).toEqual([]);
     expect(await storage.exists(image.sha256)).toBe(false);
-    const imported = await importer.importArchive(bytes, true);
-    expect(imported).toMatchObject({ entity: 'folder', imported_count: 4 });
+    const destination = await target.repositories.folders.create({ id: randomUUID(), name: 'Destination', parent_id: null });
+    const archiveForm = new FormData();
+    archiveForm.set('file', new File([Buffer.from(bytes)], 'folder.quarry'));
+    archiveForm.set('folder_id', destination.id);
+    const targetApp = createQuarryServer({ db: target.db, attachmentStorage: storage });
+    const response = await targetApp.request('/api/import/commit', { method: 'POST', body: archiveForm });
+    const { data: imported, error } = await response.json();
+    expect(response.status, JSON.stringify(error)).toBe(201);
+    expect(imported).toMatchObject({ name: 'Root', entity: 'folder', imported_count: 4 });
     expect(imported).toHaveProperty('id');
     const folders = await target.repositories.folders.list();
     const importedRoot = folders.find(folder => folder.name === 'Root')!;
     const nested = folders.find(folder => folder.name === 'Nested')!;
     expect(imported).toHaveProperty('id', importedRoot.id);
     expect(importedRoot.id).not.toBe(root.id);
+    expect(importedRoot.parent_id).toBe(destination.id);
     expect(nested.parent_id).toBe(importedRoot.id);
     const [importedBank] = await target.repositories.questionBanks.list();
     expect(importedBank?.folder_id).toBe(nested.id);
