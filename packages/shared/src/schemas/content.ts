@@ -2,6 +2,19 @@ import { z } from 'zod';
 import { QuestionType, ScoreMode } from '../enums/index.js';
 import { entityShape, IdSchema, NonEmptyTextSchema, uniqueIds } from './common.js';
 import { QuestionSchema, SharedMaterialQuestionSchema } from './question.js';
+
+const libraryTarget = z.strictObject({ entity: z.enum(['folder', 'bank', 'paper']), id: IdSchema });
+export const LibraryTransferSchema = z.strictObject({
+  targets: z.array(libraryTarget).min(1).refine(
+    targets => new Set(targets.map(({ entity, id }) => `${entity}:${id}`)).size === targets.length,
+    'Duplicate targets',
+  ),
+  target_folder_id: IdSchema.nullable(),
+});
+export type LibraryTarget = z.infer<typeof libraryTarget>;
+export type LibraryTransfer = z.infer<typeof LibraryTransferSchema>;
+export type LibraryTransferItem = LibraryTarget & { name: string };
+
 const file = { ...entityShape, name: NonEmptyTextSchema, folder_id: IdSchema.nullable(),
   tag_ids: z.array(IdSchema).default([]), deleted_at: z.iso.datetime({ offset: true }).nullable().default(null) };
 export const FolderSchema = z.strictObject({ ...entityShape, name: NonEmptyTextSchema,

@@ -1,4 +1,4 @@
-import type { StudyAnswer, Question, QuestionDTO, TagWithUsage } from "@quarry/shared";
+import type { LibraryTransfer, LibraryTransferItem, StudyAnswer, Question, QuestionDTO, TagWithUsage } from "@quarry/shared";
 export type { StudyAnswer };
 export interface Tag {
   id: string;
@@ -254,6 +254,10 @@ export class BackendClient {
     };
   }
   folders = this.crud<Folder, DocumentInput>("folders");
+  library = {
+    move: (input: LibraryTransfer) => this.request<LibraryTransferItem[]>("library/move", "POST", input),
+    copy: (input: LibraryTransfer) => this.request<LibraryTransferItem[]>("library/copy", "POST", input),
+  };
   banks = this.crud<Bank, DocumentInput>("banks");
   questions = this.crud<
     QuestionView,

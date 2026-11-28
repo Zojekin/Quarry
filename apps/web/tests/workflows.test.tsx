@@ -98,6 +98,8 @@ it("opens a production create form and saves the current folder ownership", asyn
       navigation={{ back: () => {}, forward: () => {}, home: () => {}, canBack: false, canForward: false }}
       search=""
       setSearch={() => {}}
+      clipboard={undefined}
+      setClipboard={() => {}}
     />,
   );
   const createBtn = screen.getByRole("button", { name: /新建/ });
@@ -134,6 +136,8 @@ function renderLibraryImport() {
           navigation={{ back: () => {}, forward: () => {}, home: () => {}, canBack: false, canForward: false }}
           search=""
           setSearch={() => {}}
+          clipboard={undefined}
+          setClipboard={() => {}}
         />
       </main>
     </StrictMode>,

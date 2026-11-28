@@ -37,6 +37,13 @@ async function openCreateMenu(page: Page, item: string) {
   await page.getByRole('menuitem', { name: item, exact: true }).click();
 }
 
+async function useFileMenu(page: Page, name: string, action: string | RegExp) {
+  const entry = row(page, name);
+  await entry.hover();
+  await entry.getByRole('button', { name: '更多操作' }).click();
+  await page.getByRole('menuitem', { name: action }).click();
+}
+
 async function archiveImport(page: Page, path: string, summary: RegExp) {
   await page.locator('input[accept=".quarry,.json,.md"]').setInputFiles(path);
   const dialog = page.getByRole('dialog', { name: '导入文件' });
@@ -45,6 +52,40 @@ async function archiveImport(page: Page, path: string, summary: RegExp) {
   await dialog.getByRole('button', { name: '完成', exact: true }).click();
   await expect(dialog).toBeHidden();
 }
+
+test('copies, cuts and drags real library entries between folders', async ({ quarry }) => {
+  const { page } = quarry;
+  const folder = '归档文件夹';
+  const bank = '地理练习';
+  await api(page, 'folders', { name: folder });
+  const original = await api<{ id: string }>(page, 'banks', { name: bank });
+  await sidebar(page, '资料库').click();
+  const originalRow = row(page, bank);
+  await originalRow.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /^复制/ }).click();
+  await page.keyboard.press('ControlOrMeta+V');
+  const copyName = bank + ' (副本)';
+  await expect(row(page, copyName)).toBeVisible();
+  await originalRow.dragTo(row(page, folder));
+  await expect(originalRow).toHaveCount(0);
+
+  const copy = row(page, copyName).getByRole('checkbox', { name: '选择 ' + copyName });
+  await copy.click();
+  await page.keyboard.press('ControlOrMeta+X');
+  await expect(row(page, copyName)).toHaveAttribute('data-cut', 'true');
+  await button(page, folder).click();
+  await expect(originalRow).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+V');
+  await expect(row(page, copyName)).toBeVisible();
+  const breadcrumb = page.getByRole('navigation', { name: '当前位置' });
+  await originalRow.dragTo(breadcrumb.getByRole('button', { name: '资料库', exact: true }));
+  await expect(originalRow).toHaveCount(0);
+  expect(await api(page, 'banks/' + original.id)).toMatchObject({ folder_id: null });
+  await page.keyboard.press('Backspace');
+  await expect(originalRow).toBeVisible();
+  await expect(row(page, copyName)).toHaveCount(0);
+  await assertPageHealthy(page);
+});
 
 test('creates, studies, archives and recovers a real library', async ({ quarry }, testInfo) => {
   test.setTimeout(120_000);
@@ -58,18 +99,18 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await sidebar(page, '资料库').click();
     await openCreateMenu(page, '新建文件夹');
     await saveDocument(page, '资料草稿', '地理');
-    await row(page, '资料草稿').getByRole('button', { name: '重命名' }).click({ force: true });
+    await useFileMenu(page, '资料草稿', /^重命名/);
     await saveDocument(page, folder);
     await button(page, folder).click();
 
     await openCreateMenu(page, '新建题库');
     await saveDocument(page, '题库草稿', '地理');
-    await row(page, '题库草稿').getByRole('button', { name: '重命名' }).click({ force: true });
+    await useFileMenu(page, '题库草稿', /^编辑属性/);
     await saveDocument(page, bank);
 
     await openCreateMenu(page, '新建套题');
     await saveDocument(page, '套题草稿', '地理');
-    await row(page, '套题草稿').getByRole('button', { name: '重命名' }).click({ force: true });
+    await useFileMenu(page, '套题草稿', /^编辑属性/);
     await saveDocument(page, paper);
     await expect(row(page, paper).getByText('地理', { exact: true })).toBeVisible();
   });
@@ -216,7 +257,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await button(page, folder).click();
     const bankFile = testInfo.outputPath('bank.quarry');
     await quarry.download(bankFile, () =>
-      row(page, bank).getByRole('button', { name: '导出' }).click({ force: true }),
+      useFileMenu(page, bank, '导出'),
     );
     await archiveImport(page, bankFile, /火山题库 · 题库 · 1 道题目/);
     await expect(row(page, bank)).toHaveCount(2);
@@ -224,7 +265,7 @@ test('creates, studies, archives and recovers a real library', async ({ quarry }
     await sidebar(page, '资料库').click();
     const folderFile = testInfo.outputPath('folder.quarry');
     await quarry.download(folderFile, () =>
-      row(page, folder).getByRole('button', { name: '导出' }).click({ force: true }),
+      useFileMenu(page, folder, '导出'),
     );
     await archiveImport(page, folderFile, /地理资料 · 文件夹 · 3 道题目/);
     await expect(row(page, folder)).toHaveCount(2);

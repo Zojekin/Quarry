@@ -8,7 +8,7 @@ import type { QuestionView } from './question.service.js';
 
 const sectionConfig = z.strictObject({ id: IdSchema, title: nameSchema, question_type: z.enum(QuestionType),
   shuffle_questions: z.boolean().default(false), fixed_groups: z.array(idsSchema.min(2)).default([]) });
-const composerSchema = z.strictObject({ sections: z.array(sectionConfig).default([]),
+export const composerSchema = z.strictObject({ sections: z.array(sectionConfig).default([]),
   merged_shuffle_sections: z.array(idsSchema.min(2)).default([]), shuffle_materials: z.boolean().default(false) });
 const paperInput = z.strictObject({ name: nameSchema, folder_id: IdSchema.nullable().default(null),
   description: z.string().default(''), full_score: z.number().finite().nonnegative().default(0),
