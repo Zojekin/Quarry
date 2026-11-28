@@ -233,6 +233,10 @@ export function resolveThemePalette(preset: ThemePreset, mode: ResolvedThemeMode
   const originalCardTints = pineLight && primary === palette.primary && card === palette.card;
   const originalHeat = pineLight && primary === palette.primary && background === palette.background;
   const { foreground, mutedForeground } = palette;
+  // At 60% opacity, check against the most contrasting possible backdrop.
+  const popover = adjustColor(card, dark ? black : white, (candidate) =>
+    contrastRatio(foreground, mix(candidate, dark ? white : black, 0.4)) >= minimumContrast,
+  );
   const primaryForeground = contrastInk(primary, dark ? background : white);
   const accent = originalCardTints ? "#e8f0ea" : mix(card, primary, dark ? 0.16 : 0.12);
   const accentForeground = originalCardTints ? "#204635" : contrastInk(accent, foreground);
@@ -254,7 +258,7 @@ export function resolveThemePalette(preset: ThemePreset, mode: ResolvedThemeMode
     tokens: {
       background, foreground, card, sidebar, primary,
       "card-foreground": foreground,
-      popover: card,
+      popover,
       "popover-foreground": foreground,
       "primary-foreground": primaryForeground,
       "primary-hover": pineLight && primary === palette.primary ? "#224737"

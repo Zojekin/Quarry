@@ -3,7 +3,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { client } from "../src/api/client.js";
-import { ThemeModeToggle } from "../src/components/ThemeModeToggle.js";
 import { ThemeSettingsCard } from "../src/components/ThemeSettingsCard.js";
 import { ThemeProvider } from "../src/lib/theme-context.js";
 import { bootTheme, darkPreferenceQuery, defaultThemeConfig, minimumContrast, themeStorageKey } from "../src/lib/themes.js";
@@ -70,7 +69,7 @@ it("updates the root and Windows bridge on system changes only while following t
   const setTitleBarOverlay = vi.fn();
   vi.stubGlobal("__QUARRY_DESKTOP__", { setTitleBarOverlay });
   localStorage.setItem(themeStorageKey, JSON.stringify({ preset: "indigo-ink", mode: "system" }));
-  render(<ThemeProvider><ThemeModeToggle /></ThemeProvider>);
+  render(<ThemeProvider><ThemeSettingsCard /></ThemeProvider>);
   expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#f7f8fc", symbolColor: "#3e5287" });
 
   system.set(true);
@@ -78,7 +77,7 @@ it("updates the root and Windows bridge on system changes only while following t
   expect(root.style.getPropertyValue("--sidebar")).toBe("#1d2334");
   expect(setTitleBarOverlay).toHaveBeenLastCalledWith({ color: "#171b29", symbolColor: "#e9edfa" });
   expect(savedTheme()).toEqual({ preset: "indigo-ink", mode: "system" });
-  fireEvent.click(screen.getByRole("button", { name: "外观模式：跟随系统，切换至日间" }));
+  fireEvent.click(screen.getByRole("button", { name: "日间" }));
   expect(root.dataset.themeMode).toBe("light");
   expect(savedTheme().mode).toBe("light");
   setTitleBarOverlay.mockClear();
@@ -88,19 +87,19 @@ it("updates the root and Windows bridge on system changes only while following t
 });
 
 it("refreshes the theme when another renderer changes the stored configuration", () => {
-  render(<ThemeProvider><ThemeModeToggle /></ThemeProvider>);
+  render(<ThemeProvider><ThemeSettingsCard /></ThemeProvider>);
   localStorage.setItem(themeStorageKey, JSON.stringify({ preset: "slate-neutral", mode: "dark" }));
   fireEvent(window, new StorageEvent("storage", { key: themeStorageKey }));
   expect(root.dataset.themeMode).toBe("dark");
   expect(root.style.getPropertyValue("--primary")).toBe("#adc1d5");
-  expect(screen.getByRole("button", { name: "外观模式：夜间，切换至跟随系统" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "夜间" }).getAttribute("aria-pressed")).toBe("true");
 });
 
 it("shows a compact settings grid and saves separate day and night palettes from the dialog", async () => {
   const system = mockSystemPreference(false);
   vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([]);
   vi.spyOn(client, "health").mockResolvedValue({ status: "ok", database: "connected", version: "0.3.0", timestamp: 0 });
-  const { unmount } = render(<ThemeProvider><ThemeModeToggle /><Settings /></ThemeProvider>);
+  const { unmount } = render(<ThemeProvider><Settings /></ThemeProvider>);
   await screen.findByText("此分类暂无标签。");
   const settings = within(screen.getByRole("region", { name: "外观与主题" }));
   const grid = within(settings.getByRole("group", { name: "主题" }));
@@ -116,7 +115,7 @@ it("shows a compact settings grid and saves separate day and night palettes from
   expect(preset.getAttribute("aria-pressed")).toBe("true");
   expect(root.style.getPropertyValue("--primary")).toBe("#8b4c28");
 
-  fireEvent.click(screen.getByRole("button", { name: "外观模式：日间，切换至夜间" }));
+  fireEvent.click(settings.getByRole("button", { name: "夜间" }));
   expect(settings.getByRole("button", { name: "夜间" }).getAttribute("aria-pressed")).toBe("true");
   expect(root.dataset.themeMode).toBe("dark");
   expect(root.style.getPropertyValue("--primary")).toBe("#edb589");

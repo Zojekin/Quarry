@@ -19,14 +19,25 @@ test('boots with a live backend, unified frameless chrome, workspace tabs and pa
   await page.getByRole('button', { name: '收起导航' }).click();
   const sidebar = page.locator('aside[aria-label="主导航"]');
   await expect(sidebar).toHaveCSS('width', '58px');
-  const homeNav = sidebar.getByRole('button', { name: '首页' });
-  await expect(homeNav).toHaveCSS('width', '31.5px');
-  await expect(homeNav).toHaveCSS('height', '31.5px');
-  await sidebar.getByRole('button', { name: '快速命令' }).click();
+  const utilities = ['快速命令', '回收站', '系统设置'].map(name =>
+    sidebar.getByRole('button', { name, exact: true }),
+  );
+  for (const button of [sidebar.getByRole('button', { name: '首页' }), ...utilities]) {
+    await expect(button).toHaveCSS('width', '36px');
+    await expect(button).toHaveCSS('height', '36px');
+  }
+  const collapsedButtons = await Promise.all(utilities.map(button => button.boundingBox()));
+  expect(collapsedButtons.slice(1).map(button => button!.x)).toEqual([collapsedButtons[0]!.x, collapsedButtons[0]!.x]);
+  expect(collapsedButtons.slice(1).map((button, i) => button!.y - collapsedButtons[i]!.y)).toEqual([40, 40]);
+  await utilities[0]!.click();
   await expect(page.getByRole('dialog', { name: '快速命令' })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '展开导航' }).click();
   await expect(sidebar).toHaveCSS('width', '224px');
+  const expandedButtons = await Promise.all(utilities.map(button => button.boundingBox()));
+  expect(expandedButtons.slice(1).map(button => button!.y)).toEqual([expandedButtons[0]!.y, expandedButtons[0]!.y]);
+  expect(expandedButtons.slice(1).map((button, i) => button!.x - expandedButtons[i]!.x)).toEqual([40, 40]);
+  await expect(sidebar.getByRole('button', { name: /^外观模式/ })).toHaveCount(0);
 
   const titlebar = page.locator('.quarry-titlebar');
   await expect(titlebar).toHaveCSS('-webkit-app-region', 'drag');
@@ -73,11 +84,45 @@ test('adapts the sidebar and library inspector to the viewport width', async ({ 
 
   await page.setViewportSize({ width: 960, height: 760 });
   await expect(sidebar).toHaveCSS('width', '58px');
-  await expect(sidebar.getByRole('button', { name: '资料库' })).toHaveCSS('width', '31.5px');
+  await expect(sidebar.getByRole('button', { name: '资料库' })).toHaveCSS('width', '36px');
   await page.getByRole('button', { name: '展开导航' }).click();
   await expect(sidebar).toHaveCSS('width', '224px');
   await page.getByRole('button', { name: '收起导航' }).click();
   await expect(sidebar).toHaveCSS('width', '58px');
+  await assertPageHealthy(page);
+});
+
+test('applies the saved glass setting to floating surfaces and dialog overlays', async ({ quarry }) => {
+  const { page } = quarry;
+  const sidebar = page.getByRole('complementary', { name: '主导航' });
+  await sidebar.getByRole('button', { name: '系统设置' }).click();
+  const appearance = page.getByRole('region', { name: '外观与主题' });
+  const slider = appearance.getByRole('slider');
+  const sample = appearance.locator('.quarry-popover-surface');
+  await expect(slider).toHaveValue('38');
+  await expect(sample).toHaveCSS('backdrop-filter', /^blur\(12\.\d+px\)$/);
+  await slider.press('Home');
+  await expect(slider).toHaveValue('0');
+  await expect(sample).toHaveCSS('backdrop-filter', 'blur(0px)');
+  await expect(appearance.locator('.quarry-overlay-surface')).toHaveCSS('backdrop-filter', 'blur(0px)');
+  await slider.press('End');
+  await expect(slider).toHaveValue('100');
+  await expect(sample).toHaveCSS('backdrop-filter', 'blur(16px)');
+
+  const zoom = page.getByRole('combobox', { name: '界面缩放' });
+  await zoom.click();
+  const options = page.getByRole('listbox');
+  await expect(options).toHaveCSS('backdrop-filter', 'blur(16px)');
+  await expect(options).toHaveCSS('background-color', /\/ 0\.6\)$/);
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(slider).toHaveValue('100');
+
+  await sidebar.getByRole('button', { name: '快速命令' }).click();
+  const overlay = page.locator('[data-slot="dialog-overlay"]');
+  await expect(overlay).toHaveCSS('backdrop-filter', 'blur(8px)');
+  await expect(overlay).toHaveCSS('background-color', 'rgba(23, 27, 25, 0.35)');
+  await page.keyboard.press('Escape');
   await assertPageHealthy(page);
 });
 
@@ -86,7 +131,9 @@ test('restores dark mode before the app mounts and syncs the Windows caption col
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-theme-mode', 'light');
   const readOverlay = process.platform === 'win32' ? await quarry.observeTitleBarOverlay() : undefined;
-  await page.getByRole('button', { name: '外观模式：日间，切换至夜间' }).click();
+  const sidebar = page.getByRole('complementary', { name: '主导航' });
+  await sidebar.getByRole('button', { name: '系统设置' }).click();
+  await page.getByRole('group', { name: '外观模式' }).getByRole('button', { name: '夜间' }).click();
   await expect(root).toHaveAttribute('data-theme-mode', 'dark');
   await expect(root).toHaveCSS('color-scheme', 'dark');
   if (readOverlay) {
@@ -102,6 +149,7 @@ test('restores dark mode before the app mounts and syncs the Windows caption col
     });
     observer.observe(document, { attributes: true, attributeFilter: ['data-theme-mode'], subtree: true });
   });
+  await sidebar.getByRole('button', { name: '首页' }).click();
   await page.reload();
   await expect(root).toHaveAttribute('data-theme-mode', 'dark');
   expect(await page.evaluate(() => Reflect.get(window, '__quarryFirstTheme'))).toEqual({
@@ -109,7 +157,6 @@ test('restores dark mode before the app mounts and syncs the Windows caption col
   });
   await expect(page.getByRole('heading', { name: '学习概览' })).toBeVisible();
 
-  const sidebar = page.getByRole('complementary', { name: '主导航' });
   await sidebar.getByRole('button', { name: '系统设置' }).click();
   const darkCard = 'rgb(32, 44, 37)';
   for (const name of ['外观与主题', '标签管理', '应用更新', '显示与操作', '题目转换 CLI 与 AI Skill']) {

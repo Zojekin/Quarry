@@ -26,7 +26,6 @@ import {
   type WorkspaceTab,
 } from "./state.js";
 import { ViewContext } from "./components/ui.js";
-import { ThemeModeToggle } from "./components/ThemeModeToggle.js";
 import { Badge } from "./components/ui/badge.js";
 import { Button } from "./components/ui/button.js";
 import {
@@ -109,6 +108,7 @@ export function App() {
 function Workspace() {
   const preferences = usePreferences();
   const questionSize = questionSizes[preferences.questionSize];
+  const { glassTransparency } = preferences;
   const initial = useRef(loadTabs());
   const [tabs, setTabs] = useState<WorkspaceTab[]>(initial.current.tabs);
   const [active, setActive] = useState<string>(initial.current.active);
@@ -131,6 +131,11 @@ function Workspace() {
     style.setProperty("--question-size", `${questionSize}px`);
     return () => { style.removeProperty("--question-size"); };
   }, [questionSize]);
+  useLayoutEffect(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--glass-transparency", String(glassTransparency / 100));
+    return () => { style.removeProperty("--glass-transparency"); };
+  }, [glassTransparency]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [quickItems, setQuickItems] = useState<{
     banks: Bank[];
@@ -318,30 +323,24 @@ function Workspace() {
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="iconSm"
+          size="icon"
           aria-label="快速命令"
           onClick={() => setCommandOpen(true)}
-          className="quarry-no-drag"
+          className="size-[36px] hover:bg-(--sidebar-hover)"
         >
           <Icon name="command" className="size-4" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side={compact ? "right" : "bottom"}>快速跳转 (Ctrl+K)</TooltipContent>
+      <TooltipContent side={compact ? "right" : "top"}>快速命令 (Ctrl+K)</TooltipContent>
     </Tooltip>
   );
-  const compactUtilities = compact && (
-    <div className="flex flex-col items-center gap-1">
-      <ThemeModeToggle compact />
-      {quickCommand}
-    </div>
-  );
-
   function renderNavButton(
     item: (typeof primaryNav)[number] | (typeof secondaryNav)[number],
-    badge?: number,
+    iconOnly = compact,
   ) {
     const activeItem = isNavActive(item.key);
     const showUpdate = item.key === "settings" && updateReady;
+    const badge = item.key === "mistakes" ? reviewCount : 0;
     const IconComp = item.icon;
     const button = (
       <button
@@ -353,7 +352,7 @@ function Workspace() {
         onClick={() => navigate({ page: item.key })}
         className={cn(
           "group relative flex items-center gap-2.5 rounded-lg text-[13.5px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
-          compact ? "mx-auto size-9 justify-center px-0" : "h-9 w-full px-2.5",
+          iconOnly ? "size-[36px] shrink-0 justify-center" : "h-9 w-full px-2.5",
           activeItem
             ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_12%,transparent)]"
             : "text-sidebar-foreground/85 hover:bg-(--sidebar-hover) hover:text-foreground",
@@ -371,21 +370,11 @@ function Workspace() {
         {showUpdate && (
           <span aria-hidden="true" title="更新已就绪" className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
         )}
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-left",
-            compact && "hidden",
-          )}
-        >
-          {item.label}
-        </span>
-        {badge !== undefined && badge > 0 && (
+        {!iconOnly && <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>}
+        {!iconOnly && badge > 0 && (
           <Badge
             variant="secondary"
-            className={cn(
-              "h-5 min-w-5 justify-center rounded-full bg-primary/12 px-1.5 text-[11px] font-semibold text-primary tabular-nums",
-              compact && "hidden",
-            )}
+            className="h-5 min-w-5 justify-center rounded-full bg-primary/12 px-1.5 text-[11px] font-semibold text-primary tabular-nums"
           >
             {badge}
           </Badge>
@@ -393,11 +382,11 @@ function Workspace() {
       </button>
     );
 
-    if (!compact) return button;
+    if (!iconOnly) return button;
     return (
       <Tooltip key={item.key}>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="right">{showUpdate ? `${item.label}（更新已就绪）` : item.label}</TooltipContent>
+        <TooltipContent side={compact ? "right" : "top"}>{showUpdate ? `${item.label}（更新已就绪）` : item.label}</TooltipContent>
       </Tooltip>
     );
   }
@@ -419,20 +408,16 @@ function Workspace() {
                 </span>
               </div>
             )}
-            <div className="flex items-center gap-0.5">
-              {!compact && <ThemeModeToggle />}
-              {!compact && quickCommand}
-              <Button
-                variant="ghost"
-                size="iconSm"
-                aria-label={compact ? "展开导航" : "收起导航"}
-                aria-expanded={!compact}
-                onClick={toggleSidebar}
-                className="quarry-no-drag"
-              >
-                {compact ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={compact ? "展开导航" : "收起导航"}
+              aria-expanded={!compact}
+              onClick={toggleSidebar}
+              className="quarry-no-drag size-[36px] hover:bg-(--sidebar-hover)"
+            >
+              {compact ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </Button>
           </div>
 
           <div className="quarry-titlebar-content mx-auto flex min-w-0 max-w-[1260px] flex-1 items-center gap-1 pl-7 max-[960px]:pl-5">
@@ -522,23 +507,18 @@ function Workspace() {
                 {rail}
               </div>
             ) : (
-              <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pt-1" aria-label="功能区">
-                <div className="space-y-1">
-                  {primaryNav.map((item) =>
-                    renderNavButton(
-                      item,
-                      item.key === "mistakes" ? reviewCount : undefined,
-                    ),
-                  )}
+              <nav className="flex min-h-0 flex-1 flex-col gap-[4px] overflow-y-auto pt-1" aria-label="功能区">
+                <div className={cn("flex flex-col gap-[4px]", compact && "items-center")}>
+                  {primaryNav.map((item) => renderNavButton(item))}
                 </div>
-                <div className="mt-auto space-y-1 pt-4">
-                  {compactUtilities}
-                  {secondaryNav.map((item) => renderNavButton(item))}
+                <div className={cn("mt-auto flex items-center gap-[4px] pt-4", compact && "flex-col")}>
+                  {quickCommand}
+                  {secondaryNav.map((item) => renderNavButton(item, true))}
                 </div>
               </nav>
             )}
             {isStudyView && compact && (
-              <div className="mt-auto">{compactUtilities}</div>
+              <div className="mt-auto flex justify-center">{quickCommand}</div>
             )}
           </aside>
 

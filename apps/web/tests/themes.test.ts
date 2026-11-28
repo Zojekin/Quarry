@@ -61,6 +61,21 @@ describe("theme palettes", () => {
     expect(theme.tokens["success-bg"]).toBe(base.tokens["success-bg"]);
   });
 
+  it.each(presets)("keeps %s floating text legible at maximum transparency", (preset) => {
+    for (const mode of ["light", "dark"] as const) {
+      const extreme = mode === "light" ? "#000000" : "#ffffff";
+      const backdrop = mode === "light" ? 0 : 255;
+      for (const colors of [{}, { card: extreme, background: extreme }]) {
+        const { tokens } = resolveThemePalette(preset, mode, colors);
+        const blended = "#" + [1, 3, 5].map((offset) => {
+          const channel = Number.parseInt(tokens.popover.slice(offset, offset + 2), 16);
+          return Math.round(0.6 * channel + 0.4 * backdrop).toString(16).padStart(2, "0");
+        }).join("");
+        expect(contrastRatio(tokens["popover-foreground"], blended)).toBeGreaterThanOrEqual(minimumContrast);
+      }
+    }
+  });
+
   it("recovers from incomplete, malformed, and unknown stored values", () => {
     expect(normalizeThemeConfig(null)).toEqual(defaultThemeConfig);
     expect(normalizeThemeConfig({ preset: "__proto__", mode: "solar", custom: { primary: "#123", background: "red" } })).toEqual(defaultThemeConfig);

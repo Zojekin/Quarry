@@ -5,6 +5,7 @@ import skill from "../../../../skills/question-converter/SKILL.md?raw";
 import { updatePreferences, usePreferences } from "../lib/preferences.js";
 import { Button } from "./ui.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card.js";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.js";
 import { Switch } from "./ui/switch.js";
 
 const commands = [
@@ -127,19 +128,22 @@ function CliGuideContent() {
           <div className="space-y-2">
             <label htmlFor={id} className="block font-medium">Skill 安装位置</label>
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                id={id}
-                className="h-8 rounded-md border border-input bg-card px-2"
+              <Select
                 value={selected}
                 disabled={installing}
-                onChange={(event) => {
-                  setTarget(event.currentTarget.value as SkillPreset | "custom");
+                onValueChange={(value) => {
+                  setTarget(value as SkillPreset | "custom");
                   setInstallStatus(undefined);
                 }}
               >
-                {info.targets.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
-                <option value="custom">自选目录…</option>
-              </select>
+                <SelectTrigger id={id} className="h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {info.targets.map(({ id, label }) => <SelectItem key={id} value={id}>{label}</SelectItem>)}
+                  <SelectItem value="custom">自选目录…</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="outline" size="sm" disabled={installing} onClick={() => void install(bridge)}>
                 {installing ? "安装中…" : selected === "custom" ? "选择目录并安装" : "安装 Skill"}
               </Button>

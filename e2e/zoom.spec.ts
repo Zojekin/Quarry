@@ -7,32 +7,37 @@ const nav = (page: Page, name: string) =>
   page.getByRole('complementary', { name: '主导航' }).getByRole('button', { name });
 const zoomControl = (page: Page) => page.getByRole('combobox', { name: '界面缩放' });
 
+async function selectZoom(page: Page, level: number) {
+  await zoomControl(page).click();
+  await page.getByRole('option', { name: `${level}%`, exact: true }).click();
+}
+
 test('zooms from shortcuts and Settings and restores the level on restart', async ({ quarry }) => {
   const { page } = quarry;
   await nav(page, '系统设置').click();
   const zoom = zoomControl(page);
-  await expect(zoom).toHaveValue('100');
+  await expect(zoom).toHaveText('100%');
   await quarry.pressZoomShortcut('=');
-  await expect(zoom).toHaveValue('110');
+  await expect(zoom).toHaveText('110%');
   await expect.poll(quarry.zoomFactor).toBeCloseTo(1.1);
   await quarry.pressZoomShortcut('-');
-  await expect(zoom).toHaveValue('100');
+  await expect(zoom).toHaveText('100%');
   await quarry.pressZoomShortcut('-');
-  await expect(zoom).toHaveValue('90');
+  await expect(zoom).toHaveText('90%');
   await quarry.pressZoomShortcut('0');
-  await expect(zoom).toHaveValue('100');
+  await expect(zoom).toHaveText('100%');
 
-  await zoom.selectOption('85');
-  await expect(zoom).toHaveValue('85');
+  await selectZoom(page, 85);
+  await expect(zoom).toHaveText('85%');
   await expect.poll(quarry.zoomFactor).toBeCloseTo(0.85);
-  await zoom.selectOption('125');
+  await selectZoom(page, 125);
   await expect.poll(quarry.zoomFactor).toBeCloseTo(1.25);
   const restarted = await quarry.restart();
   await expect.poll(quarry.zoomFactor).toBeCloseTo(1.25);
   await nav(restarted, '系统设置').click();
-  await expect(zoomControl(restarted)).toHaveValue('125');
+  await expect(zoomControl(restarted)).toHaveText('125%');
   await quarry.pressZoomShortcut('0');
-  await expect(zoomControl(restarted)).toHaveValue('100');
+  await expect(zoomControl(restarted)).toHaveText('100%');
 });
 
 for (const { width, height, level } of [
@@ -54,7 +59,7 @@ for (const { width, height, level } of [
 
     await quarry.resizeWindow(width, height);
     await nav(page, '系统设置').click();
-    await zoomControl(page).selectOption(String(level));
+    await selectZoom(page, level);
     await expect.poll(async () => {
       const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
       return Math.max(

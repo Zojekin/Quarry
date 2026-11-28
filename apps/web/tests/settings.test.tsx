@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /// <reference types="vitest/jsdom" />
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import type { DesktopCliToolsBridge, DesktopZoomBridge, DesktopZoomLevel } from "@quarry/shared";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
@@ -9,11 +9,12 @@ import { CliGuideCard } from "../src/components/CliGuideCard.js";
 import { DiagnosticsCard } from "../src/components/DiagnosticsCard.js";
 import { TagManagerCard } from "../src/components/TagManagerCard.js";
 import { PreferencesSettingsCard } from "../src/components/PreferencesSettingsCard.js";
-import { preferencesKey } from "../src/lib/preferences.js";
+import { preferencesKey, updatePreferences, usePreferences } from "../src/lib/preferences.js";
 
 // Use the jsdom origin's storage even when Node exposes its own global getter.
 beforeEach(() => {
   vi.stubGlobal("localStorage", jsdom.window.localStorage);
+  HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
 afterEach(() => {
@@ -22,7 +23,13 @@ afterEach(() => {
   sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
 });
+
+function selectOption(label: string, option: string) {
+  fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "Enter" });
+  fireEvent.keyDown(screen.getByRole("option", { name: option }), { key: "Enter" });
+}
 
 it("uses the browser's own zoom in the absence of a desktop zoom bridge", () => {
   render(<PreferencesSettingsCard />);
@@ -43,13 +50,13 @@ it("loads desktop zoom, sends the chosen level and follows desktop changes", asy
   };
   vi.stubGlobal("__QUARRY_DESKTOP__", { zoom });
   const card = render(<PreferencesSettingsCard />);
-  const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "界面缩放" });
-  await waitFor(() => expect(select.value).toBe("85"));
-  fireEvent.change(select, { target: { value: "125" } });
+  const select = screen.getByRole("combobox", { name: "界面缩放" });
+  await waitFor(() => expect(select.textContent).toBe("85%"));
+  selectOption("界面缩放", "125%");
   expect(zoom.setLevel).toHaveBeenCalledWith(125);
-  expect(select.value).toBe("125");
+  expect(select.textContent).toBe("125%");
   act(() => notify(150));
-  expect(select.value).toBe("150");
+  expect(select.textContent).toBe("150%");
   card.unmount();
   expect(unsubscribe).toHaveBeenCalledOnce();
 });
@@ -127,7 +134,7 @@ it("uses desktop CLI info and reports Skill installation results", async () => {
   fireEvent.click(screen.getByRole("button", { name: "安装 Skill" }));
   expect(await screen.findByText(`已安装至 ${skillDirectory}\\SKILL.md`)).toBeTruthy();
   expect(installSkill).toHaveBeenNthCalledWith(1, "codex");
-  fireEvent.change(screen.getByRole("combobox", { name: "Skill 安装位置" }), { target: { value: "custom" } });
+  selectOption("Skill 安装位置", "自选目录…");
   const customButton = screen.getByRole<HTMLButtonElement>("button", { name: "选择目录并安装" });
   fireEvent.click(customButton);
   await waitFor(() => expect(customButton.disabled).toBe(false));
@@ -167,7 +174,22 @@ it("adds and renames a tag, resets its color, and confirms deletion with its use
   expect(remove).toHaveBeenCalledWith(tag.id);
 });
 
-it("applies the saved font size and uses preferences for workspace defaults after restart", async () => {
+it.each([
+  [undefined, 38], [null, 38], ["50", 38], [1.5, 2], [-10, 0], [0, 0], [120, 100],
+])("normalizes stored glass transparency %s to %s", (stored, expected) => {
+  localStorage.setItem(preferencesKey, JSON.stringify({ glassTransparency: stored }));
+  const { result } = renderHook(() => usePreferences());
+  expect(result.current.glassTransparency).toBe(expected);
+});
+
+it("persists only normalized glass transparency values", () => {
+  updatePreferences({ glassTransparency: 110.8 });
+  expect(JSON.parse(localStorage.getItem(preferencesKey)!).glassTransparency).toBe(100);
+  updatePreferences({ glassTransparency: Number.NaN });
+  expect(JSON.parse(localStorage.getItem(preferencesKey)!).glassTransparency).toBe(38);
+});
+
+it("applies saved display preferences live and restores them after restart", async () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   window.localStorage.setItem(preferencesKey, JSON.stringify({ questionSize: "invalid", libraryView: "list" }));
   vi.spyOn(client.tags, "listWithUsage").mockResolvedValue([]);
@@ -183,7 +205,9 @@ it("applies the saved font size and uses preferences for workspace defaults afte
   });
 
   const app = render(<App />);
-  expect(document.documentElement.style.getPropertyValue("--question-size")).toBe("19px");
+  const style = document.documentElement.style;
+  expect(style.getPropertyValue("--question-size")).toBe("19px");
+  expect(style.getPropertyValue("--glass-transparency")).toBe("0.38");
   fireEvent.click(screen.getByRole("button", { name: "系统设置" }));
   expect(await screen.findByRole("heading", { name: "题目转换 CLI 与 AI Skill" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "大号" }));
@@ -191,13 +215,19 @@ it("applies the saved font size and uses preferences for workspace defaults afte
   fireEvent.click(screen.getByRole("switch", { name: "显示答题快捷键提示" }));
   fireEvent.click(screen.getByRole("switch", { name: "启动时收起侧边栏" }));
   fireEvent.click(within(screen.getByRole("group", { name: "资料库默认视图" })).getByRole("button", { name: "网格" }));
-  expect(document.documentElement.style.getPropertyValue("--question-size")).toBe("25px");
+  expect(style.getPropertyValue("--question-size")).toBe("25px");
+  const slider = screen.getByRole("slider", { name: "浮层与遮罩磨砂通透度" });
+  expect(slider.getAttribute("aria-valuetext")).toBe("38%");
+  fireEvent.change(slider, { target: { value: "64" } });
+  expect(slider.getAttribute("aria-valuetext")).toBe("64%");
+  expect(style.getPropertyValue("--glass-transparency")).toBe("0.64");
   expect(JSON.parse(window.localStorage.getItem(preferencesKey)!)).toEqual({
     questionSize: "large", confirmExamSubmit: false, showShortcutHints: true,
-    sidebarCollapsed: true, libraryView: "grid", cliEnabled: false,
+    sidebarCollapsed: true, libraryView: "grid", cliEnabled: false, glassTransparency: 64,
   });
   app.unmount();
   render(<App />);
+  expect(style.getPropertyValue("--glass-transparency")).toBe("0.64");
   expect(screen.getByRole("button", { name: "展开导航" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "资料库" }));
   const libraryView = await screen.findByRole("button", { name: "网格" });
