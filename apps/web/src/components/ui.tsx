@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { BookOpen, ChevronDown, Search, X } from "lucide-react";
 import { Icon, type IconName } from "./Icons.js";
 import { BackendError } from "../api/client.js";
@@ -520,14 +520,14 @@ export function SearchField({
 export function Breadcrumb({
   items,
 }: {
-  items: { label: string; onClick?: () => void }[];
+  items: { label: string; onClick?: () => void; dropProps?: HTMLAttributes<HTMLButtonElement> }[];
 }) {
   return (
     <nav
       className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground"
       aria-label="当前位置"
     >
-      {items.map(({ label, onClick }, index) => (
+      {items.map(({ label, onClick, dropProps }, index) => (
         <span key={index} className="inline-flex items-center gap-1.5">
           {index > 0 && (
             <span className="text-muted-foreground/50" aria-hidden="true">
@@ -538,7 +538,8 @@ export function Breadcrumb({
             <button
               type="button"
               onClick={onClick}
-              className="rounded px-1 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
+              {...dropProps}
+              className={cn("rounded px-1 py-0.5 transition-colors hover:bg-muted hover:text-foreground", dropProps?.className)}
             >
               {label}
             </button>

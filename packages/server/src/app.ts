@@ -8,6 +8,7 @@ import { AppError, ErrorCode } from '@quarry/shared';
 import { createHealthRoutes } from './routes/health.js';
 import { createAttachmentRoutes } from './routes/attachments.js';
 import { createFolderRoutes } from './routes/folders.js';
+import { createLibraryRoutes } from './routes/library.js';
 import { createBankRoutes } from './routes/banks.js';
 import { createQuestionRoutes } from './routes/questions.js';
 import { createTagRoutes } from './routes/tags.js';
@@ -82,6 +83,7 @@ export function createQuarryServer(options: QuarryServerOptions) {
   return app.route('/api', createHealthRoutes(repositories))
     .route('/api/attachments', createAttachmentRoutes())
     .route('/api/folders', createFolderRoutes())
+    .route('/api/library', createLibraryRoutes())
     .route('/api/banks', createBankRoutes())
     .route('/api/questions', createQuestionRoutes())
     .route('/api/tags', createTagRoutes())

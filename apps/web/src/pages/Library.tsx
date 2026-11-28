@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { Dispatch, DragEvent as ReactDragEvent, HTMLAttributes, SetStateAction } from "react";
+import type { LibraryTarget } from "@quarry/shared";
 import {
   ArrowRight,
   ChevronDown,
+  ClipboardPaste,
   Clock,
   Download,
   Eye,
@@ -11,6 +14,7 @@ import {
   MoreHorizontal,
   Play,
   Plus,
+  ListChecks,
   SlidersHorizontal,
   Trash2,
   Upload,
@@ -22,6 +26,10 @@ import { Icon } from "../components/Icons.js";
 import { ComposerEditor, DocumentEditor } from "../components/DocumentEditor.js";
 import { QuestionEditor } from "../components/QuestionEditor.js";
 import { QuestionPreview } from "../components/QuestionPreview.js";
+import {
+  blockedDestinations, FileActionButtons, FileMenuItems, FileTransferButtons, libraryTarget, MovePicker, Shortcut,
+} from "../components/LibraryFileActions.js";
+import type { FileEntry, LibraryClipboard } from "../components/LibraryFileActions.js";
 import { usePreferences } from "../lib/preferences.js";
 import { FollowDialog, ImportDialog, QuestionPicker } from "../components/Workflows.js";
 import {
@@ -105,16 +113,16 @@ export function download(blob: Blob, name: string) {
   URL.revokeObjectURL(url);
 }
 
-type FileEntry = {
-  kind: "folders" | "banks" | "papers";
-  item: Document;
-};
-
 const kindNames = {
   folders: "文件夹",
   banks: "题库",
   papers: "套题",
 } as const;
+
+const entryDragType = "application/x-quarry-entries";
+const dropHighlight = "bg-accent ring-2 ring-inset ring-primary";
+const editingControl = "input,textarea,select,[contenteditable],[role=textbox]";
+const openOverlay = "[role=dialog]:not([data-state=closed]),[role=alertdialog]:not([data-state=closed]),[role=menu]:not([data-state=closed]),[role=listbox]:not([data-state=closed])";
 
 export function Library({
   folder,
@@ -122,12 +130,16 @@ export function Library({
   navigation,
   search,
   setSearch,
+  clipboard,
+  setClipboard,
 }: {
   folder?: string;
   navigate: (route: Route) => void;
   navigation: NavigationProps;
   search: string;
   setSearch: (s: string) => void;
+  clipboard: LibraryClipboard | undefined;
+  setClipboard: Dispatch<SetStateAction<LibraryClipboard | undefined>>;
 }) {
   const preferences = usePreferences();
   const [viewOverride, setView] = useViewState<"list" | "grid" | undefined>("library-view", undefined);
@@ -144,11 +156,18 @@ export function Library({
   const [editing, setEditing] = useState<FileEntry>();
   const [importing, setImporting] = useState<File[]>();
   const [draggingFiles, setDraggingFiles] = useState(false);
+  const [moving, setMoving] = useState<LibraryTarget[]>();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entryId?: string }>();
+  const [dropFolder, setDropFolder] = useState<string | null>();
+  const drag = useRef<{ targets: LibraryTarget[]; blocked: Set<string> }>(null);
+  const contextFocus = useRef<HTMLElement | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [status, setStatus] = useState("");
   const confirm = useConfirmation();
 
   const { data, error, reload } = useLoad(
@@ -197,8 +216,7 @@ export function Library({
 
   const rows: FileEntry[] = [...folderEntries, ...bankEntries, ...paperEntries].filter(
     ({ kind, item }) => {
-      const entity =
-        kind === "folders" ? "folder" : kind === "banks" ? "bank" : "paper";
+      const { entity } = libraryTarget({ kind, item });
       const matchSearch =
         !search || item.name.toLowerCase().includes(search.toLowerCase());
       const matchKind = kindFilter === undefined || kindFilter.includes(entity);
@@ -210,11 +228,9 @@ export function Library({
   );
 
   const inspected = rows.find((r) => r.item.id === activeId) ?? rows[0];
-  const validSelected = selectedIds.filter((id) =>
-    rows.some((r) => r.item.id === id),
-  );
+  const selected = rows.filter(entry => selectedIds.includes(entry.item.id));
   const allSelected =
-    rows.length > 0 && validSelected.length === rows.length;
+    rows.length > 0 && selected.length === rows.length;
 
   useEffect(() => {
     setSelectedIds([]);
@@ -226,7 +242,8 @@ export function Library({
     const workspace = libraryRef.current?.closest("main") ?? libraryRef.current;
     if (!workspace) return;
     let dragDepth = 0;
-    const isFileDrag = (event: DragEvent) => event.dataTransfer?.types.includes("Files");
+    const isFileDrag = (event: DragEvent) =>
+      event.dataTransfer?.types.includes("Files") && !event.dataTransfer.types.includes(entryDragType);
 
     function enter(event: DragEvent) {
       if (!isFileDrag(event)) return;
@@ -278,12 +295,7 @@ export function Library({
   }
 
   function exportEntry(entry: FileEntry, format = "quarry") {
-    const entity =
-      entry.kind === "folders"
-        ? "folder"
-        : entry.kind === "banks"
-          ? "bank"
-          : "paper";
+    const { entity } = libraryTarget(entry);
     const ext = format === "markdown" ? "md" : format === "json" ? "json" : "quarry";
     void client.backup
       .export(entity, entry.item.id, format)
@@ -291,15 +303,47 @@ export function Library({
       .catch((e) => setMessage((e as Error).message));
   }
 
-  async function batchDelete() {
+  async function deleteEntries(entries: FileEntry[]) {
+    if (busy) return;
     setBusy(true);
     setMessage("");
     try {
-      for (const id of validSelected) {
-        const entry = rows.find((r) => r.item.id === id);
-        if (entry) await client[entry.kind].delete(entry.item.id);
-      }
+      for (const entry of entries) await client[entry.kind].delete(entry.item.id);
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
       setSelectedIds([]);
+      reload();
+      setBusy(false);
+    }
+  }
+
+  function askDelete(entries: FileEntry[]) {
+    if (busy || !entries.length) return;
+    confirm.ask(
+      entries.length === 1
+        ? `确认删除「${entries[0]!.item.name}」吗？可在回收站恢复。`
+        : `确认将已选的 ${entries.length} 个项目移入回收站吗？`,
+      () => void deleteEntries(entries),
+    );
+  }
+
+  function remember(action: LibraryClipboard["action"], entries: FileEntry[]) {
+    setClipboard({ action, targets: entries.map(libraryTarget) });
+    setStatus(`已${action === "move" ? "剪切" : "复制"} ${entries.length} 项`);
+  }
+
+  async function transfer(action: LibraryClipboard["action"], targets: LibraryTarget[], destination: string | null, pasted?: LibraryClipboard) {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    setStatus("");
+    try {
+      const result = await client.library[action]({ targets, target_folder_id: destination });
+      if (pasted?.action === "move") setClipboard(current => current === pasted ? undefined : current);
+      if (action === "move") setSelectedIds([]);
+      setMoving(undefined);
+      setStatus(`已${action === "move" ? "移动" : "复制"} ${result.length} 项`);
       reload();
     } catch (e) {
       setMessage((e as Error).message);
@@ -308,11 +352,128 @@ export function Library({
     }
   }
 
-  function batchExport() {
-    for (const id of validSelected) {
-      const entry = rows.find((r) => r.item.id === id);
-      if (entry) exportEntry(entry);
+  function paste() {
+    if (clipboard) void transfer(clipboard.action, clipboard.targets, folder ?? null, clipboard);
+  }
+
+  function selectAll() {
+    setSelectedIds(rows.map(entry => entry.item.id));
+  }
+
+  function actionsFor(entries: FileEntry[]) {
+    return {
+      open: () => openEntry(entries[0]!),
+      edit: () => setEditing(entries[0]),
+      cut: () => remember("move", entries),
+      copy: () => remember("copy", entries),
+      move: () => {
+        setMessage("");
+        setMoving(entries.map(libraryTarget));
+      },
+      export: () => entries.forEach(entry => exportEntry(entry)),
+      remove: () => askDelete(entries),
+    };
+  }
+
+  function selectionFor(entry: FileEntry) {
+    return selectedIds.includes(entry.item.id) ? selected : [entry];
+  }
+
+  const handleContextMenu = useEffectEvent((event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement || target instanceof SVGElement) ||
+        target.closest(editingControl) || draggingFiles ||
+        document.querySelector("[role=dialog]:not([data-state=closed]),[role=alertdialog]:not([data-state=closed])")) return;
+    const row = target.closest<HTMLElement>("[data-library-entry]");
+    if (!row && target.closest("button,label,a,[role=menu]")) return;
+    event.preventDefault();
+    contextFocus.current = target.closest<HTMLElement>("button") ?? row ?? libraryRef.current;
+    setContextMenu({ x: event.clientX, y: event.clientY, ...(row ? { entryId: row.dataset.libraryEntry! } : {}) });
+  });
+
+  const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.shiftKey || busy ||
+        contextMenu || document.querySelector(openOverlay) ||
+        (event.target instanceof Element && event.target.closest(editingControl))) return;
+    const focus = document.activeElement?.closest<HTMLElement>("[data-library-entry]");
+    const focused = rows.find(entry => entry.item.id === (focus?.dataset.libraryEntry ?? activeId));
+    const entries = selected.length ? selected : focused ? [focused] : [];
+    const rename = selected.length === 1 ? selected[0] : focused;
+    const key = event.key.toLowerCase();
+    if (event.ctrlKey || event.metaKey) {
+      if (key === "a") selectAll();
+      else if (key === "v" && clipboard) paste();
+      else if ((key === "c" || key === "x") && entries.length) remember(key === "c" ? "copy" : "move", entries);
+      else return;
+    } else if (key === "f2" && rename) setEditing(rename);
+    else if (key === "delete" && entries.length) askDelete(entries);
+    else if (key === "backspace" && folder) {
+      const parent = trail.at(-2);
+      navigate(parent ? { page: "library", id: parent.id } : { page: "library" });
+    } else return;
+    event.preventDefault();
+  });
+
+  useEffect(() => {
+    const workspace = libraryRef.current?.closest("main") ?? libraryRef.current;
+    const context = (event: MouseEvent) => handleContextMenu(event);
+    const keyboard = (event: KeyboardEvent) => handleShortcut(event);
+    workspace?.addEventListener("contextmenu", context);
+    window.addEventListener("keydown", keyboard);
+    return () => {
+      workspace?.removeEventListener("contextmenu", context);
+      window.removeEventListener("keydown", keyboard);
+    };
+  }, []);
+
+  function finishDrag() {
+    drag.current = null;
+    setDropFolder(undefined);
+  }
+
+  function entryDragProps(entry: FileEntry) {
+    const target = libraryTarget(entry);
+    return {
+      "data-library-entry": entry.item.id,
+      "data-cut": clipboard?.action === "move" && clipboard.targets.some(
+        item => item.id === target.id && item.entity === target.entity,
+      ) ? "true" : undefined,
+      draggable: !busy,
+      onDragStart(event: ReactDragEvent<HTMLElement>) {
+        const targets = selectionFor(entry).map(libraryTarget);
+        drag.current = { targets, blocked: blockedDestinations(folders, targets) };
+        event.dataTransfer.setData(entryDragType, JSON.stringify(targets));
+        event.dataTransfer.effectAllowed = "move";
+      },
+      onDragEnd: finishDrag,
+    };
+  }
+
+  function dropProps<T extends HTMLElement>(destination: string | null): HTMLAttributes<T> {
+    function accepts(event: ReactDragEvent<T>) {
+      return !busy && event.dataTransfer.types.includes(entryDragType) &&
+        drag.current && (destination === null || !drag.current.blocked.has(destination));
     }
+    return {
+      className: dropFolder === destination ? dropHighlight : "",
+      onDragOver(event) {
+        if (!accepts(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropFolder(destination);
+      },
+      onDragLeave(event) {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        setDropFolder(current => current === destination ? undefined : current);
+      },
+      onDrop(event) {
+        const current = drag.current;
+        if (!current || !accepts(event)) return;
+        event.preventDefault();
+        finishDrag();
+        void transfer("move", current.targets, destination);
+      },
+    };
   }
 
   async function quickStartPaper(paperId: string, mode: "practice" | "exam") {
@@ -338,9 +499,12 @@ export function Library({
     inspected?.kind === "papers" ? (inspected.item as Paper) : undefined;
   const inspectedBank =
     inspected?.kind === "banks" ? (inspected.item as Bank) : undefined;
+  const contextEntry = rows.find(entry => entry.item.id === contextMenu?.entryId);
+  const contextEntries = contextEntry ? selectionFor(contextEntry) : [];
+  const selectNone = () => setSelectedIds([]);
 
   return (
-    <div ref={libraryRef} className="space-y-5">
+    <div ref={libraryRef} tabIndex={-1} className="space-y-5 outline-none">
       {/* Header Row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -349,12 +513,12 @@ export function Library({
             items={[
               {
                 label: "资料库",
-                ...(folder ? { onClick: () => navigate({ page: "library" }) } : {}),
+                ...(folder ? { onClick: () => navigate({ page: "library" }), dropProps: dropProps<HTMLButtonElement>(null) } : {}),
               },
               ...trail.map((item, idx) => ({
                 label: item.name,
                 ...(idx < trail.length - 1
-                  ? { onClick: () => navigate({ page: "library", id: item.id }) }
+                  ? { onClick: () => navigate({ page: "library", id: item.id }), dropProps: dropProps<HTMLButtonElement>(item.id) }
                   : {}),
               })),
             ]}
@@ -381,6 +545,7 @@ export function Library({
             <Upload className="size-3.5" />
             <span>导入文件</span>
             <input
+              ref={importInput}
               type="file"
               accept=".quarry,.json,.md"
               multiple
@@ -459,7 +624,8 @@ export function Library({
         />
       </div>
 
-      <Notice error={error || message} loading={!data && !error} />
+      <Notice error={error || (moving ? "" : message)} loading={!data && !error} />
+      <p role="status" className="sr-only">{status}</p>
 
       {data && rows.length === 0 && (
         <EmptyState
@@ -492,21 +658,30 @@ export function Library({
                     <TableHead className="hidden md:table-cell">标签</TableHead>
                     <TableHead className="w-20">题数</TableHead>
                     <TableHead className="hidden w-28 sm:table-cell">更新时间</TableHead>
-                    <TableHead className="w-28 text-right">操作</TableHead>
+                    <TableHead className="w-24 text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((entry) => {
                     const { kind, item } = entry;
                     const isActive = inspected?.item.id === item.id;
-                    const isSelected = validSelected.includes(item.id);
+                    const isSelected = selectedIds.includes(item.id);
+                    const { className, ...drop } = kind === "folders" ? dropProps<HTMLTableRowElement>(item.id) : {};
                     return (
                       <TableRow
                         key={item.id}
+                        {...entryDragProps(entry)}
+                        {...drop}
                         data-selected={isActive || isSelected ? "true" : undefined}
-                        onClick={() => setActiveId(item.id)}
-                        onDoubleClick={() => openEntry(entry)}
-                        className="cursor-pointer"
+                        tabIndex={-1}
+                        onClick={(event) => {
+                          setActiveId(item.id);
+                          if (!(event.target instanceof Element && event.target.closest("button"))) event.currentTarget.focus();
+                        }}
+                        onDoubleClick={(event) => {
+                          if (!(event.target instanceof Element && event.target.closest("button,[role=menuitem]"))) openEntry(entry);
+                        }}
+                        className={cn("cursor-pointer data-[cut=true]:opacity-50", className)}
                       >
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <Checkbox
@@ -557,32 +732,7 @@ export function Library({
                           className="text-right"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="inline-flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100">
-                            <IconButton
-                              icon="download"
-                              label="导出"
-                              onClick={() => exportEntry(entry)}
-                            />
-                            <IconButton
-                              icon="edit"
-                              label="重命名"
-                              onClick={() => setEditing(entry)}
-                            />
-                            <IconButton
-                              icon="trash"
-                              label="删除"
-                              variant="destructiveGhost"
-                              onClick={() =>
-                                confirm.ask(
-                                  `确认删除「${item.name}」吗？可在回收站恢复。`,
-                                  () =>
-                                    void client[kind]
-                                      .delete(item.id)
-                                      .then(reload),
-                                )
-                              }
-                            />
-                          </div>
+                          <FileActionButtons entry={entry} actions={actionsFor([entry])} busy={busy} />
                         </TableCell>
                       </TableRow>
                     );
@@ -594,18 +744,28 @@ export function Library({
                 {rows.map((entry) => {
                   const { kind, item } = entry;
                   const isActive = inspected?.item.id === item.id;
-                  const isSelected = validSelected.includes(item.id);
+                  const isSelected = selectedIds.includes(item.id);
+                  const { className, ...drop } = kind === "folders" ? dropProps<HTMLDivElement>(item.id) : {};
                   return (
                     <Card
                       key={item.id}
-                      onClick={() => setActiveId(item.id)}
-                      onDoubleClick={() => openEntry(entry)}
+                      {...entryDragProps(entry)}
+                      {...drop}
+                      tabIndex={-1}
+                      onClick={(event) => {
+                        setActiveId(item.id);
+                        if (!(event.target instanceof Element && event.target.closest("button"))) event.currentTarget.focus();
+                      }}
+                      onDoubleClick={(event) => {
+                        if (!(event.target instanceof Element && event.target.closest("button,[role=menuitem]"))) openEntry(entry);
+                      }}
                       className={cn(
-                        "group cursor-pointer transition-all hover:border-primary/35",
+                        "group cursor-pointer transition-all hover:border-primary/35 data-[cut=true]:opacity-50",
                         isActive && "border-primary/45 ring-1 ring-primary/20",
+                        className,
                       )}
                     >
-                      <CardHeader className="pb-2">
+                      <CardHeader className="relative pb-2">
                         <div className="flex min-w-0 flex-1 items-start gap-2">
                           <div
                             className="pt-0.5"
@@ -644,6 +804,9 @@ export function Library({
                               {item.name}
                             </button>
                           </div>
+                        </div>
+                        <div className="absolute right-3 top-2 [&_button]:size-7">
+                          <FileActionButtons entry={entry} actions={actionsFor([entry])} busy={busy} />
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-2 pb-3">
@@ -752,6 +915,14 @@ export function Library({
                     </p>
                   )}
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <FileTransferButtons
+                    actions={actionsFor(selected.length ? selected : [inspected])}
+                    busy={busy}
+                    clear={selectNone}
+                    canClear={selected.length > 0}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}
@@ -759,50 +930,79 @@ export function Library({
       )}
 
       {/* Floating Multi-Select Batch Dock */}
-      {validSelected.length > 0 && (
+      {selected.length > 0 && (
         <div
           role="region"
           aria-label="批量操作"
-          className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-control-edge/15 bg-(--inverse-surface) px-4 py-2.5 text-[13px] text-inverse-ink shadow-[0_14px_34px_-8px_rgba(var(--shadow-ink),0.4)]"
+          className="fixed bottom-5 left-1/2 z-40 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-control-edge/15 bg-(--inverse-surface) px-4 py-2.5 text-[13px] text-inverse-ink shadow-[0_14px_34px_-8px_rgba(var(--shadow-ink),0.4)]"
         >
           <span className="font-medium tabular-nums">
-            已选 {validSelected.length} 项
+            已选 {selected.length} 项
           </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-7.5 bg-inverse-ink/12 text-inverse-ink hover:bg-inverse-ink/20"
-            onClick={batchExport}
-          >
-            <Download className="size-3.5" />
-            导出
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={busy}
-            className="h-7.5"
-            onClick={() =>
-              confirm.ask(
-                `确认将已选的 ${validSelected.length} 个项目移入回收站吗？`,
-                () => void batchDelete(),
-              )
-            }
-          >
-            <Trash2 className="size-3.5" />
-            删除
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7.5 text-inverse-ink/75 hover:bg-inverse-ink/10 hover:text-inverse-ink"
-            onClick={() => setSelectedIds([])}
-          >
-            取消选择
-          </Button>
+          <FileTransferButtons actions={actionsFor(selected)} busy={busy} dock clear={selectNone} canClear />
         </div>
       )}
 
+      <DropdownMenu open={!!contextMenu} onOpenChange={open => { if (!open) setContextMenu(undefined); }} modal={false}>
+        <DropdownMenuTrigger
+          aria-hidden="true"
+          tabIndex={-1}
+          className="pointer-events-none fixed size-px opacity-0"
+          style={{ left: contextMenu?.x, top: contextMenu?.y }}
+        />
+        <DropdownMenuContent
+          align="start"
+          sideOffset={0}
+          collisionPadding={8}
+          aria-labelledby={undefined}
+          aria-label={contextEntry ? "项目操作" : "资料库操作"}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            if (!document.querySelector(openOverlay) && document.activeElement === document.body) {
+              contextFocus.current?.focus();
+            }
+          }}
+          className="min-w-44"
+        >
+          {contextEntry ? (
+            <FileMenuItems
+              actions={actionsFor(contextEntries)}
+              single={contextEntries.length === 1}
+              folder={contextEntry.kind === "folders"}
+              busy={busy}
+            />
+          ) : (
+            <>
+              <DropdownMenuItem onSelect={() => setCreate("folders")}><FolderPlus />新建文件夹</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setCreate("banks")}><FilePlus2 />新建题库</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setCreate("papers")}><Layers />新建套题</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => importInput.current?.click()}><Upload />导入文件</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!clipboard || busy} onSelect={paste} aria-keyshortcuts="Control+V Meta+V">
+                <ClipboardPaste />{clipboard ? `粘贴 (${clipboard.targets.length})` : "粘贴"}<Shortcut>Ctrl+V</Shortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!rows.length} onSelect={selectAll} aria-keyshortcuts="Control+A Meta+A">
+                <ListChecks />全选<Shortcut>Ctrl+A</Shortcut>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {moving && (
+        <MovePicker
+          folders={folders}
+          targets={moving}
+          currentFolder={folder ?? null}
+          busy={busy}
+          error={message}
+          close={() => {
+            setMessage("");
+            setMoving(undefined);
+          }}
+          move={destination => void transfer("move", moving, destination)}
+        />
+      )}
       {create && (
         <DocumentEditor
           kind={create}

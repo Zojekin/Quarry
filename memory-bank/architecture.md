@@ -109,6 +109,7 @@
 
 - **系统健康**：`GET /api/health`（Kysely 探针检测数据库连接）
 - **内容管理**：`/api/folders`（支持 `?tree=true`）、`/api/banks`、`/api/questions`、`/api/papers`（含 `/:id/items`、`/:id/follow-diff`、`/:id/apply-follow`）
+- **资料库移动和复制**通过 `POST /api/library/move` 与 `POST /api/library/copy` 接收 `{ targets: [{ entity, id }], target_folder_id }`。目标类型为 `folder`、`bank` 或 `paper`，`null` 表示根目录。两者均在一个仓储事务内校验资料和目标路径，禁止将文件夹转移到自身或后代，并返回处理后的顶层资料 `[{ entity, id, name }]`。复制为资料、题目、分区和套题条目生成新 ID，重映射材料父题、固定组及合并分区，复用标签和附件引用。子树内的题库来源链接指向对应副本，并保留来源版本；外部来源继续指向原题。复制时按同级同类型名称处理冲突。
 - **标签**支持通过 `GET /api/tags?target_type=file|question` 按命名空间获取，只有 `include_usage=true` 时响应才附加 `usage_count`。计数包含回收站项目的现存关联。`PUT /api/tags/:id` 支持改名和修改颜色（`null` 为系统默认色）。`DELETE /api/tags/:id` 在仓储事务内利用 SQLite 外键级联删除标签关联，标签不存在时返回 404。
 - **附件**通过 `/api/attachments` 提供 multipart SHA-256 去重上传与流式读取。
 - **答题、错题与统计**：`/api/sessions`（`start`、`/:id/draft`、`/:id/submit-question`、`/:id/submit-exam`、`/:id/pause`、`/:id/resume`、`/:id/complete`）；`/api/mistakes`（多维 `types`/`source_paper_ids`/`folder_ids`/`tag_ids` 同维 OR 跨维 AND 过滤、掌握状态、`/create-paper`）；`/api/analytics/dashboard`
@@ -130,6 +131,7 @@
   3. 回退默认值 `http://127.0.0.1:48123`
 - **工作区与页面**：`App.tsx` 与 `state.ts` 在 `sessionStorage` 维护多标签工作区及各标签独立搜索/筛选/勾选/滚动/前进后退历史。无边框侧栏贯通品牌区与导航区。标签栏以 `42px` 为基准高度，对齐主内容，留白可拖动窗口并为 Windows 原生按钮预留空间。支持 `Ctrl+K` 快速命令跳转。一级栏目为首页（学习概览）、资料库、错题本和练习记录，另含回收站与系统设置。资料库在视口达到 `1340px` 时显示粘性右侧文件概览，低于该宽度时只显示列表或网格。
 - **资料库批量导入**共用文件多选与系统文件拖放入口。`ImportDialog` 通过 `BackendClient` 逐个向提交接口发送文件和当前文件夹 ID，逐项显示成功或错误详情，用户点「完成」后刷新资料库。
+- **资料库文件操作**共用 `BackendClient.library` 移动与深拷贝。剪贴板保存在当前工作区内存，可跨目录和页签使用。内部拖放使用 `application/x-quarry-entries`，与系统文件导入的 `Files` 类型区分。文件操作快捷键在资料库可用，编辑控件、对话框及菜单打开时保留各自的键盘操作。
 - **本地偏好**由 `lib/preferences.ts` 以 `quarry-preferences-v1` 写入 `localStorage`。题目字号通过 `--question-size` 应用于答题、详情和题目预览。侧边栏默认状态在应用启动时读取，资料库只有在页签没有手动视图选择时采用默认值。`cliEnabled` 默认为关闭，开启后才显示 CLI 与 Skill 控件。`glassTransparency` 为 0–100 的整数，旧偏好默认使用 38。工作区将比例写入根元素的 `--glass-transparency`，由 CSS 派生 `--popover-surface`、`--popover-blur` 和 `--dialog-overlay-blur`。挂载到根节点的浮层与设置内的预览共享这些变量。
 - **标签输入与设置**复用 `TagInput` 维护编辑器草稿，保存时通过 `BackendClient` 创建新标签并提交关联，成功后由资料库或详情刷新数据。保存失败时，编辑器尝试通过 `DELETE /api/tags/:id?unused_only=true` 清理此次创建且仍未关联的标签。系统设置加载外观与主题、标签管理、显示与操作、运行诊断、备份恢复与关于，以及 CLI 指南。诊断使用 `BackendClient.health()` 探测本地服务及数据库。
 - **回收站界面**按 `entity` 与 `parent_deleted` 区分资料和单独题目。批量操作提交已勾选项目。清空操作在用户确认后提交所显示分类的全部项目。

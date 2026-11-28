@@ -18,6 +18,7 @@ import logoUrl from "./assets/logo.svg";
 import { client } from "./api/client.js";
 import type { Bank, Paper } from "./api/client.js";
 import { Icon } from "./components/Icons.js";
+import type { LibraryClipboard } from "./components/LibraryFileActions.js";
 import {
   closeTab,
   navigateTab,
@@ -137,6 +138,7 @@ function Workspace() {
     return () => { style.removeProperty("--glass-transparency"); };
   }, [glassTransparency]);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard>();
   const [quickItems, setQuickItems] = useState<{
     banks: Bank[];
     papers: Paper[];
@@ -537,6 +539,8 @@ function Workspace() {
                     {...(route.id ? { folder: route.id } : {})}
                     navigate={navigate}
                     navigation={navigation}
+                    clipboard={libraryClipboard}
+                    setClipboard={setLibraryClipboard}
                     search={current.views[currentView]?.search ?? ""}
                     setSearch={(search) => saveViewPatch({ search })}
                   />
